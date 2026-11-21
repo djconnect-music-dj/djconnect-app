@@ -2116,6 +2116,25 @@ public struct TrackVibeProfile: Codable, Equatable, Sendable {
     public var motionStyle: MotionStyle
     public var spectrumProfile: [Double]
 
+    /// Shared stateless spectrum rendering; each surface owns its palette and other mood adjustments.
+    public func spectrumApplyingMoodRenderStep(_ clampedStep: Int) -> [Double] {
+        spectrumProfile.enumerated().map { index, value in
+            let position = Double(index) / Double(max(spectrumProfile.count - 1, 1))
+            let lift: Double
+            switch clampedStep {
+            case 0:
+                lift = 0.78 - position * 0.08
+            case 1:
+                lift = 0.88 + (1.0 - abs(position - 0.5) * 2.0) * 0.18
+            case 2:
+                lift = 0.96 + position * 0.24
+            default:
+                lift = 1.02 + sin(position * .pi * 3.0) * 0.20
+            }
+            return min(1.0, max(0.12, value * lift))
+        }
+    }
+
     public static func make(for insight: TrackInsight) -> TrackVibeProfile {
         let seed = stableSeed(for: insight)
         let mood = [insight.mood, insight.vibe, insight.genre, insight.texture]
@@ -4157,6 +4176,29 @@ public struct DJConnectMusicDNAIdentityRequest: Codable, Equatable, Sendable, DJ
         self.sessionID = profileContext?.sessionID
         self.privateSession = profileContext?.privateSession
         self.requestSource = profileContext?.requestSource
+    }
+}
+
+public extension DJConnectMusicDNAProfileResponse {
+    /// Empty disabled projection; no client-generated profile or recommendation facts.
+    static func disabledProjection() -> Self {
+        DJConnectMusicDNAProfileResponse(
+            success: true,
+            enabled: false,
+            profile: DJConnectMusicDNAProfile()
+        )
+    }
+}
+
+public extension DJConnectMusicDiscoveryResponse {
+    /// Empty disabled projection; no client-generated profile or recommendation facts.
+    static func disabledProjection() -> Self {
+        DJConnectMusicDiscoveryResponse(
+            success: true,
+            enabled: false,
+            reason: "music_dna_disabled",
+            sections: []
+        )
     }
 }
 

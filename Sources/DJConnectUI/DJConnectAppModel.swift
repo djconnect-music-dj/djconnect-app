@@ -10977,8 +10977,7 @@ public final class DJConnectAppModel: ObservableObject {
     func refreshMusicDNAProfile(showToast: Bool = false, retryDelays: [Duration]) async -> Bool {
         if isDemoMode {
             applyDemoMusicDNAProfile()
-            musicDNAProfileNeedsRecovery = false
-            if showToast { showMusicDNAToast(localized(key: "appModel.music.dna.updated"), systemImage: "heart") }
+            completeMusicDNAProfileRefresh(showToast: showToast)
             return true
         }
         guard pairingStatus == .paired, isRuntimeCompatible else {
@@ -10992,59 +10991,85 @@ public final class DJConnectAppModel: ObservableObject {
         musicDNAErrorMessage = nil
         defer { if musicDNARefreshGeneration == generation { isLoadingMusicDNA = false } }
         for attempt in 0...retryDelays.count {
-            guard !Task.isCancelled, isAppInForeground, pairingStatus == .paired, !isDemoMode, isRuntimeCompatible,
-                  musicDNARefreshGeneration == generation, epoch == sessionHistory.responseEpoch else { return false }
+            guard musicDNAProfileRequestIsCurrent(generation: generation, epoch: epoch) else { return false }
             do {
                 let response = try await withHomeAssistantClient { client in
                     try await client.musicDNAProfile(mood: confirmedSessionMoodInt, musicDNAKey: askDJMusicDNAKey, language: language)
                 }
-                guard !Task.isCancelled, isAppInForeground, !isDemoMode, musicDNARefreshGeneration == generation,
-                      epoch == sessionHistory.responseEpoch else { return false }
+                guard musicDNAProfileResponseIsCurrent(generation: generation, epoch: epoch) else { return false }
                 apply(musicDNAProfile: response)
-                musicDNAProfileNeedsRecovery = false
-                if showToast { showMusicDNAToast(localized(key: "appModel.music.dna.updated"), systemImage: "heart") }
+                completeMusicDNAProfileRefresh(showToast: showToast)
                 return true
             } catch {
-                guard !Self.isCancellation(error), !Task.isCancelled, !isDemoMode,
-                      musicDNARefreshGeneration == generation, epoch == sessionHistory.responseEpoch else { return false }
-                // A context fence rejects the previous projection, not Music DNA consent.
-                // Withdraw its data before a bounded new read; never reuse its artwork.
-                let contextChanged = Self.isMusicDNAContextChanged(error)
-                if contextChanged { clearMusicDNADisplay(preservingRefreshGeneration: generation) }
-                let transient: Bool
-                if contextChanged { transient = true }
-                else if let error = error as? DJConnectError {
-                    switch error {
-                    case .network, .backendUnavailable: transient = true
-                    case let .server(code, _): transient = code == 408 || code == 429 || (500...599).contains(code)
-                    default: transient = false
-                    }
-                } else { transient = false }
-                musicDNAProfileNeedsRecovery = transient
-                if transient {
-                    musicDNAErrorMessage = localized(key: "ui.music.dna.recovering")
-                    guard attempt < retryDelays.count else { return false }
-                    do { try await Task.sleep(for: retryDelays[attempt]) } catch { return false }
-                } else {
-                    if let typed = error as? DJConnectError {
-                        handleMusicDNAError(typed)
-                        switch typed {
-                        case .authStale, .notConfigured, .missingToken, .versionMismatch: break
-                        case .profile:
-                            clearMusicDNADisplay()
-                            musicDNAErrorMessage = localized(key: "ui.music.dna.profile_access")
-                        default: musicDNAErrorMessage = localized(key: "ui.music.dna.processing_failed")
-                        }
-                    } else {
-                        musicDNAErrorMessage = localized(key: "ui.music.dna.processing_failed")
-                    }
-                    log(.warning, "Music DNA profile refresh stopped: \(error.localizedDescription)")
-                    if showToast, let message = musicDNAErrorMessage { showMusicDNAToast(message, systemImage: "exclamationmark.triangle.fill") }
-                    return false
-                }
+                guard await retryMusicDNAProfileFailure(error, generation: generation, epoch: epoch,
+                    attempt: attempt, retryDelays: retryDelays, showToast: showToast) else { return false }
             }
         }
         return false
+    }
+
+    private func completeMusicDNAProfileRefresh(showToast: Bool) {
+        musicDNAProfileNeedsRecovery = false
+        if showToast { showMusicDNAToast(localized(key: "appModel.music.dna.updated"), systemImage: "heart") }
+    }
+
+    private func musicDNAProfileRequestIsCurrent(generation: UUID, epoch: UUID) -> Bool {
+        !Task.isCancelled && isAppInForeground && pairingStatus == .paired && !isDemoMode && isRuntimeCompatible &&
+            musicDNARefreshGeneration == generation && epoch == sessionHistory.responseEpoch
+    }
+
+    private func musicDNAProfileResponseIsCurrent(generation: UUID, epoch: UUID) -> Bool {
+        !Task.isCancelled && isAppInForeground && !isDemoMode && musicDNARefreshGeneration == generation &&
+            epoch == sessionHistory.responseEpoch
+    }
+
+    private func retryMusicDNAProfileFailure(_ error: Error, generation: UUID, epoch: UUID,
+        attempt: Int, retryDelays: [Duration], showToast: Bool) async -> Bool {
+        guard !Self.isCancellation(error), !Task.isCancelled, !isDemoMode,
+              musicDNARefreshGeneration == generation, epoch == sessionHistory.responseEpoch else { return false }
+        // A context fence rejects the previous projection, not Music DNA consent.
+        // Withdraw its data before a bounded new read; never reuse its artwork.
+        let contextChanged = Self.isMusicDNAContextChanged(error)
+        if contextChanged { clearMusicDNADisplay(preservingRefreshGeneration: generation) }
+        let transient = Self.isTransientMusicDNAProfileFailure(error, contextChanged: contextChanged)
+        musicDNAProfileNeedsRecovery = transient
+        if transient {
+            musicDNAErrorMessage = localized(key: "ui.music.dna.recovering")
+            guard attempt < retryDelays.count else { return false }
+            do { try await Task.sleep(for: retryDelays[attempt]) } catch { return false }
+        } else {
+            presentStoppedMusicDNAProfileFailure(error, showToast: showToast)
+            return false
+        }
+        return true
+    }
+
+    private static func isTransientMusicDNAProfileFailure(_ error: Error, contextChanged: Bool) -> Bool {
+        if contextChanged { return true }
+        else if let error = error as? DJConnectError {
+            switch error {
+            case .network, .backendUnavailable: return true
+            case let .server(code, _): return code == 408 || code == 429 || (500...599).contains(code)
+            default: return false
+            }
+        } else { return false }
+    }
+
+    private func presentStoppedMusicDNAProfileFailure(_ error: Error, showToast: Bool) {
+        if let typed = error as? DJConnectError {
+            handleMusicDNAError(typed)
+            switch typed {
+            case .authStale, .notConfigured, .missingToken, .versionMismatch: break
+            case .profile:
+                clearMusicDNADisplay()
+                musicDNAErrorMessage = localized(key: "ui.music.dna.profile_access")
+            default: musicDNAErrorMessage = localized(key: "ui.music.dna.processing_failed")
+            }
+        } else {
+            musicDNAErrorMessage = localized(key: "ui.music.dna.processing_failed")
+        }
+        log(.warning, "Music DNA profile refresh stopped: \(error.localizedDescription)")
+        if showToast, let message = musicDNAErrorMessage { showMusicDNAToast(message, systemImage: "exclamationmark.triangle.fill") }
     }
 
     private static func isMusicDNAContextChanged(_ error: Error) -> Bool {
@@ -11250,39 +11275,17 @@ public final class DJConnectAppModel: ObservableObject {
             supportsMusicDiscoveryFeedback = false
             return
         }
-        if !force, let response = musicDiscoveryResponse, !isMusicDiscoveryExpired(response),
-           !response.sections.flatMap(\.items).contains(where: { $0.imageURL != nil && ($0.imageExpiresAt.map { $0 <= Date() } ?? false) }),
-           !response.enabled || !response.visibleSections.isEmpty {
+        if !force, let response = musicDiscoveryResponse, canReuseMusicDiscoveryFeed(response) {
             scheduleDiscoveryArtworkRenewal(response)
             return
         }
         let request = UUID(), epoch = sessionHistory.responseEpoch, source = musicDiscoveryPushCoalescingKey()
         discoveryResponseGeneration = request; discoveryLoadGeneration = request
-        let valid = { self.discoveryResponseGeneration == request && self.sessionHistory.responseEpoch == epoch
-            && self.musicDiscoveryPushCoalescingKey() == source && self.isAppInForeground && self.pairingStatus == .paired && !Task.isCancelled }
+        let valid = { self.musicDiscoveryReadIsCurrent(request: request, epoch: epoch, source: source) }
         isLoadingMusicDiscovery = true
         defer { if discoveryLoadGeneration == request { isLoadingMusicDiscovery = false } }
         musicDiscoveryErrorMessage = nil
-        do {
-            let response = try await withHomeAssistantClient { client in
-                let supports = await client.supportsMusicDiscoveryFeedback()
-                guard valid() else { throw CancellationError() }
-                supportsMusicDiscoveryFeedback = supports
-                return try await client.musicDiscoveryFeed(musicDNAKey: askDJMusicDNAKey, language: language)
-            }
-            guard valid() else { return }
-            apply(musicDiscovery: response)
-        } catch let error as DJConnectError {
-            guard valid() else { return }
-            handleMusicDiscoveryError(error)
-            if showToast {
-                showMusicDNAToast(messageForMusicDiscoveryFailure(error), systemImage: "exclamationmark.triangle.fill")
-            }
-        } catch {
-            guard valid() else { return }
-            musicDiscoveryErrorMessage = localized(key: "ui.discovery.could.not.be.loaded")
-            log(.warning, "Music Discovery load failed: \(error.localizedDescription)")
-        }
+        await loadMusicDiscoveryResponse(showToast: showToast, valid: valid)
     }
 
     @discardableResult
@@ -11331,16 +11334,16 @@ public final class DJConnectAppModel: ObservableObject {
         }
         let request = UUID(), epoch = sessionHistory.responseEpoch, source = musicDiscoveryPushCoalescingKey()
         discoveryResponseGeneration = request; discoveryRefreshGeneration = request
-        let valid = { self.discoveryResponseGeneration == request && self.sessionHistory.responseEpoch == epoch
-            && self.musicDiscoveryPushCoalescingKey() == source && self.isAppInForeground && self.pairingStatus == .paired && !Task.isCancelled }
+        let valid = { self.musicDiscoveryReadIsCurrent(request: request, epoch: epoch, source: source) }
         isRefreshingMusicDiscovery = true
         musicDiscoveryErrorMessage = nil
         defer { if discoveryRefreshGeneration == request { isRefreshingMusicDiscovery = false } }
+        return await performMusicDiscoveryRefresh(coalesce: coalesce, valid: valid)
+    }
+
+    private func performMusicDiscoveryRefresh(coalesce: Bool, valid: () -> Bool) async -> Bool {
         do {
-            let refreshResponse = try await withHomeAssistantClient { client in
-                let supports = await client.supportsMusicDiscoveryFeedback()
-                guard valid() else { throw CancellationError() }
-                supportsMusicDiscoveryFeedback = supports
+            let refreshResponse = try await withMusicDiscoveryFeedback(valid: valid) { client in
                 return try await client.refreshMusicDiscovery(musicDNAKey: askDJMusicDNAKey, language: language)
             }
             guard valid() else { return false }
@@ -11348,34 +11351,77 @@ public final class DJConnectAppModel: ObservableObject {
             return true
         } catch let error as DJConnectError {
             guard valid() else { return false }
-            if shouldLoadMusicDiscoveryFeedAfterRefreshError(error) {
-                do {
-                    let response = try await withHomeAssistantClient { client in
-                        let supports = await client.supportsMusicDiscoveryFeedback()
-                guard valid() else { throw CancellationError() }
-                supportsMusicDiscoveryFeedback = supports
-                        return try await client.musicDiscoveryFeed(musicDNAKey: askDJMusicDNAKey, language: language)
-                    }
-                    guard valid() else { return false }
-                    apply(musicDiscovery: response, preservesVisibleRecommendationsOnEmptyEnabledResponse: coalesce)
-                    return true
-                } catch let fallbackError as DJConnectError {
-                    guard valid() else { return false }
-                    handleMusicDiscoveryError(fallbackError)
-                } catch {
-                    guard valid() else { return false }
-                    musicDiscoveryErrorMessage = localized(key: "ui.discovery.could.not.be.loaded")
-                    log(.warning, "Music Discovery refresh fallback feed failed: \(error.localizedDescription)")
-                }
-                return false
-            }
-            handleMusicDiscoveryError(error)
+            return await recoverMusicDiscoveryRefresh(error, coalesce: coalesce, valid: valid)
         } catch is CancellationError {
         } catch {
             guard valid() else { return false }
             musicDiscoveryErrorMessage = localized(key: "ui.discovery.could.not.be.loaded")
             log(.warning, "Music Discovery refresh failed: \(error.localizedDescription)")
         }
+        return false
+    }
+
+    private func musicDiscoveryReadIsCurrent(request: UUID, epoch: UUID, source: String) -> Bool {
+        discoveryResponseGeneration == request && sessionHistory.responseEpoch == epoch &&
+            musicDiscoveryPushCoalescingKey() == source && isAppInForeground && pairingStatus == .paired && !Task.isCancelled
+    }
+
+    private func withMusicDiscoveryFeedback(valid: () -> Bool,
+        _ read: (DJConnectClient) async throws -> DJConnectMusicDiscoveryResponse) async throws -> DJConnectMusicDiscoveryResponse {
+        try await withHomeAssistantClient { client in
+            let supports = await client.supportsMusicDiscoveryFeedback()
+            guard valid() else { throw CancellationError() }
+            supportsMusicDiscoveryFeedback = supports
+            return try await read(client)
+        }
+    }
+
+    private func canReuseMusicDiscoveryFeed(_ response: DJConnectMusicDiscoveryResponse) -> Bool {
+        !isMusicDiscoveryExpired(response) &&
+            !response.sections.flatMap(\.items).contains(where: { $0.imageURL != nil && ($0.imageExpiresAt.map { $0 <= Date() } ?? false) }) &&
+            (!response.enabled || !response.visibleSections.isEmpty)
+    }
+
+    private func loadMusicDiscoveryResponse(showToast: Bool, valid: () -> Bool) async {
+        do {
+            let response = try await withMusicDiscoveryFeedback(valid: valid) { client in
+                return try await client.musicDiscoveryFeed(musicDNAKey: askDJMusicDNAKey, language: language)
+            }
+            guard valid() else { return }
+            apply(musicDiscovery: response)
+        } catch let error as DJConnectError {
+            guard valid() else { return }
+            handleMusicDiscoveryError(error)
+            if showToast {
+                showMusicDNAToast(messageForMusicDiscoveryFailure(error), systemImage: "exclamationmark.triangle.fill")
+            }
+        } catch {
+            guard valid() else { return }
+            musicDiscoveryErrorMessage = localized(key: "ui.discovery.could.not.be.loaded")
+            log(.warning, "Music Discovery load failed: \(error.localizedDescription)")
+        }
+    }
+
+    private func recoverMusicDiscoveryRefresh(_ error: DJConnectError, coalesce: Bool, valid: () -> Bool) async -> Bool {
+        if shouldLoadMusicDiscoveryFeedAfterRefreshError(error) {
+            do {
+                let response = try await withMusicDiscoveryFeedback(valid: valid) { client in
+                    return try await client.musicDiscoveryFeed(musicDNAKey: askDJMusicDNAKey, language: language)
+                }
+                guard valid() else { return false }
+                apply(musicDiscovery: response, preservesVisibleRecommendationsOnEmptyEnabledResponse: coalesce)
+                return true
+            } catch let fallbackError as DJConnectError {
+                guard valid() else { return false }
+                handleMusicDiscoveryError(fallbackError)
+            } catch {
+                guard valid() else { return false }
+                musicDiscoveryErrorMessage = localized(key: "ui.discovery.could.not.be.loaded")
+                log(.warning, "Music Discovery refresh fallback feed failed: \(error.localizedDescription)")
+            }
+            return false
+        }
+        handleMusicDiscoveryError(error)
         return false
     }
 
@@ -11574,11 +11620,11 @@ public final class DJConnectAppModel: ObservableObject {
         switch error {
         case .routeMissing:
             return localized(key: "appModel.djconnect.route.missing.in.home.assistant.check.the.integration")
-        case .backendUnavailable, .server, .network, .decodingFailed, .invalidResponse, .payloadTooLarge:
+        case .backendUnavailable, .server, .network, .decodingFailed, .invalidResponse, .payloadTooLarge, .trackInsightUnavailable:
             return localized(key: "ui.discovery.could.not.be.loaded")
         case .missingToken:
             return localized(key: "appModel.missing.djconnect.bearer.token.reset.pairing.to.set.up")
-        case .authStale, .notConfigured:
+        case .authStale, .notConfigured, .pairingFailed:
             return localized(key: "appModel.not.connected.to.home.assistant")
         case .versionMismatch:
             return localized(key: "appModel.update.the.djconnect.app.or.home.assistant.integration")
@@ -11586,10 +11632,6 @@ public final class DJConnectAppModel: ObservableObject {
             return localized(key: "pairing.error.clientTypeMismatch")
         case .invalidConfiguration:
             return localized(key: "appModel.no.connection.to.home.assistant")
-        case .pairingFailed:
-            return localized(key: "appModel.not.connected.to.home.assistant")
-        case .trackInsightUnavailable:
-            return localized(key: "ui.discovery.could.not.be.loaded")
         case let .profile(_, _, message):
             return message?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
                 ? message!
@@ -11675,20 +11717,11 @@ public final class DJConnectAppModel: ObservableObject {
     }
 
     public static func disabledMusicDNAProfileResponse() -> DJConnectMusicDNAProfileResponse {
-        DJConnectMusicDNAProfileResponse(
-            success: true,
-            enabled: false,
-            profile: DJConnectMusicDNAProfile()
-        )
+        .disabledProjection()
     }
 
     public static func disabledMusicDiscoveryResponse() -> DJConnectMusicDiscoveryResponse {
-        DJConnectMusicDiscoveryResponse(
-            success: true,
-            enabled: false,
-            reason: "music_dna_disabled",
-            sections: []
-        )
+        .disabledProjection()
     }
 
     public static func demoMusicDiscoveryResponse(revision: Int = 12) -> DJConnectMusicDiscoveryResponse {

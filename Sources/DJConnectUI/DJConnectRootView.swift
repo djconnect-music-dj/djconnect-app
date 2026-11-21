@@ -8859,21 +8859,7 @@ extension TrackVibeProfile {
             copy.animationSpeed = min(1.9, max(0.90, animationSpeed * 1.24))
             copy.motionStyle = .energetic
         }
-        copy.spectrumProfile = copy.spectrumProfile.enumerated().map { index, value in
-            let position = Double(index) / Double(max(copy.spectrumProfile.count - 1, 1))
-            let lift: Double
-            switch clampedStep {
-            case 0:
-                lift = 0.78 - position * 0.08
-            case 1:
-                lift = 0.88 + (1.0 - abs(position - 0.5) * 2.0) * 0.18
-            case 2:
-                lift = 0.96 + position * 0.24
-            default:
-                lift = 1.02 + sin(position * .pi * 3.0) * 0.20
-            }
-            return min(1.0, max(0.12, value * lift))
-        }
+        copy.spectrumProfile = copy.spectrumApplyingMoodRenderStep(clampedStep)
         return copy
     }
 

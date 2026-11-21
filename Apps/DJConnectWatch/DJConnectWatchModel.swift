@@ -3449,8 +3449,8 @@ final class DJConnectWatchModel: NSObject, ObservableObject {
     }
 
     private func applyDemoMusicDNAProfile() {
-        musicDNAProfileResponse = demoMusicDNAEnabled ? Self.demoMusicDNAProfileResponse(language: language) : Self.disabledMusicDNAProfileResponse()
-        musicDiscoveryResponse = demoMusicDNAEnabled ? Self.demoMusicDiscoveryResponse() : Self.disabledMusicDiscoveryResponse()
+        musicDNAProfileResponse = demoMusicDNAEnabled ? Self.demoMusicDNAProfileResponse(language: language) : DJConnectMusicDNAProfileResponse.disabledProjection()
+        musicDiscoveryResponse = demoMusicDNAEnabled ? Self.demoMusicDiscoveryResponse() : DJConnectMusicDiscoveryResponse.disabledProjection()
         musicDNAErrorMessage = nil
         musicDiscoveryErrorMessage = nil
         isLoadingMusicDNA = false
@@ -3470,7 +3470,7 @@ final class DJConnectWatchModel: NSObject, ObservableObject {
 
     func loadMusicDiscovery(force: Bool = false) async {
         if isDemoMode {
-            musicDiscoveryResponse = demoMusicDNAEnabled ? Self.demoMusicDiscoveryResponse() : Self.disabledMusicDiscoveryResponse()
+            musicDiscoveryResponse = demoMusicDNAEnabled ? Self.demoMusicDiscoveryResponse() : DJConnectMusicDiscoveryResponse.disabledProjection()
             musicDiscoveryErrorMessage = nil
             isLoadingMusicDiscovery = false
             isRefreshingMusicDiscovery = false
@@ -3510,7 +3510,7 @@ final class DJConnectWatchModel: NSObject, ObservableObject {
     func refreshMusicDiscovery() async {
         if isDemoMode {
             let revision = (musicDiscoveryResponse?.revision ?? 12) + 1
-            musicDiscoveryResponse = demoMusicDNAEnabled ? Self.demoMusicDiscoveryResponse(revision: revision) : Self.disabledMusicDiscoveryResponse()
+            musicDiscoveryResponse = demoMusicDNAEnabled ? Self.demoMusicDiscoveryResponse(revision: revision) : DJConnectMusicDiscoveryResponse.disabledProjection()
             musicDiscoveryErrorMessage = nil
             return
         }
@@ -5659,22 +5659,7 @@ final class DJConnectWatchModel: NSObject, ObservableObject {
             .uppercased()
     }
 
-    private static func disabledMusicDNAProfileResponse() -> DJConnectMusicDNAProfileResponse {
-        DJConnectMusicDNAProfileResponse(
-            success: true,
-            enabled: false,
-            profile: DJConnectMusicDNAProfile()
-        )
-    }
 
-    private static func disabledMusicDiscoveryResponse() -> DJConnectMusicDiscoveryResponse {
-        DJConnectMusicDiscoveryResponse(
-            success: true,
-            enabled: false,
-            reason: "music_dna_disabled",
-            sections: []
-        )
-    }
 
     private static func demoMusicDiscoveryResponse(revision: Int = 12) -> DJConnectMusicDiscoveryResponse {
         DJConnectMusicDiscoveryResponse(
