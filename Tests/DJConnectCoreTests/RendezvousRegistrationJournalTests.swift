@@ -238,21 +238,7 @@ final class RendezvousRegistrationJournalTests: XCTestCase {
         let bytes = try store.read()!
         for kind in 0..<11 {
             var object = try JSONSerialization.jsonObject(with: bytes) as! [String: Any]
-            var sdk = object["attestationWindow"] as! [String: Any]
-            switch kind {
-            case 0: object.removeValue(forKey: "admission")
-            case 1: object.removeValue(forKey: "attestationWindow")
-            case 2: object["admission"] = "preparedImport"
-            case 3: sdk["kind"] = "registration"
-            case 4: sdk["deadlineMS"] = 119_999
-            case 5: object["nonceHash"] = Data(repeating: 0, count: 32).base64EncodedString()
-            case 6: object["request"] = Data([99]).base64EncodedString()
-            case 7: object["schemaVersion"] = 1
-            case 8: object["phase"] = "prepared"
-            case 9: sdk["lastObservedMS"] = 1 // journal clock cannot trail its nested window
-            default: var window = object["window"] as! [String: Any]; window["callsStarted"] = 1; window["reservation"] = UUID().uuidString; object["window"] = window
-            }
-            if kind != 1 { object["attestationWindow"] = sdk }
+            corruptAttestationRecord(&object, kind: kind)
             store.inject(try JSONSerialization.data(withJSONObject: object))
             do { _ = try await subject.snapshot(at: 1); XCTFail("malformed SDK case \(kind)") } catch {}
         }
@@ -262,6 +248,53 @@ final class RendezvousRegistrationJournalTests: XCTestCase {
         object.removeValue(forKey: "attestationWindow")
         store.inject(try JSONSerialization.data(withJSONObject: object))
         do { _ = try await subject.snapshot(at: 1); XCTFail() } catch {}
+    }
+
+    private func corruptAttestationRecord(_ object: inout [String: Any], kind: Int) {
+        var sdk = object["attestationWindow"] as! [String: Any]
+        switch kind {
+        case 0, 1, 2, 7, 8: corruptAttestationAdmission(&object, kind: kind)
+        case 3: sdk["kind"] = "registration"
+        case 4: sdk["deadlineMS"] = 119_999
+        case 5: object["nonceHash"] = Data(repeating: 0, count: 32).base64EncodedString()
+        case 6: object["request"] = Data([99]).base64EncodedString()
+        case 9: sdk["lastObservedMS"] = 1 // journal clock cannot trail its nested window
+        default: var window = object["window"] as! [String: Any]; window["callsStarted"] = 1; window["reservation"] = UUID().uuidString; object["window"] = window
+        }
+        if kind != 1 { object["attestationWindow"] = sdk }
+    }
+
+    private func corruptAttestationAdmission(_ object: inout [String: Any], kind: Int) {
+        switch kind {
+        case 0: object.removeValue(forKey: "admission")
+        case 1: object.removeValue(forKey: "attestationWindow")
+        case 2: object["admission"] = "preparedImport"
+        case 7: object["schemaVersion"] = 1
+        case 8: object["phase"] = "prepared"
+        default: preconditionFailure("Unrouted attestation admission mutation")
+        }
+    }
+
+    private func corruptPreparedRegistration(_ object: inout [String: Any], kind: Int) throws {
+        switch kind {
+        case 0: object["schemaVersion"] = 3
+        case 1: object["key"] = "bad-key"
+        case 2: object["nonceHash"] = Data(repeating: 0, count: 32).base64EncodedString()
+        case 3: object["phase"] = "completed"
+        case 4: object["requestHash"] = Data(repeating: 0, count: 32).base64EncodedString()
+        case 5: object["lastObservedMS"] = -1
+        case 6: var window = object["window"] as! [String: Any]; window["kind"] = "recovery"; object["window"] = window
+        default: try corruptPreparedRequest(&object, kind: kind)
+        }
+    }
+
+    private func corruptPreparedRequest(_ object: inout [String: Any], kind: Int) throws {
+        var body = try JSONSerialization.jsonObject(with: Data(base64Encoded: object["request"] as! String)!) as! [String: Any]
+        if kind == 7 { body["Authorization"] = "not-a-real-token" }
+        if kind == 8 { body["challenge_id"] = url(Data(repeating: 5, count: 32)) }
+        let changed = try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys, .withoutEscapingSlashes]) + (kind == 9 ? Data(" ".utf8) : Data())
+        object["request"] = changed.base64EncodedString()
+        object["requestHash"] = Data(SHA256.hash(data: changed)).base64EncodedString()
     }
 
     func testConcurrentSDKReservationsHaveOnePersistedWinner() async throws {
@@ -435,22 +468,7 @@ final class RendezvousRegistrationJournalTests: XCTestCase {
         let bytes = try store.read()!
         for kind in 0..<10 {
             var object = try JSONSerialization.jsonObject(with: bytes) as! [String: Any]
-            switch kind {
-            case 0: object["schemaVersion"] = 3
-            case 1: object["key"] = "bad-key"
-            case 2: object["nonceHash"] = Data(repeating: 0, count: 32).base64EncodedString()
-            case 3: object["phase"] = "completed"
-            case 4: object["requestHash"] = Data(repeating: 0, count: 32).base64EncodedString()
-            case 5: object["lastObservedMS"] = -1
-            case 6: var window = object["window"] as! [String: Any]; window["kind"] = "recovery"; object["window"] = window
-            default:
-                var body = try JSONSerialization.jsonObject(with: Data(base64Encoded: object["request"] as! String)!) as! [String: Any]
-                if kind == 7 { body["Authorization"] = "not-a-real-token" }
-                if kind == 8 { body["challenge_id"] = url(Data(repeating: 5, count: 32)) }
-                let changed = try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys, .withoutEscapingSlashes]) + (kind == 9 ? Data(" ".utf8) : Data())
-                object["request"] = changed.base64EncodedString()
-                object["requestHash"] = Data(SHA256.hash(data: changed)).base64EncodedString()
-            }
+            try corruptPreparedRegistration(&object, kind: kind)
             store.inject(try JSONSerialization.data(withJSONObject: object))
             do { _ = try await original.snapshot(at: 0); XCTFail("corrupt case \(kind)") } catch {}
         }

@@ -104,45 +104,62 @@ enum PreparedPushProof {
         if variant != "new_key_attestation" { keys.insert("verified_key_ref") }
         if variant == "target_registration_assertion" { keys.formUnion(["native_target", "native_token_sha256"]) }
         try require(domains[variant] != nil && Set(o.keys) == keys && o["contract_version"] == .integer(1) && o["proof_variant"] == .string(variant) && o["proof_port_audience"] == .string("djc-push-status-native-proof/1"))
+        try validateTranscriptIdentifiers(o, variant: variant)
+        try validateTranscriptKeyAndOrigin(o)
+        let activity = try validateTranscriptClient(o)
+        if variant == "target_registration_assertion" {
+            try validateTranscriptTarget(o, activity: activity)
+        }
+    }
+
+    private static func validateTranscriptIdentifiers(_ o: [String: Value], variant: String) throws {
         for k in ["proof_job_id", "bootstrap_id", "operation_id"] + (variant == "new_key_attestation" ? [] : ["verified_key_ref"]) { try require(matches(o[k]?.string, uuid)) }
         for k in ["candidate_sha256", "source_selection_sha256", "owner_approval_binding_sha256", "paired_subject_binding_sha256", "identity_policy_sha256", "deployment_policy_sha256"] + (variant == "target_registration_assertion" ? ["native_token_sha256"] : []) { try require(matches(o[k]?.string, hex)) }
         for k in ["bootstrap_deadline_unix_ms", "original_grant_expires_at_unix_ms"] { try require(o[k]?.integer.map { (1...9_007_199_254_740_991).contains($0) } ?? false) }
+    }
+
+    private static func validateTranscriptKeyAndOrigin(_ o: [String: Value]) throws {
         try nonce(o["nonce_b64url"]?.string)
         guard let key = o["apple_key_id_b64"]?.string else { throw Invalid.data }
         _ = try base64(key, count: 32...32)
         guard let origin = o["selected_ha_origin"]?.string else { throw Invalid.data }
         try require((1...2048).contains(origin.unicodeScalars.count))
         try require(o["expected_target_generation"] == .null || matches(o["expected_target_generation"]?.string, uuid))
+    }
+
+    private static func validateTranscriptClient(_ o: [String: Value]) throws -> Bool {
         let activity = o["token_role"] == .string("live_activity_update")
         try require([Value.string("ios"), .string("macos")].contains(o["client_type"]) && [Value.string("widget"), .string("live_activity_update")].contains(o["token_role"]) && !(activity && o["client_type"] == .string("macos")))
         if activity {
             guard let p = o["prospective_activity_identity"]?.object else { throw Invalid.data }
             try require(Set(p.keys) == ["presentation_id", "presentation_generation"] && p.values.allSatisfy { matches($0.string, uuid) } && o["profile_identity_sha256"] == .string(profile))
         } else { try require(o["profile_identity_sha256"] == .null && o["prospective_activity_identity"] == .null) }
-        if variant == "target_registration_assertion" {
-            guard let t = o["native_target"]?.object else { throw Invalid.data }
-            let tkeys: Set<String> = activity ? ["kind", "app_bundle_id", "native_activity_id", "native_attributes_type", "presentation_id", "presentation_generation", "profile_id", "profile_identity_sha256"] : ["kind", "app_bundle_id", "extension_bundle_id", "widget_kind"]
-            try require(Set(t.keys) == tkeys && t["kind"] == o["token_role"])
-            for k in activity ? ["app_bundle_id", "native_activity_id"] : ["app_bundle_id", "extension_bundle_id", "widget_kind"] { try require(t[k]?.string.map { (1...200).contains($0.unicodeScalars.count) } ?? false) }
-            if activity {
-                let p = o["prospective_activity_identity"]!.object!
-                try require(t["native_attributes_type"] == .string("DJConnectRemotePlaybackStatusActivityAttributesV1") && t["profile_id"] == .string("remote-playback-status-v1") && t["profile_identity_sha256"] == .string(profile) && t["presentation_id"] == p["presentation_id"] && t["presentation_generation"] == p["presentation_generation"])
-            }
-        }
+        return activity
     }
+
+    private static func validateTranscriptTarget(_ o: [String: Value], activity: Bool) throws {
+        guard let t = o["native_target"]?.object else { throw Invalid.data }
+        let tkeys: Set<String> = activity ? ["kind", "app_bundle_id", "native_activity_id", "native_attributes_type", "presentation_id", "presentation_generation", "profile_id", "profile_identity_sha256"] : ["kind", "app_bundle_id", "extension_bundle_id", "widget_kind"]
+        try require(Set(t.keys) == tkeys && t["kind"] == o["token_role"])
+        for k in activity ? ["app_bundle_id", "native_activity_id"] : ["app_bundle_id", "extension_bundle_id", "widget_kind"] { try require(t[k]?.string.map { (1...200).contains($0.unicodeScalars.count) } ?? false) }
+        if activity { try validateNativeActivityIdentity(t, transcript: o) }
+    }
+
+    private static func validateNativeActivityIdentity(_ t: [String: Value], transcript o: [String: Value]) throws {
+        let p = o["prospective_activity_identity"]!.object!
+        try require(t["native_attributes_type"] == .string("DJConnectRemotePlaybackStatusActivityAttributesV1") && t["profile_id"] == .string("remote-playback-status-v1") && t["profile_identity_sha256"] == .string(profile) && t["presentation_id"] == p["presentation_id"] && t["presentation_generation"] == p["presentation_generation"])
+    }
+
     static func decode(_ bytes: Data, expected e: Expected, boundJob: String? = nil, boundOpaque: [String: Value]? = nil) throws -> Parsed {
         let o = try object(bytes, max: 8192), target = e.variant == "target_registration_assertion"
         let op = target ? "target_operation_id" : "key_operation_id", handle = target ? "target_verification_handle" : "key_verification_handle"
         let keys: Set<String> = ["contract_version", "request_id", "bootstrap_id", "outcome", op, "proof_job_id", "proof_variant", "domain_prefix_utf8", "canonical_transcript_b64", "client_data_hash_sha256", "prepared_transcript_sha256", handle, "bootstrap_deadline_unix_ms", "original_grant_expires_at_unix_ms"]
-        try require(Set(o.keys) == keys && Set(e.known.keys) == knownKeys && matches(e.requestID, uuid) && o["request_id"] == .string(e.requestID) && o["contract_version"] == .integer(1) && o["proof_variant"] == .string(e.variant) && o["outcome"] == .string(target ? "target_proof_prepared" : "key_proof_prepared"))
+        try validatePreparedEnvelope(o, expected: e, target: target, keys: keys)
         guard let domain = domains[e.variant], o["domain_prefix_utf8"] == .string(domain), let b64 = o["canonical_transcript_b64"]?.string else { throw Invalid.data }
         let original = try base64(b64, count: 1...4096), t = try object(original, max: 4096)
         try require(Data(Value.object(t).canonical.utf8) == original) // Compare only; never replace signing bytes.
         try transcript(t, variant: e.variant)
-        for (k, v) in e.known { try require(t[k] == v) }
-        try require(o["bootstrap_id"] == t["bootstrap_id"] && o[op] == t["operation_id"] && o["proof_job_id"] == t["proof_job_id"] && o["bootstrap_deadline_unix_ms"] == t["bootstrap_deadline_unix_ms"] && o["original_grant_expires_at_unix_ms"] == t["original_grant_expires_at_unix_ms"])
-        if target { try require(e.nativeTarget != nil && e.nativeTokenHash != nil && matches(e.verifiedKeyRef, uuid) && t["verified_key_ref"] == e.verifiedKeyRef.map(Value.string) && t["native_target"] == e.nativeTarget && t["native_token_sha256"] == e.nativeTokenHash.map(Value.string)) }
-        else { try require(e.nativeTarget == nil && e.nativeTokenHash == nil && (e.verifiedKeyRef == nil || t["verified_key_ref"] == e.verifiedKeyRef.map(Value.string))) }
+        try validatePreparedBindings(o, transcript: t, expected: e, target: target, operationKey: op)
         let preimage = Data(domain.utf8) + original
         try require(o["prepared_transcript_sha256"] == .string(hash(original)) && o["client_data_hash_sha256"] == .string(hash(preimage)))
         try nonce(o[handle]?.string)
@@ -151,6 +168,21 @@ enum PreparedPushProof {
         try require(boundJob.map { $0 == job } ?? true)
         try require(boundOpaque.map { $0 == opaque } ?? true)
         return Parsed(originalBytes: original, clientDataHash: Data(SHA256.hash(data: preimage)), job: job, opaqueBindings: opaque, handle: o[handle]!.string!, preparedKeyRef: t["verified_key_ref"]?.string)
+    }
+
+    private static func validatePreparedEnvelope(_ o: [String: Value], expected e: Expected, target: Bool, keys: Set<String>) throws {
+        try require(Set(o.keys) == keys && Set(e.known.keys) == knownKeys && matches(e.requestID, uuid) && o["request_id"] == .string(e.requestID) && o["contract_version"] == .integer(1) && o["proof_variant"] == .string(e.variant) && o["outcome"] == .string(target ? "target_proof_prepared" : "key_proof_prepared"))
+    }
+
+    private static func validatePreparedBindings(_ o: [String: Value], transcript t: [String: Value], expected e: Expected, target: Bool, operationKey op: String) throws {
+        for (k, v) in e.known { try require(t[k] == v) }
+        try require(o["bootstrap_id"] == t["bootstrap_id"] && o[op] == t["operation_id"] && o["proof_job_id"] == t["proof_job_id"] && o["bootstrap_deadline_unix_ms"] == t["bootstrap_deadline_unix_ms"] && o["original_grant_expires_at_unix_ms"] == t["original_grant_expires_at_unix_ms"])
+        try validatePreparedNativeTarget(t, expected: e, target: target)
+    }
+
+    private static func validatePreparedNativeTarget(_ t: [String: Value], expected e: Expected, target: Bool) throws {
+        if target { try require(e.nativeTarget != nil && e.nativeTokenHash != nil && matches(e.verifiedKeyRef, uuid) && t["verified_key_ref"] == e.verifiedKeyRef.map(Value.string) && t["native_target"] == e.nativeTarget && t["native_token_sha256"] == e.nativeTokenHash.map(Value.string)) }
+        else { try require(e.nativeTarget == nil && e.nativeTokenHash == nil && (e.verifiedKeyRef == nil || t["verified_key_ref"] == e.verifiedKeyRef.map(Value.string))) }
     }
 
     // Logical lifecycle model ONLY. Integer ticks are synthetic controls, not a

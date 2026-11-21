@@ -23,6 +23,21 @@ enum ProbeFailure: Error { case arguments, state, unexpectedAdmission, metadata,
         let store = RendezvousRepairKeychainStorage(service: service, account: account)
         let journal = RendezvousRecoveryJournal(storage: store)
         switch action {
+        case "begin", "restore":
+            try await runAssertionPhase(action: action, store: store, journal: journal)
+        case "retry", "expire", "verify-purge":
+            try await runSubmissionPhase(action: action, store: store, journal: journal)
+        case "metadata", "cleanup":
+            try runStorageInspection(action: action, service: service, account: account, store: store)
+        default: throw ProbeFailure.arguments
+        }
+    }
+    static func url(_ bytes: Data) -> String {
+        bytes.base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
+    }
+
+    private static func runAssertionPhase(action: String, store: RendezvousRepairKeychainStorage, journal: RendezvousRecoveryJournal) async throws {
+        switch action {
         case "begin":
             guard try store.read() == nil else { throw ProbeFailure.state }
             let id = try await journal.begin(keyIdentifier: Data(repeating: 7, count: 32).base64EncodedString(),
@@ -44,6 +59,12 @@ enum ProbeFailure: Error { case arguments, state, unexpectedAdmission, metadata,
             let call = try await journal.reserveSubmission(attemptIdentifier: state.attemptIdentifier, at: 1)
             try await journal.completeSubmission(attemptIdentifier: state.attemptIdentifier, reservation: call.reservation, outcome: .responseLost, at: 100)
             print("PASS: occupied assertion restored; original bytes/hash matched; maximum synthetic assertion saved; request SHA256=\(digest(call.body))")
+        default: throw ProbeFailure.arguments
+        }
+    }
+
+    private static func runSubmissionPhase(action: String, store: RendezvousRepairKeychainStorage, journal: RendezvousRecoveryJournal) async throws {
+        switch action {
         case "retry":
             guard let state = try await journal.snapshot(at: 2_100), state.phase == .prepared,
                   state.callsStarted == 1, state.deadlineMS == 120_000 else { throw ProbeFailure.state }
@@ -60,6 +81,12 @@ enum ProbeFailure: Error { case arguments, state, unexpectedAdmission, metadata,
             do { _ = try await journal.reserveSubmission(attemptIdentifier: state.attemptIdentifier, at: now); throw ProbeFailure.unexpectedAdmission }
             catch RendezvousRecoveryJournal.Failure.unavailable {}
             print("PASS: expired material removed; original handle and consumed assertion/request budgets retained")
+        default: throw ProbeFailure.arguments
+        }
+    }
+
+    private static func runStorageInspection(action: String, service: String, account: String, store: RendezvousRepairKeychainStorage) throws {
+        switch action {
         case "metadata", "cleanup":
             let context = LAContext(); context.interactionNotAllowed = true
             var query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
@@ -82,8 +109,6 @@ enum ProbeFailure: Error { case arguments, state, unexpectedAdmission, metadata,
         default: throw ProbeFailure.arguments
         }
     }
-    static func url(_ bytes: Data) -> String {
-        bytes.base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
-    }
+
     static func digest(_ bytes: Data) -> String { SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined() }
 }

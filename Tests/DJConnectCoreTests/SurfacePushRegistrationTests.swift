@@ -32,88 +32,104 @@ private enum SurfacePushProbe {
   let service=DJConnectSurfacePushRegistration.Services(isCurrent:{_ in current},nowMS:{now},monotonicNow:{mono},register:{_,expected in
    calls += 1; receivedExpected=expected; return reply
   },revoke:{_,_ in writes += 1;return reply},publishBackgroundRead:{published=$0})
-  let owner=DJConnectSurfacePushRegistration()
-  await owner.register(first,services:service)
-  check(owner.state == .registered && published != nil && calls == 1,"valid exact registration publishes scoped credential")
-  await owner.register(first,services:service)
-  check(calls == 1,"same admitted token does not replay write")
-  reply=try response(revision:2,generation:"generation-A")
-  await owner.register(witness(epoch:first.ownerEpoch,token:2,deadline:first.originalMonotonicDeadline),services:service)
-  check(owner.coordinate?.revision == 2 && receivedExpected?.revision == 1,"rotation carries original CAS coordinate")
-  await owner.register(witness(),services:service)
-  check(calls == 2,"different owner cannot rotate predecessor")
-  await owner.withdraw(services:service)
-  check(owner.state == .withdrawn && published == nil && writes == 1,"withdraw scrubs then revokes original registration")
-  let invalid=DJConnectSurfacePushRegistration(); reply=try response(credential:"ordinary-app-bearer")
-  await invalid.register(first,services:service)
-  check(invalid.state == .outcomeUnknown && published == nil,"ordinary app bearer cannot become background credential")
-  let before=calls; await invalid.register(first,services:service)
-  check(calls == before,"unknown write outcome is not automatically retried")
-  let expired=DJConnectSurfacePushRegistration(); reply=try response(expiry:130000)
-  await expired.register(first,services:service)
-  check(expired.state == .outcomeUnknown && published == nil,"server cannot extend original purpose expiry")
-  now=120000
-  let notDispatched=DJConnectSurfacePushRegistration();let beforeExpiry=calls
-  await notDispatched.register(first,services:service)
-  check(calls == beforeExpiry,"equality expiry blocks before network")
-  now=100000; current=true
-  let pending=Pending();let late=DJConnectSurfacePushRegistration()
-  let delayed=DJConnectSurfacePushRegistration.Services(isCurrent:{_ in current},nowMS:{now},monotonicNow:{mono},register:{_,_ in try await pending.read()},
-   revoke:{_,_ in writes += 1;return reply},publishBackgroundRead:{published=$0})
-  let task=Task { await late.register(first,services:delayed) }
-  while pending.continuation == nil { await Task.yield() }
-  current=false;pending.finish(try response());await task.value
-  check(late.state == .withdrawn && published == nil,"late success after owner loss cannot publish")
-  current=true
-  let pending2=Pending();let withdrawn=DJConnectSurfacePushRegistration()
-  let delayed2=DJConnectSurfacePushRegistration.Services(isCurrent:{_ in current},nowMS:{now},monotonicNow:{mono},register:{_,_ in try await pending2.read()},
-   revoke:{_,_ in writes += 1;return reply},publishBackgroundRead:{published=$0})
-  let task2=Task { await withdrawn.register(first,services:delayed2) }
-  while pending2.continuation == nil { await Task.yield() }
-  await withdrawn.withdraw(services:delayed2);pending2.finish(try response());await task2.value
-  check(withdrawn.state == .withdrawn && published == nil,"late registration ACK cannot resurrect explicit withdrawal")
-  let pending3=Pending();let short=DJConnectSurfacePushRegistration()
-  let delayed3=DJConnectSurfacePushRegistration.Services(isCurrent:{_ in current},nowMS:{now},monotonicNow:{mono},register:{_,_ in try await pending3.read()},
-   revoke:{_,_ in writes += 1;return reply},publishBackgroundRead:{published=$0})
-  let task3=Task { await short.register(first,services:delayed3) }
-  while pending3.continuation == nil { await Task.yield() }
-  mono=first.originalMonotonicDeadline;pending3.finish(try response());await task3.value
-  check(short.state == .withdrawn && published == nil,"original monotonic equality expiry rejects despite unchanged wall time")
-  mono=ContinuousClock.now
-  for poison in [0,-1,Int.max,9_007_199_254_740_991] {
-   let poisoned=DJConnectSurfacePushRegistration();reply=try response(revision:poison)
-   await poisoned.register(first,services:service)
-   check(poisoned.state == .outcomeUnknown && published == nil,"invalid revision \(poison) rejected before adoption")
+  func checkRegistrationRotationAndWithdrawal() async throws {
+   let owner=DJConnectSurfacePushRegistration()
+   await owner.register(first,services:service)
+   check(owner.state == .registered && published != nil && calls == 1,"valid exact registration publishes scoped credential")
+   await owner.register(first,services:service)
+   check(calls == 1,"same admitted token does not replay write")
+   reply=try response(revision:2,generation:"generation-A")
+   await owner.register(witness(epoch:first.ownerEpoch,token:2,deadline:first.originalMonotonicDeadline),services:service)
+   check(owner.coordinate?.revision == 2 && receivedExpected?.revision == 1,"rotation carries original CAS coordinate")
+   await owner.register(witness(),services:service)
+   check(calls == 2,"different owner cannot rotate predecessor")
+   await owner.withdraw(services:service)
+   check(owner.state == .withdrawn && published == nil && writes == 1,"withdraw scrubs then revokes original registration")
   }
-  let upper=DJConnectSurfacePushRegistration();reply=try response(revision:9_007_199_254_740_990)
-  await upper.register(first,services:service)
-  let beforeUpper=calls
-  await upper.register(witness(epoch:first.ownerEpoch,token:2,deadline:first.originalMonotonicDeadline),services:service)
-  check(calls == beforeUpper,"highest valid revision cannot overflow or dispatch invalid next revision")
-  let cancelled=DJConnectSurfacePushRegistration();reply=try response();let beforeCancel=calls
-  let cancelledTask=Task { await cancelled.register(first,services:service) }
-  cancelledTask.cancel();await cancelledTask.value
-  check(calls == beforeCancel && cancelled.state == .idle,"already cancelled registration makes zero service calls")
-  let revokeCancelled=DJConnectSurfacePushRegistration();await revokeCancelled.register(first,services:service)
-  let beforeRevoke=writes
-  let revokeTask=Task { await revokeCancelled.withdraw(services:service) }
-  revokeTask.cancel();await revokeTask.value
-  check(writes == beforeRevoke && published == nil && revokeCancelled.state == .withdrawn,"cancelled revoke still scrubs locally and makes zero writes")
-  let callbackCancelled=DJConnectSurfacePushRegistration();let beforeCallback=calls
-  let callbackService=DJConnectSurfacePushRegistration.Services(isCurrent:{_ in current},nowMS:{now},monotonicNow:{mono},
-   register:{_,_ in calls += 1;return reply},revoke:{_,_ in writes += 1;return reply},
-   publishBackgroundRead:{ value in published=value; withUnsafeCurrentTask { $0?.cancel() } })
-  let callbackTask=Task { await callbackCancelled.register(first,services:callbackService) }
-  await callbackTask.value
-  check(calls == beforeCallback && callbackCancelled.state == .withdrawn,"cancellation from pre-dispatch callback blocks service effect")
-  let callbackPost=DJConnectSurfacePushRegistration();var checks=0
-  let callbackPostService=DJConnectSurfacePushRegistration.Services(isCurrent:{_ in
-    checks += 1;if checks == 3 { withUnsafeCurrentTask { $0?.cancel() } };return true
-   },nowMS:{now},monotonicNow:{mono},register:{_,_ in calls += 1;return reply},
-   revoke:{_,_ in writes += 1;return reply},publishBackgroundRead:{published=$0})
-  let callbackPostTask=Task { await callbackPost.register(first,services:callbackPostService) }
-  await callbackPostTask.value
-  check(callbackPost.state == .withdrawn && published == nil,"post-ACK authority callback cancellation cannot publish")
+  func checkUncertainOutcomeAndWallExpiry() async throws {
+   let invalid=DJConnectSurfacePushRegistration(); reply=try response(credential:"ordinary-app-bearer")
+   await invalid.register(first,services:service)
+   check(invalid.state == .outcomeUnknown && published == nil,"ordinary app bearer cannot become background credential")
+   let before=calls; await invalid.register(first,services:service)
+   check(calls == before,"unknown write outcome is not automatically retried")
+   let expired=DJConnectSurfacePushRegistration(); reply=try response(expiry:130000)
+   await expired.register(first,services:service)
+   check(expired.state == .outcomeUnknown && published == nil,"server cannot extend original purpose expiry")
+   now=120000
+   let notDispatched=DJConnectSurfacePushRegistration();let beforeExpiry=calls
+   await notDispatched.register(first,services:service)
+   check(calls == beforeExpiry,"equality expiry blocks before network")
+  }
+  func checkLateOwnerWithdrawalAndMonotonicExpiry() async throws {
+   now=100000; current=true
+   let pending=Pending();let late=DJConnectSurfacePushRegistration()
+   let delayed=DJConnectSurfacePushRegistration.Services(isCurrent:{_ in current},nowMS:{now},monotonicNow:{mono},register:{_,_ in try await pending.read()},
+    revoke:{_,_ in writes += 1;return reply},publishBackgroundRead:{published=$0})
+   let task=Task { await late.register(first,services:delayed) }
+   while pending.continuation == nil { await Task.yield() }
+   current=false;pending.finish(try response());await task.value
+   check(late.state == .withdrawn && published == nil,"late success after owner loss cannot publish")
+   current=true
+   let pending2=Pending();let withdrawn=DJConnectSurfacePushRegistration()
+   let delayed2=DJConnectSurfacePushRegistration.Services(isCurrent:{_ in current},nowMS:{now},monotonicNow:{mono},register:{_,_ in try await pending2.read()},
+    revoke:{_,_ in writes += 1;return reply},publishBackgroundRead:{published=$0})
+   let task2=Task { await withdrawn.register(first,services:delayed2) }
+   while pending2.continuation == nil { await Task.yield() }
+   await withdrawn.withdraw(services:delayed2);pending2.finish(try response());await task2.value
+   check(withdrawn.state == .withdrawn && published == nil,"late registration ACK cannot resurrect explicit withdrawal")
+   let pending3=Pending();let short=DJConnectSurfacePushRegistration()
+   let delayed3=DJConnectSurfacePushRegistration.Services(isCurrent:{_ in current},nowMS:{now},monotonicNow:{mono},register:{_,_ in try await pending3.read()},
+    revoke:{_,_ in writes += 1;return reply},publishBackgroundRead:{published=$0})
+   let task3=Task { await short.register(first,services:delayed3) }
+   while pending3.continuation == nil { await Task.yield() }
+   mono=first.originalMonotonicDeadline;pending3.finish(try response());await task3.value
+   check(short.state == .withdrawn && published == nil,"original monotonic equality expiry rejects despite unchanged wall time")
+   mono=ContinuousClock.now
+  }
+  func checkRevisionBoundaries() async throws {
+   for poison in [0,-1,Int.max,9_007_199_254_740_991] {
+    let poisoned=DJConnectSurfacePushRegistration();reply=try response(revision:poison)
+    await poisoned.register(first,services:service)
+    check(poisoned.state == .outcomeUnknown && published == nil,"invalid revision \(poison) rejected before adoption")
+   }
+   let upper=DJConnectSurfacePushRegistration();reply=try response(revision:9_007_199_254_740_990)
+   await upper.register(first,services:service)
+   let beforeUpper=calls
+   await upper.register(witness(epoch:first.ownerEpoch,token:2,deadline:first.originalMonotonicDeadline),services:service)
+   check(calls == beforeUpper,"highest valid revision cannot overflow or dispatch invalid next revision")
+  }
+  func checkCancellationFences() async throws {
+   let cancelled=DJConnectSurfacePushRegistration();reply=try response();let beforeCancel=calls
+   let cancelledTask=Task { await cancelled.register(first,services:service) }
+   cancelledTask.cancel();await cancelledTask.value
+   check(calls == beforeCancel && cancelled.state == .idle,"already cancelled registration makes zero service calls")
+   let revokeCancelled=DJConnectSurfacePushRegistration();await revokeCancelled.register(first,services:service)
+   let beforeRevoke=writes
+   let revokeTask=Task { await revokeCancelled.withdraw(services:service) }
+   revokeTask.cancel();await revokeTask.value
+   check(writes == beforeRevoke && published == nil && revokeCancelled.state == .withdrawn,"cancelled revoke still scrubs locally and makes zero writes")
+   let callbackCancelled=DJConnectSurfacePushRegistration();let beforeCallback=calls
+   let callbackService=DJConnectSurfacePushRegistration.Services(isCurrent:{_ in current},nowMS:{now},monotonicNow:{mono},
+    register:{_,_ in calls += 1;return reply},revoke:{_,_ in writes += 1;return reply},
+    publishBackgroundRead:{ value in published=value; withUnsafeCurrentTask { $0?.cancel() } })
+   let callbackTask=Task { await callbackCancelled.register(first,services:callbackService) }
+   await callbackTask.value
+   check(calls == beforeCallback && callbackCancelled.state == .withdrawn,"cancellation from pre-dispatch callback blocks service effect")
+   let callbackPost=DJConnectSurfacePushRegistration();var checks=0
+   let callbackPostService=DJConnectSurfacePushRegistration.Services(isCurrent:{_ in
+     checks += 1;if checks == 3 { withUnsafeCurrentTask { $0?.cancel() } };return true
+    },nowMS:{now},monotonicNow:{mono},register:{_,_ in calls += 1;return reply},
+    revoke:{_,_ in writes += 1;return reply},publishBackgroundRead:{published=$0})
+   let callbackPostTask=Task { await callbackPost.register(first,services:callbackPostService) }
+   await callbackPostTask.value
+   check(callbackPost.state == .withdrawn && published == nil,"post-ACK authority callback cancellation cannot publish")
+  }
+
+  try await checkRegistrationRotationAndWithdrawal()
+  try await checkUncertainOutcomeAndWallExpiry()
+  try await checkLateOwnerWithdrawalAndMonotonicExpiry()
+  try await checkRevisionBoundaries()
+  try await checkCancellationFences()
   print("TOTAL \(passed) PASS; synthetic injected services; no HTTP/APNs/device effects")
  }
 }
