@@ -1,3 +1,95 @@
+## 2026-11-22 — Corrected Music Origin source Finalization and scoped installation
+
+#### Repository Status
+
+The original feature Core #1669 / Apple #405 is merged. The verified locale correction [Core #1671](https://github.com/djconnect-music-dj/djconnect/pull/1671), reviewed `e1697270dd71f87831f280158b5086fcd29e1d8b`, merged as `0cfff07002dc13d05d768212d09c71e894da3282`; full tree `38fbb906afb1865ada1ccb12b5e8efb53d576b38` is identical. Apple source remains `e0fa68b870893343f4660f42786e3697d0c8e35d`, tree `cd072ef748cfa4a77967b8c17383e28a6aef902c`, identical to reviewed #405. The user approved the correction, controlled separate Finalizations and scoped installation. This records-only Finalization remains `REVIEWABLE_FROZEN`; source reconciliation becomes effective only after its own protected merge and own exact-main qualification.
+
+#### Management Summary
+
+Avatar → Moments → **Waar ken ik dit nummer van?** uses the existing native pending/result card and direct Core history commit. The backend now recognizes every exact canonical question in all five languages, including French spacing/apostrophes and Spanish punctuation, without giving prefix commands or negations that informational route. The Apple renderer, payload schema, authority, provider, budgets and playback behavior remain unchanged. Original source, failure, source-freeze and first Finalization-draft records are retained as immutable snapshots; the new readback explicitly binds the corrected source.
+
+#### Roadmap Position
+
+Existing owner-selected `DJC-MUSIC-ORIGIN-MOMENT-V1-20261113` / Core #1581. Maintenance22 preserves the entire maintenance21 freeze and completes only contract, producer and Apple source leaves. Joint MO01–MO18 real-provider/editorial/physical-product acceptance remains Planned / OPEN. No new capability, writer or automatic successor dispatch is admitted.
+
+#### Rolling Horizon (Next 5 Planned)
+
+1. **MUSIC-ORIGIN::ACCEPTANCE — Joint MO01–MO18 acceptance** — Planned / OPEN; source dependencies are delivered. Real-provider, editorial and physical-product qualification remain separate from installation.
+2. **ASK-DJ-MOMENTS::ACCEPTANCE — Existing AM01–AM12 acceptance** — Planned / OPEN_ACCEPTANCE; prior source dependencies remain delivered.
+3. **SETTINGS::APPLE::EDITOR — Shared settings editor** — Planned / NOT_ISSUED; fresh owning-lane selection required.
+4. **SETTINGS::PI::ADOPTION — Shared settings adoption** — Planned / NOT_ISSUED; preserve owner/order.
+5. **SETTINGS::ESP32::ADOPTION — Shared settings adoption** — Planned / NOT_ISSUED; preserve owner/order.
+
+#### Validation and Acceptance
+
+Corrected Core own-main [validation 45024170213](https://github.com/djconnect-music-dj/djconnect/actions/runs/45024170213) and [publication 45024693928](https://github.com/djconnect-music-dj/djconnect/actions/runs/45024693928) PASS. Downloaded archive `c21858c6297d312d453503ecadabfc6ab59d857b79effbf595af83665a2c07ed` matches all322 qualified product files; durable evidence `b8dee186c4ccbfead8284b82c2b66ddb9f56b3c86d3b540d734266b45cd2f253` passes all12 canonical checks under the original validator and independently pinned policy. Apple own-main CI45019473798 and formal45020404578 separately pass all12 checks; durable SHA256 `0ed70b52d53dfc3a71a66f2cc647dd006df74ec9d8b87c855fdf008b2d2df8dc`. No qualification is inherited across changed source. Corrected software evidence includes 4,876 Core tests (4,865 PASS/11 existing SKIP), 47 fresh actual isolated HA regressions, and real HA/TLS/paired avatar plus all five typed questions with six synthetic model calls and zero real-provider calls. Earlier Apple 1,789 tests/62 suites, 28 VibeCast selections and native builds remain source-bound; no Apple product input changes here.
+
+Both actual TDE assessments remain FAIL / repository qualifications FAILED under unchanged observe policy; workflow success is not a policy pass or evidence of actual critical product bugs. Core's separate migration Ask DJ qualification remains DEFERRED_CORE_4_1_0. Source/provenance, installation/runtime health and editorial/product acceptance stay distinct.
+
+#### Scoped Installation Readback
+
+The user separately requested only iPhone, MacBook and HA-dev. Signed Apple4.1.0 build40532 from exact sourcee0fa68b is installed and launched on iPhone and MacBook; both MacBook app locations retain recovery bundles. HA-dev now actually executes all322 files from Core0cfff070, advertises Music Origin over its HTTP API, passes SQLite quick_check and preserves all13 existing principal fingerprints. Full host and actual-container cold backups and the previous runtime source remain retained. Installation receipt SHA256 `9d8c4663f9f30c8c1128be0154baf8397d59015e466f802f79d761d60a3e106f`; private custody `/Volumes/Shared Data/tmp/pcvantol/music-origin-install-20261122-yjly7xct/installation-complete.json`. HA-prod and other devices received no direct installation in this operation. This operational proof does not close MO01–MO18.
+
+#### Operational Finding and Resolution
+
+Host-only code hashes initially matched while Docker's actual view still exposed318 older files and no requested-Moments modules. Restart/recreation alone did not refresh that view. The actual container/configuration was backed up cold, then the canonical bytes were transferred through Docker's filesystem API with refreshed file metadata. Independent in-container hashes now match all322 files and the running API advertises the new type. Future HA-dev installs must check actual container bytes and runtime capabilities; host hashes/HTTP version labels alone are insufficient. No profile, token or music data was replaced.
+
+#### Blocked Items
+
+No source/installation blocker remains. The separate Finalizations Core #1670 and Apple #406 still need their own protected merge and exact-main/internal-publication evidence. Real provider/model, editorial and physical-product acceptance remain open.
+
+#### Deferred Items
+
+No additional device/HA-prod deployment, provider activation, new Watch gesture, numerical debt target or automatic next work is added. All original rollback, install, source and failure artifacts remain retained.
+
+#### Repository and Workspace State
+
+`REVIEWABLE_FROZEN` for this controlled records/planning update. Its target `MERGED_RECONCILED` becomes effective after its own merge and own canonical12PASS readback. All322 product files remain identical to corrected Core main; all Apple product/test/project/package/workflow inputs remain identical to qualified Apple main. Historical WIP, source branches and unrelated locks remain preserved; no global `WORKSPACE_READY` or cross-writer cleanup claim.
+
+## 2026-11-22 — Music Origin Moment source Finalization
+
+#### Repository Status
+
+Source [Core #1669](https://github.com/djconnect-music-dj/djconnect/pull/1669), reviewed `5f4b8be750891869ac6b8ea3a5474473f1aac5dd`, merged as `9758cbea19e2af153f192cd53480e11a3f9c482b`. Source [Apple #405](https://github.com/djconnect-music-dj/djconnect-app/pull/405), reviewed `f489aa2cf8b66fe5bb8972f9cc7def5eca57f63c`, merged as `e0fa68b870893343f4660f42786e3697d0c8e35d`. Both complete Git trees are identical to their approved candidates. The user explicitly approved these merges; official Core owner authorization [45019399497](https://github.com/djconnect-music-dj/djconnect/actions/runs/45019399497) passed on the exact candidate. Sources remain `MERGED_UNRECONCILED` until this separate Finalization is itself protected merged and qualified on its own main.
+
+#### Management Summary
+
+The explicit **Waar ken ik dit nummer van?** choice is implemented in the existing avatar Moments menu. Core owns bounded websearch-first research, original-subject identity, native `music_origin` production, immediate durable commit, sources, speech and history. Apple renders direction/uncertainty in the same pending/result card and retained history, with an informational **Ontdek het origineel** action and one shared localized composer accuracy caption. Source delivery is complete; this Apple Finalization changes only records; Core reconciles the canonical planning separately and retains all product inputs.
+
+#### Roadmap Position
+
+Generation 2 / owner-selected `DJC-MUSIC-ORIGIN-MOMENT-V1-20261113`. Core maintenance22 preserves the complete maintenance21 source freeze; only the Music Origin contract, producer and Apple source leaves become Completed / SOURCE_DELIVERED. Joint `MUSIC-ORIGIN::ACCEPTANCE` remains Planned / OPEN. Real provider/model, MO01–MO18 editorial and physical-device/accessibility qualification are distinct. No new provider, writer or automatic successor dispatch is admitted.
+
+#### Rolling Horizon (Next 5 Planned)
+
+1. **MUSIC-ORIGIN::ACCEPTANCE — Joint MO01–MO18 acceptance** — Planned / OPEN. Core #1581 remains authoritative; contract/producer/Apple source dependencies are delivered. Fresh real-provider/editorial/device admission is required.
+2. **ASK-DJ-MOMENTS::ACCEPTANCE — Existing AM01–AM12 acceptance** — Planned / OPEN_ACCEPTANCE. Prior Moments source dependencies remain delivered; physical/editorial acceptance remains separate.
+3. **SETTINGS::APPLE::EDITOR — One shared settings editor** — Planned / NOT_ISSUED. Existing Core producer is complete; fresh owning-lane selection is required.
+4. **SETTINGS::PI::ADOPTION — Shared settings adoption** — Planned / NOT_ISSUED. Retain existing consumer owner and order.
+5. **SETTINGS::ESP32::ADOPTION — Shared settings adoption** — Planned / NOT_ISSUED. Retain existing consumer owner and order.
+
+This horizon is derived from canonical maintenance22 and the explicit Music Origin selection. It is a bounded handoff, not automatic dispatch or acceptance.
+
+#### Validation and Acceptance
+
+Core own-main [validation 45019459888](https://github.com/djconnect-music-dj/djconnect/actions/runs/45019459888) and [publication 45019795701](https://github.com/djconnect-music-dj/djconnect/actions/runs/45019795701) pass. Downloaded archive `fcdc4ac8b40334cb98728b1614f9ceb13240cceaa6531ad14c5e2ff6ca10c3d5` contains exactly the same 322 product files as the qualified source. Core durable evidence `41030aeeffd4583bb5b6cca31aaabbd9b3c28b055f76f794ca19dde3ea19ed71` passes the original validator with all 12 canonical checks PASS. Apple own-main [CI 45019473798](https://github.com/djconnect-music-dj/djconnect-app/actions/runs/45019473798) and [formal 45020404578](https://github.com/djconnect-music-dj/djconnect-app/actions/runs/45020404578) pass; durable evidence `0ed70b52d53dfc3a71a66f2cc647dd006df74ec9d8b87c855fdf008b2d2df8dc` independently passes the same 12 named checks against its own pinned policy identity. Source/full-tree equality, canonical integrity and exact-main provenance are recorded together in the source readback.
+
+Premerge software evidence includes all 4,875 Core tests (4,864 PASS, 11 existing SKIP), 47 fresh isolated actual-HA harnesses, the HA2026.11.1 verified-TLS avatar/freeform/SQLite operation and 1,789 Apple Swift tests/62 suites, 28 VibeCast XCTest selections, nine checks and native macOS/iOS builds. Three CodeQL URL-boundary observations and the Xcode test-resource omission were corrected; full affected evidence was reacquired and original failures preserved. Inputs in provider/model harnesses are explicitly synthetic; installed devices and real editorial/provider behavior are not inferred.
+
+Both source-main TDE observe jobs succeeded, while actual assessments remain FAIL and repository qualifications FAILED under unchanged policy. No thresholds, skips or classifications changed; numeric size/complexity labels are not evidence of a new critical product bug. Core's migration Ask DJ qualification remains DEFERRED_CORE_4_1_0; software/provenance qualification does not close MO01–MO18.
+
+#### Blocked Items
+
+No source/software blocker is known. This separate Finalization still needs its own human merge decision and exact-main/internal-publication readback. Overall product acceptance remains open; model/provider, editorial, physical-device and accessibility evidence must be obtained independently.
+
+#### Deferred Items
+
+No installation or deployment occurred in this feature. Existing build40531, HA-dev/prod installations, rollback and device evidence remain preserved. No new Watch gesture, API/firmware work, debt-count target or consumer dispatch was added.
+
+#### Repository and Workspace State
+
+`REVIEWABLE_FROZEN` for this records-only Finalization. Its reconciliation target becomes `MERGED_RECONCILED` only after its own protected merge and own exact-main 12-PASS evidence. Original source branches, historical Core WIP, browser lock, qualification artifacts and native/install custody are retained. This scope never claims global `WORKSPACE_READY` or authorizes cleanup of another writer.
+
 ## 2026-11-22 — Music Origin Moment native consumer
 
 #### Repository Status
