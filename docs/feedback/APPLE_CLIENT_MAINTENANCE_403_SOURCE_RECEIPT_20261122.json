@@ -1,0 +1,332 @@
+{
+  "canonical_horizon": {
+    "canonical_plan_path": "docs/roadmap/v1/djconnect-platform-v1.json",
+    "canonical_plan_sha256": "dac621d5a033bedafefb2f5a864868f05843cf65fd1e494f0713b48b559d3ef7",
+    "canonical_selection": "USER_SELECTED_INTERACTIVE_MOMENTS_SUPERSEDES_SETTINGS_HORIZON",
+    "items": [
+      {
+        "assignment_status": "OPEN_ACCEPTANCE",
+        "automatic_dispatch": false,
+        "canonical_source": "docs/roadmap/v1/djconnect-platform-v1.json#planning_maintenance.nodes",
+        "dependencies": [
+          {
+            "edge_id": "ASK-DJ-MOMENTS-3",
+            "producer": "ASK-DJ-MOMENTS::PRODUCER",
+            "stage": "completion",
+            "status": "Completed"
+          },
+          {
+            "edge_id": "ASK-DJ-MOMENTS-4",
+            "producer": "ASK-DJ-MOMENTS::APPLE",
+            "stage": "completion",
+            "status": "Completed"
+          }
+        ],
+        "execution_rationale": "Existing explicit Moments selection remains first; actual model/device/editorial/accessibility admission stays separate.",
+        "id": "ASK-DJ-MOMENTS::ACCEPTANCE",
+        "order": 1,
+        "source_ids": [
+          "OWNER-ASK-DJ-MOMENTS-6849511889"
+        ],
+        "status": "Planned",
+        "title": "Joint AM01\u2013AM12 real model, device, editorial and accessibility acceptance"
+      },
+      {
+        "assignment_status": "NOT_ISSUED",
+        "automatic_dispatch": false,
+        "canonical_source": "docs/roadmap/v1/djconnect-platform-v1.json#planning_maintenance.nodes",
+        "dependencies": [
+          {
+            "edge_id": "SETTINGS-4",
+            "producer": "SETTINGS::CORE::PRODUCER",
+            "stage": "completion",
+            "status": "Completed"
+          }
+        ],
+        "execution_rationale": "Existing consumer order is retained after the completed Core settings producer; a separate owning-lane issuance is still required.",
+        "id": "SETTINGS::APPLE::EDITOR",
+        "order": 2,
+        "source_ids": [
+          "OWNER-PROFILE-SESSION-SETTINGS-20261016"
+        ],
+        "status": "Planned",
+        "title": "One Jouw DJ editor and shared Session quick controls"
+      },
+      {
+        "assignment_status": "NOT_ISSUED",
+        "automatic_dispatch": false,
+        "canonical_source": "docs/roadmap/v1/djconnect-platform-v1.json#planning_maintenance.nodes",
+        "dependencies": [
+          {
+            "edge_id": "SETTINGS-6",
+            "producer": "SETTINGS::CORE::PRODUCER",
+            "stage": "completion",
+            "status": "Completed"
+          }
+        ],
+        "execution_rationale": "Existing consumer order is retained after the completed Core settings producer; a separate owning-lane issuance is still required.",
+        "id": "SETTINGS::PI::ADOPTION",
+        "order": 3,
+        "source_ids": [
+          "OWNER-PROFILE-SESSION-SETTINGS-20261016"
+        ],
+        "status": "Planned",
+        "title": "Pi allowed shared Session settings and legacy disposition"
+      },
+      {
+        "assignment_status": "NOT_ISSUED",
+        "automatic_dispatch": false,
+        "canonical_source": "docs/roadmap/v1/djconnect-platform-v1.json#planning_maintenance.nodes",
+        "dependencies": [
+          {
+            "edge_id": "SETTINGS-8",
+            "producer": "SETTINGS::CORE::PRODUCER",
+            "stage": "completion",
+            "status": "Completed"
+          }
+        ],
+        "execution_rationale": "Existing consumer order is retained after the completed Core settings producer; a separate owning-lane issuance is still required.",
+        "id": "SETTINGS::ESP32::ADOPTION",
+        "order": 4,
+        "source_ids": [
+          "OWNER-PROFILE-SESSION-SETTINGS-20261016"
+        ],
+        "status": "Planned",
+        "title": "ESP32 Assist/voice/settings compatibility and legacy disposition"
+      },
+      {
+        "assignment_status": "NOT_ISSUED",
+        "automatic_dispatch": false,
+        "canonical_source": "docs/roadmap/v1/djconnect-platform-v1.json#planning_maintenance.nodes",
+        "dependencies": [
+          {
+            "edge_id": "SETTINGS-10",
+            "producer": "SETTINGS::CORE::PRODUCER",
+            "stage": "completion",
+            "status": "Completed"
+          }
+        ],
+        "execution_rationale": "Existing consumer order is retained after the completed Core settings producer; a separate owning-lane issuance is still required.",
+        "id": "SETTINGS::VIBECAST::COMPAT",
+        "order": 5,
+        "source_ids": [
+          "OWNER-PROFILE-SESSION-SETTINGS-20261016"
+        ],
+        "status": "Planned",
+        "title": "Shared renderer allowed Session fields without Profile preferences"
+      }
+    ],
+    "no_backlog_or_priority_change": true,
+    "not_new_dispatch_or_install_authority": true,
+    "selection_source_ids": [
+      "OWNER-ASK-DJ-MOMENTS-6849511889",
+      "OWNER-PROFILE-SESSION-SETTINGS-20261016"
+    ],
+    "source_main": "ec22c1f3072bd54242dbccfd3a3492a2f4d9f97f"
+  },
+  "current_tde": {
+    "assessment": {
+      "policy": {
+        "identifier": "tde.generation-1.default",
+        "owner": "TDE policy governance",
+        "scope": "repository",
+        "version": "1.4.0"
+      },
+      "policyDecision": "FAIL",
+      "status": "FAIL",
+      "triggeredRules": [
+        {
+          "affectedCapability": "code_size",
+          "affectedEvidence": {
+            "measurementId": "code_size.repository.source",
+            "targetEntityId": "repository.git.52b38718d0e23b04"
+          },
+          "measuredValue": 113893,
+          "metricKey": "code_size.source_lines",
+          "outcome": "FAIL",
+          "ruleId": "code_size.repository_lines",
+          "threshold": 75000
+        },
+        {
+          "affectedCapability": "complexity",
+          "affectedEvidence": {
+            "measurementId": "complexity.repository_product.91b75ae4b1faf27c.maximum",
+            "targetEntityId": "repository.git.52b38718d0e23b04"
+          },
+          "measuredValue": 29,
+          "metricKey": "complexity.cyclomatic.product.maximum",
+          "outcome": "PASS_WITH_WARNINGS",
+          "ruleId": "complexity.product.maximum",
+          "threshold": 15
+        }
+      ]
+    },
+    "capabilities": [
+      "code_size",
+      "complexity",
+      "coverage",
+      "dependency_health"
+    ],
+    "coverage": {
+      "coveredLines": 106409,
+      "executableLines": 168478,
+      "lineCoverage": 0.6315898811714289
+    },
+    "exits": {
+      "tde-observe/assessment.exit": 2,
+      "tde-observe/qualification.exit": 2
+    },
+    "findings": {
+      "HIGH": 273
+    },
+    "main_sha": "1aefeb019f5eab861f765c12a383e04dd86f94fe",
+    "repository_qualification": {
+      "assessmentDecision": "FAIL",
+      "assessmentEvidenceId": "sha256:be3e8fbd5fdf4a03ef5a111423d08fcb38d6a9420c26322d08c6097a15552a1d",
+      "assessmentExecutionId": "execution.4a4d16e204c64dc88f78d73e595593c9",
+      "assessmentProfile": {
+        "hash": "sha256:d2516b94e7c684790bd10576a639d4827bbedbe6715c20ca892314633dd2ef68",
+        "identifier": "standard",
+        "version": "1.2.0"
+      },
+      "executionDurationMs": 4537,
+      "qualificationId": "repository-qualification.82771f904fe0a51c941520a4",
+      "qualificationStatus": "FAILED",
+      "repository": {
+        "identifier": "djconnect-app",
+        "metadata": {
+          "consumer": "DJConnect",
+          "rolloutPhase": "observe"
+        },
+        "name": "DJConnect App",
+        "primaryLanguage": "Swift",
+        "repositoryRoot": "/Users/pcvantol/actions-runners/djconnect-apple-macos-macmini/_work/djconnect-app/djconnect-app",
+        "repositoryType": "source"
+      },
+      "runtimeVersion": "1.1.2",
+      "schema": {
+        "assessmentVersion": "1.2.0",
+        "compatibilityVersion": "1",
+        "name": "tde.repository-qualification-evidence",
+        "runtimeVersion": "1.1.2",
+        "version": "1.0.0"
+      },
+      "schemaVersion": "1.0.0",
+      "timestamp": "2026-11-22T08:09:14.025729Z"
+    },
+    "run_id": 45001210643,
+    "summary": "# TDE observe result\n\n- Runtime: `technical-debt-engine-runtime==1.1.2`\n- Assessment profile: `standard`\n- Executed capabilities: code_size, complexity, coverage, dependency_health\n- Assessment decision: FAIL\n- Repository qualification: FAILED\n- Assessment exit code: 2 (observed only)\n- Qualification exit code: 2 (observed only)\n- Duration: 13s\n- Started: 2026-11-22T08:09:01Z\n- Evidence artifact: `tde-observe-evidence`\n",
+    "validation": {
+      "adapter": "VALID",
+      "analyzer": "VALID",
+      "candidateIdentity": "VALID",
+      "completeness": "COMPLETE",
+      "errors": [],
+      "integrity": "VALID",
+      "repositoryIdentity": "VALID",
+      "schema": "VALID",
+      "status": "VALID",
+      "warnings": []
+    },
+    "workflow_conclusion": "success",
+    "workflow_event": "push"
+  },
+  "historical_inventory_exception": {
+    "attachment_available": false,
+    "batch": 19,
+    "disposition": "Original independent readback and cleanup receipts remain. Source, Products and causal artifacts unaffected; no replacement inventory fabricated.",
+    "original_sha256": "f856bed148dd6d0c538759e979909dc7d781bb08b79306d011e502ed624c6363"
+  },
+  "installed_baseline": "Existing installation/rollback and HA backup unchanged; no new install/deploy/provider action.",
+  "kind": "apple_client_maintenance_source403_finalization",
+  "premerge": {
+    "exact_head_ci": 44996398030,
+    "head_and_merge_ref_tree_equal": true,
+    "owner_authorization": "SUCCESS",
+    "pr_ci": 44997423662,
+    "pr_merge_ref": "8ade1c29844cc1e5ee553b64810860d1284f3875",
+    "trusted_delivery": "SUCCESS"
+  },
+  "preservation": "All source/ref/native custody, original provider archives and historical failures retained. Historical Users-main bce719 remains untouched. Workspace cleanup is scoped and fail-closed.",
+  "schema_version": 1,
+  "separate_finalization": {
+    "branch": "codex/apple-client-maintenance-finalization-20261122",
+    "own_merge_and_main_qualification": "PENDING",
+    "scope": "Only four rolling prefixes, one immutable history and this source receipt; no product/test/project/workflow/package change.",
+    "target_repository_state": "MERGED_RECONCILED only after own protected merge and own exact-main12PASS"
+  },
+  "software_qualification": {
+    "canonical_integrity": "PASS",
+    "ci": 45001210990,
+    "ci_attempt": 1,
+    "coverage_lines": 0.6316254941297974,
+    "coverage_targets": 6,
+    "durable_asset_id": 778368094,
+    "durable_release": "internal-ha-1aefeb019f5eab861f765c12a383e04dd86f94fe",
+    "durable_sha256": "e30e35dc92d3ae2014d3e97a3a0b69acd6a73113afadaa07b0aeb40a17e57896",
+    "evidence_digest": "f4d3f0eb2391fe0f37a6845496dbf22a3e18e47471699b98b32c79697101c994",
+    "formal": 45002085771,
+    "formal_decision": "POST_MERGE_RELEASE_EVIDENCE_QUALIFIED",
+    "main_sha": "1aefeb019f5eab861f765c12a383e04dd86f94fe",
+    "original_artifacts": [
+      {
+        "id": 14746725738,
+        "members_sha256": {
+          "coverage-main-sha.txt": "c357023812690bcd6f19b40249625317c5adae6babfd246b1d17f9c14c754494",
+          "coverage.json": "f15fdba8ad4485b477ccd82a425b97471a9eaf7e357ea32d72d12bf54bad0a89"
+        },
+        "name": "apple-xccov-coverage",
+        "provider_zip_sha256": "a220e2983ad2a0bbf298fb0354154e1492a9a3771946f0c1521bb5903983cc8f",
+        "run": 45001210990
+      },
+      {
+        "id": 14745947361,
+        "members_sha256": {
+          "post-merge-release-evidence.json": "94aabd7e79263039c176317b236c742e0f45378a92e47a21469b12e46674d506"
+        },
+        "name": "post-merge-release-evidence",
+        "provider_zip_sha256": "70b155e23b66b76a46788b4cd50588ffe9aee4d66b954f2e1df9900213726eed",
+        "run": 45002085771
+      }
+    ],
+    "policy_source_identity": {
+      "original_repository_id": 1258575431,
+      "original_revision": "4877403ba6fc69881439e70d3048da13ecb5576b",
+      "repository": "djconnect-music-dj/.github",
+      "repository_id": 1461539726,
+      "revision": "89a2a8b4c7571965249bed745bf7c5c37a1221f1",
+      "snapshot": "evidence-4877"
+    },
+    "repository": "djconnect-music-dj/djconnect-app",
+    "required_checks": {
+      "post_merge_build_validation": "PASS",
+      "post_merge_ci": "PASS",
+      "post_merge_coverage": "PASS",
+      "post_merge_governance": "PASS",
+      "post_merge_lint": "PASS",
+      "post_merge_static_analysis": "PASS",
+      "post_merge_tests": "PASS",
+      "required_checks": "PASS",
+      "software_assurance": "PASS",
+      "trusted_delivery": "PASS",
+      "verification": "PASS",
+      "workflow_integrity": "PASS"
+    },
+    "schema_version": 1,
+    "validator_sha256": "3fba299f26c75e47804e66218cabea8fd50627bd2a84a1dd294d59009714466f"
+  },
+  "source": {
+    "all_swift_inputs": 373,
+    "code_checkpoint": "7312fae1d411147ad1dd6694b7144023ba7f7b78",
+    "completed_batches": 26,
+    "merged_main": "1aefeb019f5eab861f765c12a383e04dd86f94fe",
+    "native_inputs": 312,
+    "pr": 403,
+    "reviewed_and_merged_tree": "d57bac870418944f0fa96fa6dc2c03052e468a04",
+    "reviewed_head": "535ee17c5cbf93b9b43af14e9c49aef4bdcb7c7e",
+    "source_paths": 38,
+    "tree_equal": true,
+    "url": "https://github.com/djconnect-music-dj/djconnect-app/pull/403"
+  },
+  "tde_disposition": "Actual standard FAIL/FAILED remains visible under unchanged observe policy. Numerical optimization stopped at user direction; no thresholds, exclusions, classifications or waivers changed. Analyzer severity alone is not proof of a critical product defect."
+}
