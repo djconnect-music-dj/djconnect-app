@@ -437,6 +437,7 @@ struct SessionTimelineScreen: View {
     @State private var feedbackMessage: DJConnectAskDJMessage?
     @State private var menuFrames: [SessionControlIntent.Kind: CGRect] = [:]
     @State private var currentHeaderVisible = true
+    @State private var canvasPresented = false
     @State private var composerKeyboardVisible = false
     private var composerBottomPadding: CGFloat {
         #if os(iOS)
@@ -876,6 +877,7 @@ struct SessionTimelineScreen: View {
                 }
             }
             #endif
+            .sheet(isPresented: $canvasPresented) { MusicCanvasView(model: model) }
             .background(sessionBackground)
             .coordinateSpace(name: AskDJHelpPanelLayout.coordinateSpace)
             .simultaneousGesture(SpatialTapGesture(coordinateSpace: .global).onEnded { tap in
@@ -945,6 +947,12 @@ struct SessionTimelineScreen: View {
                 ToolbarItemGroup(placement: .navigation) {
                     sessionSearchToolbarButton(proxy: proxy)
                     sessionToolbarActions(proxy: proxy)
+                    if activeSession != nil && !model.isDemoMode {
+                        Button { canvasPresented = true } label: { Image(systemName: "photo.artframe") }
+                            .accessibilityLabel(text("ui.canvas.open"))
+                            .accessibilityIdentifier("session-music-canvas")
+                            .help(text("ui.canvas.open"))
+                    }
                     if allowsHandoffPresentation {
                         Button { model.openVibeCastDestinationPicker() } label: {
                             Image(systemName: "tv.badge.wifi")
@@ -1014,7 +1022,7 @@ struct SessionTimelineScreen: View {
                 confirmation: $deleteConfirmation, isPresented: $confirmingDelete))
             #if os(iOS)
             .overlay(alignment: .topTrailing) {
-                SessionControlPopoverHost(model: model, intent: $sessionControlIntent, showsHandoff: allowsHandoffPresentation,
+                SessionControlPopoverHost(model: model, intent: $sessionControlIntent, showsHandoff: allowsHandoffPresentation, canvasAction: { canvasPresented = true },
                     searchAction: showsSessionSearch ? { openCurrentSearch() } : nil,
                     searchEnabled: showsSessionSearch && history.searchAvailable)
 
@@ -1243,6 +1251,12 @@ struct SessionTimelineScreen: View {
             }
             #else
             if usesExpandedToolbar {
+                if activeSession != nil && !model.isDemoMode {
+                    Button { canvasPresented = true } label: { Image(systemName: "photo.artframe") }
+                        .accessibilityLabel(text("ui.canvas.open"))
+                        .accessibilityIdentifier("session-music-canvas")
+                }
+
                 if let activeSession {
                     Button {
                         sessionControlIntent = SessionControlIntent(kind: .voice, sessionID: activeSession.id,
@@ -2322,15 +2336,16 @@ struct SessionControlPopoverHost: View {
     @Environment(\.scenePhase) private var scenePhase
     @ObservedObject private var history: DJConnectSessionHistoryModel
     let showsHandoff: Bool
+    let canvasAction: (() -> Void)?
     let visualMoodSelection: Binding<Int>?
     let searchAction: (() -> Void)?
     let searchEnabled: Bool?
     let refreshAction: (() -> Void)?
     @State private var pendingAction: (SessionControlIntent, MoreAction)?
-    private enum MoreAction { case handoff, refresh, voice, search }
-    init(model: DJConnectAppModel, intent: Binding<SessionControlIntent?>, showsHandoff: Bool = false, refreshAction: (() -> Void)? = nil, searchAction: (() -> Void)? = nil, searchEnabled: Bool? = nil, visualMoodSelection: Binding<Int>? = nil) {
+    private enum MoreAction { case handoff, refresh, voice, search, canvas }
+    init(model: DJConnectAppModel, intent: Binding<SessionControlIntent?>, showsHandoff: Bool = false, canvasAction: (() -> Void)? = nil, refreshAction: (() -> Void)? = nil, searchAction: (() -> Void)? = nil, searchEnabled: Bool? = nil, visualMoodSelection: Binding<Int>? = nil) {
         self.model = model; _intent = intent; history = model.sessionHistory
-        self.showsHandoff = showsHandoff; self.refreshAction = refreshAction; self.searchAction = searchAction; self.visualMoodSelection = visualMoodSelection
+        self.showsHandoff = showsHandoff; self.canvasAction = canvasAction; self.refreshAction = refreshAction; self.searchAction = searchAction; self.visualMoodSelection = visualMoodSelection
         self.searchEnabled = searchEnabled
     }
     private func text(_ key: String) -> String { DJConnectLocalization.localized(key: key, language: model.language) }
@@ -2343,6 +2358,9 @@ struct SessionControlPopoverHost: View {
         pendingAction = nil
         guard scenePhase == .active, captured.epoch == history.responseEpoch else { return }
         switch action {
+        case .canvas:
+            guard captured.sessionID == model.activeDJSession?.id, !model.isDemoMode else { return }
+            canvasAction?()
         case .handoff:
             guard showsHandoff, captured.sessionID == model.activeDJSession?.id else { return }
             model.openVibeCastDestinationPicker()
@@ -2442,6 +2460,12 @@ struct SessionControlPopoverHost: View {
                                         Label(text("ui.dj_settings.title"), systemImage: "speaker.wave.2")
                                             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                                     }.accessibilityIdentifier("session-voice-toggle")
+                                }
+                                if captured.sessionID == model.activeDJSession?.id && !model.isDemoMode && canvasAction != nil {
+                                    Button { queue(.canvas, captured: captured) } label: {
+                                        Label(text("ui.canvas.open"), systemImage: "photo.artframe")
+                                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                                    }.accessibilityIdentifier("session-music-canvas")
                                 }
                                 if showsHandoff {
                                     Button { queue(.handoff, captured: captured) } label: {

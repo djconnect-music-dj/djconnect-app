@@ -1,0 +1,67 @@
+{
+  "success": true,
+  "contract_version": 1,
+  "binding": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "revision": 1,
+  "preferences": {
+    "enabled": true,
+    "selected_targets": [
+      "samsung:synthetic-a",
+      "samsung:synthetic-b",
+      "switchbot:synthetic-p"
+    ],
+    "composition": "central",
+    "matte": "off",
+    "cadence": "1800",
+    "cadence_overrides": {}
+  },
+  "targets": [
+    {
+      "id": "samsung:synthetic-a",
+      "name": "Samsung A",
+      "adapter": "samsung",
+      "state": "ready",
+      "screen": {
+        "width": 3840,
+        "height": 2160,
+        "orientation": "landscape",
+        "provenance": "synthetic_fixture"
+      },
+      "remote_cleanup": true,
+      "preview_available": false,
+      "shared_profiles": 1
+    },
+    {
+      "id": "samsung:synthetic-b",
+      "name": "Samsung B",
+      "adapter": "samsung",
+      "state": "ready",
+      "screen": {
+        "width": 3840,
+        "height": 2160,
+        "orientation": "landscape",
+        "provenance": "synthetic_fixture"
+      },
+      "remote_cleanup": true,
+      "preview_available": false,
+      "shared_profiles": 1
+    },
+    {
+      "id": "switchbot:synthetic-p",
+      "name": "Portrait frame",
+      "adapter": "switchbot",
+      "state": "ready",
+      "screen": {
+        "width": 1200,
+        "height": 1600,
+        "orientation": "portrait",
+        "provenance": "synthetic_fixture"
+      },
+      "remote_cleanup": false,
+      "preview_available": false,
+      "shared_profiles": 1
+    }
+  ],
+  "image_generation_available": true,
+  "can_manage_devices": true
+}
