@@ -1,0 +1,550 @@
+{
+  "contract_version": 1,
+  "captured_at": "2026-11-22T10:44:21.871226+00:00",
+  "evidence_scope": "declared synthetic public/model fixtures; real owners/SQLite",
+  "capability": {
+    "available": true,
+    "contract_version": 1,
+    "inventory_operation": "ask_dj/moments",
+    "request_operation": "ask_dj/moments/request",
+    "status_operation": "ask_dj/moments/status",
+    "cancel_operation": "ask_dj/moments/cancel",
+    "read_path": "/api/djconnect/v1/transport/read",
+    "operation_path": "/api/djconnect/v1/transport/operation",
+    "owner_only": true,
+    "client_types": [
+      "ios",
+      "macos"
+    ],
+    "language_families": [
+      "en",
+      "nl",
+      "de",
+      "fr",
+      "es"
+    ],
+    "requires_active_session": true,
+    "inventory_has_provider_effects": false,
+    "maximum_pending_per_profile_session": 1,
+    "queue": false,
+    "type_ids": [
+      "music_origin",
+      "recording_story",
+      "work_composers",
+      "artist_story",
+      "album_story",
+      "genre_context",
+      "live_impression",
+      "shared_producer",
+      "producer_recommendation",
+      "album_continuity",
+      "dj_bulletin"
+    ]
+  },
+  "inventory": {
+    "success": true,
+    "contract_version": 1,
+    "session_id": "session-ea27798f9f254400bd812aef56fc9518",
+    "language": "nl",
+    "title": "Ask DJ: Moments",
+    "types": [
+      {
+        "type_id": "music_origin",
+        "moment_type": "music_origin",
+        "order": 0,
+        "label": {
+          "en": "Where do I know this song from?",
+          "nl": "Waar ken ik dit nummer van?",
+          "de": "Woher kenne ich dieses Lied?",
+          "fr": "D\u2019o\u00f9 est-ce que je connais ce morceau ?",
+          "es": "\u00bfDe qu\u00e9 me suena esta canci\u00f3n?"
+        },
+        "available": true,
+        "reason": null,
+        "reason_text": null,
+        "reason_labels": null,
+        "history_policy": "original_source_and_profile_policy",
+        "subject": {
+          "subject_ref": "E9PGhzsqlZ16s-kHDAANQdGdY5tZPbtE",
+          "kind": "recording",
+          "title": "Amber Lines 1",
+          "subtitle": "Nora Vale 1"
+        },
+        "pending_text": "Ik zoek een goed onderbouwde bijdrage voor je over Amber Lines 1."
+      },
+      {
+        "type_id": "recording_story",
+        "moment_type": "track",
+        "order": 1,
+        "label": {
+          "en": "Recording story",
+          "nl": "Opnameverhaal",
+          "de": "Aufnahmegeschichte",
+          "fr": "Histoire de l\u2019enregistrement",
+          "es": "Historia de la grabaci\u00f3n"
+        },
+        "available": false,
+        "reason": "subject_evidence_unavailable",
+        "reason_text": "Over dit onderwerp is nu geen betrouwbare bijdrage beschikbaar.",
+        "reason_labels": {
+          "en": "A reliable contribution about this subject is not available right now.",
+          "nl": "Over dit onderwerp is nu geen betrouwbare bijdrage beschikbaar.",
+          "de": "Zu diesem Thema ist gerade kein verl\u00e4sslicher Beitrag verf\u00fcgbar.",
+          "fr": "Aucune contribution fiable sur ce sujet n\u2019est disponible pour le moment.",
+          "es": "Ahora no hay una aportaci\u00f3n fiable sobre este tema."
+        },
+        "history_policy": "original_source_and_profile_policy",
+        "subject": {
+          "subject_ref": "E9PGhzsqlZ16s-kHDAANQdGdY5tZPbtE",
+          "kind": "recording",
+          "title": "Amber Lines 1",
+          "subtitle": "Nora Vale 1"
+        },
+        "pending_text": "Ik zoek een goed onderbouwde bijdrage voor je over Amber Lines 1."
+      },
+      {
+        "type_id": "work_composers",
+        "moment_type": "track",
+        "order": 2,
+        "label": {
+          "en": "The composers",
+          "nl": "De componisten",
+          "de": "Die Komponisten",
+          "fr": "Les compositeurs",
+          "es": "Los compositores"
+        },
+        "available": false,
+        "reason": "subject_evidence_unavailable",
+        "reason_text": "Over dit onderwerp is nu geen betrouwbare bijdrage beschikbaar.",
+        "reason_labels": {
+          "en": "A reliable contribution about this subject is not available right now.",
+          "nl": "Over dit onderwerp is nu geen betrouwbare bijdrage beschikbaar.",
+          "de": "Zu diesem Thema ist gerade kein verl\u00e4sslicher Beitrag verf\u00fcgbar.",
+          "fr": "Aucune contribution fiable sur ce sujet n\u2019est disponible pour le moment.",
+          "es": "Ahora no hay una aportaci\u00f3n fiable sobre este tema."
+        },
+        "history_policy": "original_source_and_profile_policy",
+        "subject": {
+          "subject_ref": "E9PGhzsqlZ16s-kHDAANQdGdY5tZPbtE",
+          "kind": "recording",
+          "title": "Amber Lines 1",
+          "subtitle": "Nora Vale 1"
+        },
+        "pending_text": "Ik zoek een goed onderbouwde bijdrage voor je over Amber Lines 1."
+      },
+      {
+        "type_id": "artist_story",
+        "moment_type": "artist",
+        "order": 3,
+        "label": {
+          "en": "Artist story",
+          "nl": "Artiestenverhaal",
+          "de": "K\u00fcnstlergeschichte",
+          "fr": "Histoire de l\u2019artiste",
+          "es": "Historia del artista"
+        },
+        "available": true,
+        "reason": null,
+        "reason_text": null,
+        "reason_labels": null,
+        "history_policy": "original_source_and_profile_policy",
+        "subject": {
+          "subject_ref": "E9PGhzsqlZ16s-kHDAANQdGdY5tZPbtE",
+          "kind": "artist",
+          "title": "Nora Vale 1",
+          "subtitle": "Nora Vale 1"
+        },
+        "pending_text": "Ik zoek een goed onderbouwde bijdrage voor je over Nora Vale 1."
+      },
+      {
+        "type_id": "album_story",
+        "moment_type": "album",
+        "order": 4,
+        "label": {
+          "en": "Album story",
+          "nl": "Albumverhaal",
+          "de": "Albumgeschichte",
+          "fr": "Histoire de l\u2019album",
+          "es": "Historia del \u00e1lbum"
+        },
+        "available": false,
+        "reason": "capability_unavailable",
+        "reason_text": "Dit type bijdrage is hier niet beschikbaar.",
+        "reason_labels": {
+          "en": "This type of contribution is not available here.",
+          "nl": "Dit type bijdrage is hier niet beschikbaar.",
+          "de": "Diese Art von Beitrag ist hier nicht verf\u00fcgbar.",
+          "fr": "Ce type de contribution n\u2019est pas disponible ici.",
+          "es": "Este tipo de aportaci\u00f3n no est\u00e1 disponible aqu\u00ed."
+        },
+        "history_policy": "original_source_and_profile_policy",
+        "subject": {
+          "subject_ref": "E9PGhzsqlZ16s-kHDAANQdGdY5tZPbtE",
+          "kind": "album",
+          "title": "Albumverhaal",
+          "subtitle": "Nora Vale 1"
+        },
+        "pending_text": "Ik zoek een goed onderbouwde bijdrage voor je over Albumverhaal."
+      },
+      {
+        "type_id": "genre_context",
+        "moment_type": "genre",
+        "order": 5,
+        "label": {
+          "en": "Genre context",
+          "nl": "Genrecontext",
+          "de": "Genre-Kontext",
+          "fr": "Contexte du genre",
+          "es": "Contexto del g\u00e9nero"
+        },
+        "available": false,
+        "reason": "capability_unavailable",
+        "reason_text": "Dit type bijdrage is hier niet beschikbaar.",
+        "reason_labels": {
+          "en": "This type of contribution is not available here.",
+          "nl": "Dit type bijdrage is hier niet beschikbaar.",
+          "de": "Diese Art von Beitrag ist hier nicht verf\u00fcgbar.",
+          "fr": "Ce type de contribution n\u2019est pas disponible ici.",
+          "es": "Este tipo de aportaci\u00f3n no est\u00e1 disponible aqu\u00ed."
+        },
+        "history_policy": "original_source_and_profile_policy",
+        "subject": {
+          "subject_ref": "E9PGhzsqlZ16s-kHDAANQdGdY5tZPbtE",
+          "kind": "recording",
+          "title": "Amber Lines 1",
+          "subtitle": "Nora Vale 1"
+        },
+        "pending_text": "Ik zoek een goed onderbouwde bijdrage voor je over Amber Lines 1."
+      },
+      {
+        "type_id": "live_impression",
+        "moment_type": "live_impression",
+        "order": 6,
+        "label": {
+          "en": "Live impression",
+          "nl": "Live-impressie",
+          "de": "Live-Eindruck",
+          "fr": "Impression live",
+          "es": "Impresi\u00f3n en vivo"
+        },
+        "available": true,
+        "reason": null,
+        "reason_text": null,
+        "reason_labels": null,
+        "history_policy": "original_source_and_profile_policy",
+        "subject": {
+          "subject_ref": "E9PGhzsqlZ16s-kHDAANQdGdY5tZPbtE",
+          "kind": "artist",
+          "title": "Nora Vale 1",
+          "subtitle": "Nora Vale 1"
+        },
+        "pending_text": "Ik zoek een goed onderbouwde bijdrage voor je over Nora Vale 1."
+      },
+      {
+        "type_id": "shared_producer",
+        "moment_type": "track",
+        "order": 7,
+        "label": {
+          "en": "A shared producer",
+          "nl": "Een gedeelde producer",
+          "de": "Ein gemeinsamer Produzent",
+          "fr": "Un producteur en commun",
+          "es": "Un productor en com\u00fan"
+        },
+        "available": false,
+        "reason": "subject_evidence_unavailable",
+        "reason_text": "Over dit onderwerp is nu geen betrouwbare bijdrage beschikbaar.",
+        "reason_labels": {
+          "en": "A reliable contribution about this subject is not available right now.",
+          "nl": "Over dit onderwerp is nu geen betrouwbare bijdrage beschikbaar.",
+          "de": "Zu diesem Thema ist gerade kein verl\u00e4sslicher Beitrag verf\u00fcgbar.",
+          "fr": "Aucune contribution fiable sur ce sujet n\u2019est disponible pour le moment.",
+          "es": "Ahora no hay una aportaci\u00f3n fiable sobre este tema."
+        },
+        "history_policy": "original_source_and_profile_policy",
+        "subject": {
+          "subject_ref": "E9PGhzsqlZ16s-kHDAANQdGdY5tZPbtE",
+          "kind": "recording",
+          "title": "Amber Lines 1",
+          "subtitle": "Nora Vale 1"
+        },
+        "pending_text": "Ik zoek een goed onderbouwde bijdrage voor je over Amber Lines 1."
+      },
+      {
+        "type_id": "producer_recommendation",
+        "moment_type": "recommendation",
+        "order": 8,
+        "label": {
+          "en": "Explore a producer",
+          "nl": "Ontdek een producer",
+          "de": "Einen Produzenten entdecken",
+          "fr": "D\u00e9couvrir un producteur",
+          "es": "Descubrir un productor"
+        },
+        "available": false,
+        "reason": "capability_unavailable",
+        "reason_text": "Dit type bijdrage is hier niet beschikbaar.",
+        "reason_labels": {
+          "en": "This type of contribution is not available here.",
+          "nl": "Dit type bijdrage is hier niet beschikbaar.",
+          "de": "Diese Art von Beitrag ist hier nicht verf\u00fcgbar.",
+          "fr": "Ce type de contribution n\u2019est pas disponible ici.",
+          "es": "Este tipo de aportaci\u00f3n no est\u00e1 disponible aqu\u00ed."
+        },
+        "history_policy": "original_source_and_profile_policy",
+        "subject": {
+          "subject_ref": "E9PGhzsqlZ16s-kHDAANQdGdY5tZPbtE",
+          "kind": "recording",
+          "title": "Amber Lines 1",
+          "subtitle": "Nora Vale 1"
+        },
+        "pending_text": "Ik zoek een goed onderbouwde bijdrage voor je over Amber Lines 1."
+      },
+      {
+        "type_id": "album_continuity",
+        "moment_type": "track",
+        "order": 9,
+        "label": {
+          "en": "Back to this album",
+          "nl": "Terug naar dit album",
+          "de": "Zur\u00fcck zu diesem Album",
+          "fr": "Retour \u00e0 cet album",
+          "es": "Volver a este \u00e1lbum"
+        },
+        "available": false,
+        "reason": "subject_evidence_unavailable",
+        "reason_text": "Over dit onderwerp is nu geen betrouwbare bijdrage beschikbaar.",
+        "reason_labels": {
+          "en": "A reliable contribution about this subject is not available right now.",
+          "nl": "Over dit onderwerp is nu geen betrouwbare bijdrage beschikbaar.",
+          "de": "Zu diesem Thema ist gerade kein verl\u00e4sslicher Beitrag verf\u00fcgbar.",
+          "fr": "Aucune contribution fiable sur ce sujet n\u2019est disponible pour le moment.",
+          "es": "Ahora no hay una aportaci\u00f3n fiable sobre este tema."
+        },
+        "history_policy": "original_source_and_profile_policy",
+        "subject": {
+          "subject_ref": "E9PGhzsqlZ16s-kHDAANQdGdY5tZPbtE",
+          "kind": "album",
+          "title": "Terug naar dit album",
+          "subtitle": "Nora Vale 1"
+        },
+        "pending_text": "Ik zoek een goed onderbouwde bijdrage voor je over Terug naar dit album."
+      },
+      {
+        "type_id": "dj_bulletin",
+        "moment_type": "dj_bulletin",
+        "order": 10,
+        "label": {
+          "en": "DJ Bulletin",
+          "nl": "DJ Bulletin",
+          "de": "DJ-Bulletin",
+          "fr": "Bulletin du DJ",
+          "es": "Bolet\u00edn del DJ"
+        },
+        "available": false,
+        "reason": "producer_unavailable",
+        "reason_text": "Verhalen zijn nu niet beschikbaar. Probeer het later nog eens.",
+        "reason_labels": {
+          "en": "Stories are currently unavailable. Try again later.",
+          "nl": "Verhalen zijn nu niet beschikbaar. Probeer het later nog eens.",
+          "de": "Geschichten sind gerade nicht verf\u00fcgbar. Versuche es sp\u00e4ter noch einmal.",
+          "fr": "Les histoires sont momentan\u00e9ment indisponibles. R\u00e9essayez plus tard.",
+          "es": "Las historias no est\u00e1n disponibles ahora. Int\u00e9ntalo m\u00e1s tarde."
+        },
+        "history_policy": "publication_metadata_only",
+        "subject": {
+          "subject_ref": "E9PGhzsqlZ16s-kHDAANQdGdY5tZPbtE",
+          "kind": "session",
+          "title": "Actuele berichten",
+          "subtitle": ""
+        },
+        "pending_text": "Ik zoek een goed onderbouwde bijdrage voor je over Actuele berichten."
+      }
+    ]
+  },
+  "response": {
+    "success": true,
+    "contract_version": 1,
+    "session_id": "session-ea27798f9f254400bd812aef56fc9518",
+    "operation_id": "01a202db-62d3-7000-8000-000000000001",
+    "type_id": "music_origin",
+    "language": "nl",
+    "state": "accepted",
+    "pending_text": "Ik zoek een goed onderbouwde bijdrage voor je over Amber Lines 1.",
+    "message": null,
+    "result": {
+      "moment": {
+        "moment_id": "moment-7e75a2b00fda5fa6b586a7594ea32d2f",
+        "session_id": "session-ea27798f9f254400bd812aef56fc9518",
+        "created_at": "2026-11-22T10:44:21.854155+00:00",
+        "type": "music_origin",
+        "user_requested": {
+          "contract_version": 1,
+          "operation_id": "01a202db-62d3-7000-8000-000000000001",
+          "type_id": "music_origin",
+          "subject_ref": "E9PGhzsqlZ16s-kHDAANQdGdY5tZPbtE",
+          "playback_item_id": "63bf0397fbdc1fd1f3fbec76"
+        },
+        "music_origin": {
+          "relation": {
+            "direction": "current_to_related",
+            "kind": "interpolation",
+            "target": {
+              "artist": "Sample Artist",
+              "kind": "recording",
+              "title": "Original Light"
+            },
+            "uncertainty": "possible"
+          },
+          "schema_version": 1,
+          "subject": {
+            "artist": "Nora Vale 1",
+            "title": "Amber Lines 1"
+          }
+        },
+        "knowledge_intent": {
+          "type": "music_origin_story",
+          "goal": "Explicit musical origin research"
+        },
+        "presentation_intent": {
+          "source_session_mood": "energy",
+          "dj_persona": "home_dj",
+          "tone_of_voice": "warm and conversational",
+          "energy_level": "energy",
+          "delivery_style": "short contextual music story",
+          "voice_style": "persona-guided",
+          "visual_theme": "music-context",
+          "importance": "normal",
+          "maximum_duration_seconds": 25,
+          "delivery_channels": [
+            "owner"
+          ],
+          "visibility": "owner_only"
+        },
+        "title": "Een bekende melodie",
+        "summary": "Een mogelijke verbinding.",
+        "content": "Misschien herken je de melodie: volgens het interview is dit nummer mogelijk gebaseerd op Original Light van Sample Artist. Het verband is niet helemaal zeker, maar maakt het luisteren interessant.",
+        "artwork": null,
+        "actions": [],
+        "visibility": "owner_only",
+        "delivery_channels": [
+          "owner"
+        ],
+        "importance": "normal",
+        "source_references": [
+          "https://example.org/interview"
+        ],
+        "generation_metadata": {
+          "context_source": "public_music_origin_v1",
+          "validated": "true"
+        },
+        "sources": [
+          {
+            "claim_scope": "fetched_public_music_reference",
+            "consultation": "search_excerpt",
+            "content_hash": "68b9d0cfbaa96e7e329db3344c3fc15307ced94e173277c3d3ed269e657a2433",
+            "expires_at": "2026-11-22T11:44:21.842594+00:00",
+            "fetched_at": "2026-11-22T10:44:21.842594+00:00",
+            "kind": "source",
+            "language": "en",
+            "license": "public_page_short_reference",
+            "provider": "Public web",
+            "revision_url": "",
+            "title": "Synthetic interview",
+            "url": "https://example.org/interview",
+            "wikidata_id": ""
+          }
+        ],
+        "playback_item_id": "63bf0397fbdc1fd1f3fbec76"
+      },
+      "entry_id": "entry-50ea2af1523a56d5ac713ce9b71ddcd6",
+      "retention": "retained",
+      "history_state": "content_retained",
+      "presentation_admission": {
+        "contract_version": 1,
+        "moment_id": "moment-7e75a2b00fda5fa6b586a7594ea32d2f",
+        "owner_only": true,
+        "display_allowed": true,
+        "expires_at": "2026-11-22T10:49:21.842999+00:00",
+        "requires_spotify_attribution": false,
+        "source_expires_at": null
+      },
+      "session_media": [],
+      "session_speech": {
+        "schema_version": 1,
+        "moments": [
+          {
+            "schema_version": 1,
+            "reference": {
+              "session_id": "session-ea27798f9f254400bd812aef56fc9518",
+              "moment_id": "moment-7e75a2b00fda5fa6b586a7594ea32d2f"
+            },
+            "source_kind": "published_dj_moment",
+            "source_id": "moment-7e75a2b00fda5fa6b586a7594ea32d2f",
+            "session_id": "session-ea27798f9f254400bd812aef56fc9518",
+            "text_revision": "9646963018801b66762d52a1",
+            "presentation_revision": "9a4b9a1f8da200af57604e27",
+            "persona": "home_dj",
+            "persona_revision": 0,
+            "mood": "energy",
+            "locale": "nl",
+            "segments": [
+              {
+                "ordinal": 1,
+                "speaker_role": "dj",
+                "text": "Misschien herken je de melodie: volgens het interview is dit nummer mogelijk gebaseerd op Original Light van Sample Artist. Het verband is niet helemaal zeker, maar maakt het luisteren interessant."
+              }
+            ],
+            "style_basis": "accepted_contribution",
+            "state": "available",
+            "reason": null,
+            "manual_allowed": true,
+            "autoplay_eligible": true,
+            "processors": [
+              "local_on_device",
+              "ha_configured"
+            ],
+            "processor_qualification_required": true,
+            "expires_at": "2026-11-22T11:14:21.858503+00:00",
+            "source_expires_at": "2026-11-22T11:14:21.858503+00:00",
+            "attribution": [
+              {
+                "claim_scope": "fetched_public_music_reference",
+                "consultation": "search_excerpt",
+                "content_hash": "68b9d0cfbaa96e7e329db3344c3fc15307ced94e173277c3d3ed269e657a2433",
+                "expires_at": "2026-11-22T11:44:21.842594+00:00",
+                "fetched_at": "2026-11-22T10:44:21.842594+00:00",
+                "kind": "source",
+                "language": "en",
+                "license": "public_page_short_reference",
+                "provider": "Public web",
+                "revision_url": "",
+                "title": "Synthetic interview",
+                "url": "https://example.org/interview",
+                "wikidata_id": ""
+              }
+            ],
+            "cache_policy": "private,no-store",
+            "automatic_start_expires_at": "2026-11-22T10:44:33.858503+00:00",
+            "user_requested": true,
+            "moment_type": "music_origin"
+          }
+        ]
+      }
+    },
+    "entry_id": "entry-50ea2af1523a56d5ac713ce9b71ddcd6",
+    "moment_id": "moment-7e75a2b00fda5fa6b586a7594ea32d2f",
+    "error": null,
+    "operation_receipt": {
+      "contract_version": 1,
+      "operation_id": "01a202db-62d3-7000-8000-000000000001",
+      "operation_epoch": "4f1bb3b2eddd977b1704d98c72088b14",
+      "phase": "confirmed",
+      "expires_at_ms": 1795344561843,
+      "result_available": true,
+      "response_status": 200,
+      "error": null
+    },
+    "result_available": true
+  }
+}

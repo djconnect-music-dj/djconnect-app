@@ -1788,3 +1788,29 @@
 "ui.ask_moments.release_reading" = "Zeitlich begrenzte Anzeige fortsetzen";
 "ui.ask_moments.check_status" = "Erneut prüfen";
 "ui.ask_moments.subject_unavailable" = "Dieses Thema ist nicht mehr verfügbar.";
+
+// Native Music Origin relationships preserve direction and uncertainty.
+"ui.ask_dj.accuracy_notice" = "Dein DJ kann sich irren.";
+"ui.music_origin.label" = "Musikalische Herkunft";
+"ui.music_origin.likely" = "Wahrscheinlich:";
+"ui.music_origin.possible" = "Möglicherweise:";
+"ui.music_origin.sample.current_to_related" = "sampelt";
+"ui.music_origin.sample.related_to_current" = "wurde gesampelt von";
+"ui.music_origin.interpolation.current_to_related" = "interpoliert";
+"ui.music_origin.interpolation.related_to_current" = "wurde interpoliert von";
+"ui.music_origin.cover.current_to_related" = "ist ein Cover von";
+"ui.music_origin.cover.related_to_current" = "wurde gecovert von";
+"ui.music_origin.remake.current_to_related" = "ist ein Remake von";
+"ui.music_origin.remake.related_to_current" = "wurde neu aufgenommen von";
+"ui.music_origin.remix.current_to_related" = "ist ein Remix von";
+"ui.music_origin.remix.related_to_current" = "wurde remixt von";
+"ui.music_origin.earlier_performance.current_to_related" = "hat eine frühere Aufführung in";
+"ui.music_origin.earlier_performance.related_to_current" = "hat eine spätere Aufführung in";
+"ui.music_origin.media_use.current_to_related" = "ist bekannt aus";
+"ui.music_origin.media_use.related_to_current" = "ist bekannt aus";
+"ui.music_origin.shared_source.current_to_related" = "teilt eine Quelle mit";
+"ui.music_origin.shared_source.related_to_current" = "teilt eine Quelle mit";
+"ui.music_origin.influence.current_to_related" = "ist beeinflusst von";
+"ui.music_origin.influence.related_to_current" = "beeinflusste";
+"ui.music_origin.discover" = "Original entdecken";
+"ui.music_origin.discover_question" = "Was kannst du mir über %@ erzählen?";

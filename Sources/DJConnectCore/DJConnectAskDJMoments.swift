@@ -146,6 +146,7 @@ public enum DJConnectAskDJMoments {
                   provenance.typeID == request.typeID, provenance.subjectReference == request.subjectReference,
                   admission.admits(moment: moment, at: now),
                   (retention == "retained" && historyState == "content_retained" && entryID.map { bounded($0) } == true) || (retention == "not_retained" && ((historyState == "not_retained" && entryID == nil) || (historyState == "receipt_only" && entryID.map { bounded($0) } == true))) else { return false }
+            if moment.type == "music_origin" { return moment.isMusicOriginV1 }
             if moment.type == "live_impression" { return moment.isLiveImpressionV1 }
             if moment.type == "dj_bulletin" { return moment.isBulletinV1 }
             return !["silence", "transition", "session", "music_announcement"].contains(moment.type)

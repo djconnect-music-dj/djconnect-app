@@ -29,7 +29,7 @@ public struct DJConnectBulletinSource: Codable, Equatable, Sendable {
 
 public extension DJConnectMoment {
     var isSupportedNativeType: Bool {
-        ["track", "artist", "album", "genre", "session", "transition", "silence"].contains(type) || isBulletinV1 || isMusicAnnouncementV1 || isLiveImpressionV1
+        ["track", "artist", "album", "genre", "session", "transition", "silence"].contains(type) || isBulletinV1 || isMusicAnnouncementV1 || isLiveImpressionV1 || isMusicOriginV1
     }
     /// Version recognition is not display or speech authority. Those continue
     /// to require original display admission and separate owner speech rights/deadlines.

@@ -1313,7 +1313,15 @@ struct MomentCard: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            if moment.isLiveImpressionV1, let impression = moment.liveImpression, let model = artworkModel {
+            if moment.isMusicOriginV1, let origin = moment.musicOrigin {
+                MusicOriginContentView(origin: origin, title: moment.title, story: moment.content, language: language,
+                    discover: artworkModel.flatMap { model in contributionAction.map { begin in
+                        { discoverMusicOrigin(origin, sessionID: moment.sessionID, model: model, begin: begin) }
+                    } })
+                if let contributionAction {
+                    Button(DJConnectLocalization.localized(key: "ui.live_impression.ask", language: language), action: contributionAction).frame(minHeight: 44)
+                }
+            } else if moment.isLiveImpressionV1, let impression = moment.liveImpression, let model = artworkModel {
                 LiveImpressionContentView(impression: impression, title: moment.title, lead: moment.summary,
                     story: moment.content, language: language, sessionID: moment.sessionID,
                     target: .moment(moment.id), model: model, currentAvatar: currentLiveAvatar, activity: activity)

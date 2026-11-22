@@ -13805,6 +13805,10 @@ struct AskDJInputBar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             SessionComposerContext(model: model)
+            Text(DJConnectLocalization.localized(key: "ui.ask_dj.accuracy_notice", language: model.language))
+                .font(.caption).foregroundStyle(.white.opacity(0.8))
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("ask-dj-accuracy-notice")
         // AnyLayout keeps the same native editor mounted during focus changes,
         // preserving first responder, selection and the unsent draft.
         composerLayout {

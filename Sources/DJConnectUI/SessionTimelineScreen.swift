@@ -1824,7 +1824,13 @@ struct SessionEntryView: View, Equatable {
                     if entry.inputType == "voice" { Label(text("ui.session.history.voice"), systemImage: "mic.fill").font(.caption) }
                 } else {
                     VStack(alignment: .leading, spacing: 10) {
-                        if entry.momentType == "live_impression", let impression = entry.liveImpression,
+                        if entry.momentType == "music_origin", let origin = entry.musicOrigin, origin.isValid {
+                            MusicOriginContentView(origin: origin, title: entry.title ?? "", story: entry.text ?? "", language: language,
+                                discover: opensActiveComposer ? artworkModel.map { model in
+                                    { discoverMusicOrigin(origin, sessionID: entry.sessionID, model: model, begin: askAction) }
+                                } : nil)
+                            Button(DJConnectLocalization.localized(key: "ui.live_impression.ask", language: language), action: askAction).frame(minHeight: 44)
+                        } else if entry.momentType == "live_impression", let impression = entry.liveImpression,
                            impression.isValid, let model = artworkModel {
                             LiveImpressionContentView(impression: impression, title: entry.title ?? "",
                                 lead: entry.summary ?? "", story: entry.text ?? "", language: language,
