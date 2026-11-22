@@ -226,6 +226,7 @@ public struct DJConnectHistoryEntry: Codable, Equatable, Sendable, Identifiable 
     public var persona: String?
     public var summary: String?
     public var title: String? = nil
+    public var musicOrigin: DJConnectMusicOrigin? = nil
     private var optionalUserRequested: DJConnectOptionalRequestedMoment? = nil
     public var userRequested: DJConnectAskDJMoments.Provenance? {
         get { optionalUserRequested?.value }
@@ -277,6 +278,10 @@ public struct DJConnectHistoryEntry: Codable, Equatable, Sendable, Identifiable 
                 return momentType == "live_impression" &&
                     title?.isEmpty == false && summary?.isEmpty == false && text?.isEmpty == false
             }
+            if archiveBasis == "public_music_origin_v1" {
+                return momentType == "music_origin" && musicOrigin?.isValid == true
+                    && title?.isEmpty == false && summary?.isEmpty == false && text?.isEmpty == false
+            }
             // These are Core-qualified records of an accepted publication.
             // Recognizing a history basis grants no live, shared or speech authority.
             return ["cc0_normalized_fields_v1", "runtime_authored_direction_v1", "runtime_accepted_settings_v1",
@@ -316,6 +321,7 @@ public struct DJConnectHistoryEntry: Codable, Equatable, Sendable, Identifiable 
     }
     enum CodingKeys: String, CodingKey {
         case optionalUserRequested = "user_requested"
+        case musicOrigin = "music_origin"
         case title, optionalLiveImpression = "live_impression"
         case optionalSessionSpeech = "session_speech"
         case optionalSessionMedia = "session_media"
@@ -335,6 +341,7 @@ public struct DJConnectHistoryEntry: Codable, Equatable, Sendable, Identifiable 
         try c.encode(kind, forKey: .kind)
         try c.encode(occurredAt, forKey: .occurredAt)
         try c.encode(retainedUntil, forKey: .retainedUntil)
+        try c.encodeIfPresent(musicOrigin, forKey: .musicOrigin)
         try c.encodeIfPresent(text, forKey: .text)
         try c.encodeIfPresent(playback, forKey: .playback)
         try c.encodeIfPresent(turnID, forKey: .turnID)

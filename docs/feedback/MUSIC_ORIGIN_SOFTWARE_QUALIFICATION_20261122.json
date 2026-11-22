@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "feature": "DJC-MUSIC-ORIGIN-MOMENT-V1-20261113",
+  "phase": "REVIEWABLE_FROZEN",
+  "core_base": "b6c47739d1d2be758089551302c97410c6914979",
+  "apple_base": "fca846237919a9bb6e5588cddba12c081f461908",
+  "product_files": 322,
+  "product_manifest_sha256": "d42fda44549622700a45183f45ca6772de28ae5a91eef162babfade939cdcc51",
+  "core_unittest": {
+    "success": true,
+    "tests_success": true,
+    "coverage_requested": true,
+    "discovered": 4875,
+    "tests_run": 4875,
+    "accounted": 4875,
+    "workers": 4,
+    "exit_codes": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "skipped": 11,
+    "elapsed_seconds": 80.89506358299695
+  },
+  "apple_swift_tests": 1789,
+  "apple_swift_suites": 62,
+  "apple_vibecast_xctest_selections": 28,
+  "apple_checks": 9,
+  "apple_unsigned_builds": [
+    "macOS",
+    "iOS including Watch dependencies"
+  ],
+  "native_rendering": "Shared card hosted in AppKit at 320/900 points, 5 languages, accessibility2; not physical device acceptance",
+  "avatar_interop": "Core-producer capability/inventory -> exact Dutch menu choice -> same original subject/request -> accepted retained native card",
+  "actual_ha": "47 isolated HA regression harnesses PASS; requested Moments and Music Origin verified TLS/paired-operation/SQLite on HA2026.11.1; synthetic sources/model, zero real-provider calls",
+  "receipt_boundary": "New versioned actual-run derivatives preserve historical receipts and deliberately mismatched-source negative control",
+  "remaining": {
+    "protected_merge": "PENDING_HUMAN_DECISION",
+    "real_provider_model": "NOT_RUN",
+    "editorial_MO01_MO18": "OPEN",
+    "physical_device_accessibility": "OPEN",
+    "installation": "NOT_RUN",
+    "deployment": "NOT_RUN"
+  },
+  "evidence": {
+    "core-full-final-green/summary.json": {
+      "sha256": "a1905f87e8fdcef4daa0e1384708a58e7193e7d89d5fd873c4e129e1c7a1c95b",
+      "custody": "/Volumes/Shared Data/tmp/pcvantol/music-origin-moment-20261122-32wcosm7/core-full-final-green/summary.json"
+    },
+    "core-full-final-green/coverage.xml": {
+      "sha256": "1d91d2aea0442b07b37531a26529cb61ab1082443155e40b5b91e1a464f55bc4",
+      "custody": "/Volumes/Shared Data/tmp/pcvantol/music-origin-moment-20261122-32wcosm7/core-full-final-green/coverage.xml"
+    },
+    "apple-full-final-tests.log": {
+      "sha256": "375ad534b9a6767fa9f22ce718db877c0181d584819eaac5be77525df2c98726",
+      "custody": "/Volumes/Shared Data/tmp/pcvantol/music-origin-moment-20261122-32wcosm7/apple-full-final-tests.log"
+    },
+    "apple-origin-avatar-tests-2.log": {
+      "sha256": "892586efa6834108b61c89dc08f140f546e3ad4d44c29b2b9aaabcafd0ac67ac",
+      "custody": "/Volumes/Shared Data/tmp/pcvantol/music-origin-moment-20261122-32wcosm7/apple-origin-avatar-tests-2.log"
+    },
+    "apple-native-layout.log": {
+      "sha256": "bef713a88e47cabf7b6c3858be1cac99c8faaaf693fbb82729ba1f394dcc7c72",
+      "custody": "/Volumes/Shared Data/tmp/pcvantol/music-origin-moment-20261122-32wcosm7/apple-native-layout.log"
+    },
+    "apple-vibecast-tests.log": {
+      "sha256": "d7ee6835b6f3b2596d876af07b6881ca8508ae05de2daba52787837573200af8",
+      "custody": "/Volumes/Shared Data/tmp/pcvantol/music-origin-moment-20261122-32wcosm7/apple-vibecast-tests.log"
+    },
+    "apple-checks.log": {
+      "sha256": "85b99476785a9dc752748fa65090e64790dcaf7d1d14c0547a897d617ee12138",
+      "custody": "/Volumes/Shared Data/tmp/pcvantol/music-origin-moment-20261122-32wcosm7/apple-checks.log"
+    },
+    "apple-builds.log": {
+      "sha256": "7828a8ef6bc35087ae91c838fea2a4c523cab2c5a1a206c7f2657a8a1c65a2c3",
+      "custody": "/Volumes/Shared Data/tmp/pcvantol/music-origin-moment-20261122-32wcosm7/apple-builds.log"
+    },
+    "core-bandit.log": {
+      "sha256": "dfe199df8c0dae602ec146473712765c7dccbc960fa182ec5a5303f2f86b2c43",
+      "custody": "/Volumes/Shared Data/tmp/pcvantol/music-origin-moment-20261122-32wcosm7/core-bandit.log"
+    },
+    "ha-matrix-v2/summary-qualified.json": {
+      "sha256": "5120f0524a02c829a77c7497566b176370e155d80860359169b792096b9c59bc",
+      "custody": "/Volumes/Shared Data/tmp/pcvantol/music-origin-moment-20261122-32wcosm7/ha-matrix-v2/summary-qualified.json"
+    },
+    "ha-origin-2026.11.1/status.json": {
+      "sha256": "371081aa583c6fb9971c33f458ab34e8216c4c825553b9339c6ba7569eaab155",
+      "custody": "/Volumes/Shared Data/tmp/pcvantol/music-origin-moment-20261122-32wcosm7/ha-origin-2026.11.1/status.json"
+    },
+    "receipt-derivation-v2-applied.json": {
+      "sha256": "e740efdf1576675d79f8c96da7cc1939c94ce837b65d87386a39058a843bccf2",
+      "custody": "/Volumes/Shared Data/tmp/pcvantol/music-origin-moment-20261122-32wcosm7/receipt-derivation-v2-applied.json"
+    },
+    "consumer-fixture-requalification.json": {
+      "sha256": "cd7ddbd4f8f548747f15051e95263b655afbdb34470e59fbc5a2c758280829f7",
+      "custody": "/Volumes/Shared Data/tmp/pcvantol/music-origin-moment-20261122-32wcosm7/consumer-fixture-requalification.json"
+    }
+  }
+}

@@ -1788,3 +1788,29 @@
 "ui.ask_moments.release_reading" = "Tijdelijke weergave hervatten";
 "ui.ask_moments.check_status" = "Opnieuw controleren";
 "ui.ask_moments.subject_unavailable" = "Dit onderwerp is niet meer beschikbaar.";
+
+// Native Music Origin relationships preserve direction and uncertainty.
+"ui.ask_dj.accuracy_notice" = "Je DJ kan zich vergissen.";
+"ui.music_origin.label" = "Muzikale herkomst";
+"ui.music_origin.likely" = "Waarschijnlijk:";
+"ui.music_origin.possible" = "Mogelijk:";
+"ui.music_origin.sample.current_to_related" = "samplet";
+"ui.music_origin.sample.related_to_current" = "wordt gesampled door";
+"ui.music_origin.interpolation.current_to_related" = "interpoleert";
+"ui.music_origin.interpolation.related_to_current" = "wordt geïnterpoleerd door";
+"ui.music_origin.cover.current_to_related" = "is een cover van";
+"ui.music_origin.cover.related_to_current" = "kreeg een cover door";
+"ui.music_origin.remake.current_to_related" = "is een remake van";
+"ui.music_origin.remake.related_to_current" = "kreeg een remake door";
+"ui.music_origin.remix.current_to_related" = "is een remix van";
+"ui.music_origin.remix.related_to_current" = "kreeg een remix door";
+"ui.music_origin.earlier_performance.current_to_related" = "heeft een eerdere uitvoering in";
+"ui.music_origin.earlier_performance.related_to_current" = "heeft een latere uitvoering in";
+"ui.music_origin.media_use.current_to_related" = "is bekend uit";
+"ui.music_origin.media_use.related_to_current" = "is bekend uit";
+"ui.music_origin.shared_source.current_to_related" = "deelt een bron met";
+"ui.music_origin.shared_source.related_to_current" = "deelt een bron met";
+"ui.music_origin.influence.current_to_related" = "is beïnvloed door";
+"ui.music_origin.influence.related_to_current" = "beïnvloedde";
+"ui.music_origin.discover" = "Ontdek het origineel";
+"ui.music_origin.discover_question" = "Wat kun je vertellen over %@?";

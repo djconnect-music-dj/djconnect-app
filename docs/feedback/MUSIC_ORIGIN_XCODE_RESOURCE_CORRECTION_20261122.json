@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "predecessor_commit": "26827af702858392385c299ad8b383ccc8f3d9ce",
+  "correction": "Bundle music-origin-v1.json in the Xcode test target as well as the Swift Package test target",
+  "failure": "Hosted Xcode coverage could not locate the new fixture; eight issues in four new tests. Original failure preserved. No production Swift change.",
+  "validation": "xcodebuild test DJConnectMac -only-testing:DJConnectCoreTests/MusicOriginTests PASS; all four tests including avatar-menu original-subject/retained-card admission, with five invalid payload and five localization cases",
+  "artifact": {
+    "path": "/Volumes/Shared Data/tmp/pcvantol/music-origin-moment-20261122-32wcosm7/apple-xcode-resource-tests.log",
+    "sha256": "0e2d8493f523afcee2187c6e3c947aa91c1449ff54a11b12f55698a69f7cf624"
+  },
+  "source_pins": {
+    "project.yml": "b5816e808553b3de2ca213a0da491df8bb1199d385d2bfb10876b9498862968b",
+    "DJConnectApp.xcodeproj/project.pbxproj": "1111b75a77227054babe8f4522b5720030f3ae5148ea70119dcfa16bfc953929",
+    "Tests/Fixtures/music-origin-v1.json": "8766dfb2e80a1e719c20fba5ec5561fb018f01d3e4654f875dbf5ae5dd048904"
+  },
+  "real_provider": "NOT_RUN",
+  "physical_device": "NOT_RUN",
+  "editorial": "OPEN"
+}

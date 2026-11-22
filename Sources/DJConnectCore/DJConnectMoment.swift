@@ -27,6 +27,7 @@ public struct DJConnectMoment: Codable, Equatable, Sendable, Identifiable {
     public var settingsConfirmation: DJConnectSettingsConfirmationIdentity? = nil
     public var sources: [DJConnectBulletinSource] = []
     public var musicAnnouncement: DJConnectMusicAnnouncement? = nil
+    public var musicOrigin: DJConnectMusicOrigin? = nil
     public var liveImpression: DJConnectLiveImpression? = nil
     public var liveSources: [DJConnectLiveImpression.Source] = []
     public var id: String { momentID }
@@ -64,6 +65,7 @@ public struct DJConnectMoment: Codable, Equatable, Sendable, Identifiable {
         }
     }
     enum CodingKeys: String, CodingKey {
+        case musicOrigin = "music_origin"
         case liveImpression = "live_impression"
         case musicAnnouncement = "music_announcement"
         case type, title, summary, content, artwork, actions, sources
@@ -81,6 +83,7 @@ public struct DJConnectMoment: Codable, Equatable, Sendable, Identifiable {
         createdAt = try c.decode(String.self, forKey: .createdAt)
         type = try c.decode(String.self, forKey: .type)
         musicAnnouncement = try? c.decode(DJConnectMusicAnnouncement.self, forKey: .musicAnnouncement)
+        musicOrigin = try? c.decode(DJConnectMusicOrigin.self, forKey: .musicOrigin)
         liveImpression = try? c.decode(DJConnectLiveImpression.self, forKey: .liveImpression)
         content = try c.decode(String.self, forKey: .content)
         presentationIntent = try c.decode(PresentationIntent.self, forKey: .presentationIntent)
@@ -138,6 +141,7 @@ public struct DJConnectMoment: Codable, Equatable, Sendable, Identifiable {
         try c.encodeIfPresent(userRequested, forKey: .userRequested)
         try c.encodeIfPresent(settingsConfirmation, forKey: .settingsConfirmation)
         try c.encodeIfPresent(musicAnnouncement, forKey: .musicAnnouncement)
+        try c.encodeIfPresent(musicOrigin, forKey: .musicOrigin)
         try c.encodeIfPresent(liveImpression, forKey: .liveImpression)
         if type == "live_impression" { try c.encode(liveSources, forKey: .sources) }
         else if type == "dj_bulletin" { try c.encode(sources, forKey: .sources) }
@@ -344,6 +348,10 @@ public extension DJConnectBroadcastState {
             #else
             return moment.admitsBulletin(admission, at: date, current: current)
             #endif
+        }
+        if moment.type == "music_origin" {
+            guard moment.isMusicOriginV1, !admission.requiresSpotifyAttribution, admission.sourceExpiresAt == nil else { return false }
+            return !current || admission.displayExpiresAt.flatMap(nativeDeadline).map { date < $0 } == true
         }
         if moment.type == "live_impression" {
             #if os(watchOS)
