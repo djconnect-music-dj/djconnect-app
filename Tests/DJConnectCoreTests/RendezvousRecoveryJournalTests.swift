@@ -264,26 +264,33 @@ final class RendezvousRecoveryJournalTests: XCTestCase {
         let bytes = try store.read()!
         for kind in 0..<10 {
             var object = try JSONSerialization.jsonObject(with: bytes) as! [String: Any]
-            switch kind {
-            case 0: object["schemaVersion"] = 2
-            case 1: object["assertionStarted"] = false
-            case 2: object["clientDataHash"] = Data(repeating: 0, count: 32).base64EncodedString()
-            case 3: object["requestHash"] = Data(repeating: 0, count: 32).base64EncodedString()
-            case 4: object["assertionReservation"] = UUID().uuidString
-            case 5: object["key"] = "bad-key"
-            case 6: var window = object["window"] as! [String: Any]; window["kind"] = "registration"; object["window"] = window
-            case 7: object["lastObservedMS"] = -1
-            default:
-                var request = try JSONSerialization.jsonObject(with: Data(base64Encoded: object["request"] as! String)!) as! [String: Any]
-                request[kind == 8 ? "client_data" : "extra"] = "foreign"
-                let changed = try JSONSerialization.data(withJSONObject: request)
-                object["request"] = changed.base64EncodedString(); object["requestHash"] = Data(SHA256.hash(data: changed)).base64EncodedString()
-            }
+            try corruptRecoveryRecord(&object, kind: kind)
             store.inject(try JSONSerialization.data(withJSONObject: object))
             do { _ = try await subject.snapshot(at: 1); XCTFail("corrupt \(kind)") } catch {}
         }
         store.inject(Data(repeating: 0, count: 24_577))
         do { _ = try await subject.snapshot(at: 1); XCTFail() } catch {}
+    }
+
+    private func corruptRecoveryRecord(_ object: inout [String: Any], kind: Int) throws {
+        switch kind {
+        case 0: object["schemaVersion"] = 2
+        case 1: object["assertionStarted"] = false
+        case 2: object["clientDataHash"] = Data(repeating: 0, count: 32).base64EncodedString()
+        case 3: object["requestHash"] = Data(repeating: 0, count: 32).base64EncodedString()
+        case 4: object["assertionReservation"] = UUID().uuidString
+        case 5: object["key"] = "bad-key"
+        case 6: var window = object["window"] as! [String: Any]; window["kind"] = "registration"; object["window"] = window
+        case 7: object["lastObservedMS"] = -1
+        default: try corruptRecoveryRequest(&object, kind: kind)
+        }
+    }
+
+    private func corruptRecoveryRequest(_ object: inout [String: Any], kind: Int) throws {
+        var request = try JSONSerialization.jsonObject(with: Data(base64Encoded: object["request"] as! String)!) as! [String: Any]
+        request[kind == 8 ? "client_data" : "extra"] = "foreign"
+        let changed = try JSONSerialization.data(withJSONObject: request)
+        object["request"] = changed.base64EncodedString(); object["requestHash"] = Data(SHA256.hash(data: changed)).base64EncodedString()
     }
 
     func testConcurrentAssertionReservationsHaveExactlyOnePersistedWinner() async throws {

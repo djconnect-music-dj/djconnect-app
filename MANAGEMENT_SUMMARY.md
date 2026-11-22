@@ -1,3 +1,49 @@
+## 2026-11-22 — Completed Apple client maintenance, batches 1–26
+
+#### Repository Status
+
+The completed implementation candidate is `7312fae1d411147ad1dd6694b7144023ba7f7b78` on `codex/apple-technical-debt-20261121`, based on main `1303c5e337abe9507d5558abdcc506a044c15bd5`. The 26 maintenance batches comprise 27 commits and 38 changed files. No new refactor is authorized by this delivery record.
+
+[CI 44994218302](https://github.com/djconnect-music-dj/djconnect-app/actions/runs/44994218302), a normal unsigned `workflow_dispatch`, passed on exact `7312fae1`: governance, nine contract/localization/hygiene checks, main Swift tests, the separate VibeCast package and macOS/iOS builds including the Watch dependency. All 373 Swift and 312 native committed inputs match the qualified implementation. Four original provider ZIPs and all member hashes are retained and provider-digest verified.
+
+This five-file records supplement awaits independent review and fresh CI on its resulting head. The existing CI qualification does not qualify a future commit. No PR has been opened; no merge, release, tag, installation or deployment occurred. Predecessor main 1303 qualification (CI 44898973055/formal 44899795918) remains its own historical evidence.
+
+#### Management Summary
+
+Existing App/Watch client operations now have explicit admission, execution, adoption and failure-presentation phases. Equivalent decoder, failure, offline-demo and renderer logic is shared where behavior is equal. Regression scenarios and their original assertions remain; the Watch speech-expiry test uses deterministic internal timing seams with the original lifetime and production defaults preserved. Project membership covers the extracted UI files and removes the proven duplicate test entry.
+
+The user's final direction is to address demonstrable critical correctness, security or reliability problems. No further cyclomatic-complexity or source-line optimization is part of this delivery. The bounded read-only review found no evidenced open critical defect; passing software checks are not exhaustive security or device acceptance.
+
+#### Roadmap Position
+
+This is maintenance of the existing Generation 2 Apple client, not a new product capability or backend intelligence model. Product roadmap and Execution Horizon authority remain with canonical Core records. This supplement does not change their order, create a new capability or reopen an earlier completed delivery.
+
+#### Delivery State and Next Decision
+
+Review this records-only supplement, qualify its exact new head through normal CI, then open the single reviewable Apple maintenance PR only after Root GO. The actual PR establishes `REVIEWABLE_FROZEN`; human merge remains separate. Subsequent exact-main coverage/formal qualification and governance reconciliation are not claimed here.
+
+#### Blocked Items and Evidence Limits
+
+The historical batch 19 detailed package-buffer inventory attachment was overwritten and is unavailable. The incident did not affect source, Products, retained causal inputs or the cleanup operation; independent prior readback and the explicit loss supplement remain. No replacement inventory was fabricated.
+
+The latest requested TDE complexity/code-size subset remains policy FAIL: 273 HIGH observations and SOURCE 113,862 against the configured 75,000 limit. Those numerical observations do not establish critical defects. Thresholds, classifications, exclusions and waivers are unchanged; no numerical remediation target is introduced.
+
+Post-merge coverage was correctly skipped by the unchanged push-main-only guard in manual CI. PR-specific authorization, protected merge, own-main qualification and any installed/provider/editorial acceptance remain separate gates.
+
+#### Deferred Work
+
+No new implementation or automatic backlog follows from analyzer scores or this history. Delivery review and its required CI/merge/reconciliation gates remain. Existing installation/rollback, native custody, source/failure history and external evidence are preserved. This maintenance candidate has not been installed.
+
+#### Repository State
+
+The maintenance increment is `LOCAL_IN_PROGRESS` for records review and delivery preparation. Main remains1303; the recovery branch holds qualified implementation 7312. There is no PR or merge for this increment and no premature `MERGED_RECONCILED` claim. [Immutable implementation snapshot](docs/history/prompts/2026-11-22_apple_client_maintenance_26_batches.md).
+
+#### Workspace State
+
+The managed checkout was clean on 7312 before this five-file documentation preview. Only the four rolling prefixes and one new history record are pending review. Historical Users-main `bce719c422b7a460b304e314a4af34e02ecbc3b5` remains preserved. No worktree/ref retirement or `WORKSPACE_READY` claim is made.
+
+All earlier content below is preserved byte-for-byte as historical snapshots.
+
 ## 2026-11-21 — Ask DJ Moments supplemental QA402 Finalization
 
 #### Repository Status

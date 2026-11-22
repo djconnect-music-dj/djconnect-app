@@ -17,10 +17,34 @@ enum ProbeFailure: Error { case arguments, state, unexpectedAdmission, metadata,
         let service = args[1], action = args[2], account = "synthetic-registration-v1"
         let store = RendezvousRepairKeychainStorage(service: service, account: account)
         let journal = RendezvousRegistrationJournal(storage: store)
-        func verifyPurged() throws {
-            guard let bytes = try store.read(), let object = try JSONSerialization.jsonObject(with: bytes) as? [String: Any],
-                  ["challenge", "nonce", "nonceHash", "request", "requestHash"].allSatisfy({ object[$0] == nil }) else { throw ProbeFailure.state }
+        switch action {
+        case "sdk-begin", "sdk-restore", "sdk-proof", "sdk-prepared-restore":
+            try await runAttestationPhase(action: action, store: store, journal: journal)
+        case "sdk-expire", "sdk-verify-purge", "expire", "verify-purge":
+            try await runExpiryPhase(action: action, store: store, journal: journal)
+        case "prepare", "restore":
+            try await runSubmissionPhase(action: action, store: store, journal: journal)
+        case "metadata", "cleanup":
+            try runStorageInspection(action: action, service: service, account: account, store: store)
+        default: throw ProbeFailure.arguments
         }
+    }
+
+    private static func verifyPurged(_ store: RendezvousRepairKeychainStorage) throws {
+        guard let bytes = try store.read(), let object = try JSONSerialization.jsonObject(with: bytes) as? [String: Any],
+              ["challenge", "nonce", "nonceHash", "request", "requestHash"].allSatisfy({ object[$0] == nil }) else { throw ProbeFailure.state }
+    }
+    private static func runAttestationPhase(action: String, store: RendezvousRepairKeychainStorage, journal: RendezvousRegistrationJournal) async throws {
+        switch action {
+        case "sdk-begin", "sdk-restore":
+            try await reserveOrRestoreAttestation(action: action, store: store, journal: journal)
+        case "sdk-proof", "sdk-prepared-restore":
+            try await handOffAttestationToSubmission(action: action, journal: journal)
+        default: throw ProbeFailure.arguments
+        }
+    }
+
+    private static func reserveOrRestoreAttestation(action: String, store: RendezvousRepairKeychainStorage, journal: RendezvousRegistrationJournal) async throws {
         switch action {
         case "sdk-begin":
             guard try store.read() == nil else { throw ProbeFailure.state }
@@ -39,6 +63,12 @@ enum ProbeFailure: Error { case arguments, state, unexpectedAdmission, metadata,
             // Synthetic SDK callback only; no DeviceCheck import or SDK invocation.
             try await journal.completeAttestation(attemptIdentifier: state.attemptIdentifier, reservation: reservation, result: .serverUnavailable, at: 100)
             print("PASS: process-restored in-flight SDK call refused; synthetic unavailable result accounted")
+        default: throw ProbeFailure.arguments
+        }
+    }
+
+    private static func handOffAttestationToSubmission(action: String, journal: RendezvousRegistrationJournal) async throws {
+        switch action {
         case "sdk-proof":
             guard let state = try await journal.snapshot(at: 2_100), state.phase == .attestationPending,
                   state.attestationCallsStarted == 1, state.deadlineMS == 120_000 else { throw ProbeFailure.state }
@@ -57,14 +87,34 @@ enum ProbeFailure: Error { case arguments, state, unexpectedAdmission, metadata,
             try await journal.completeSubmission(attemptIdentifier: state.attemptIdentifier, reservation: reservation, outcome: .responseLost, at: 2_300)
             let submission = try await journal.reserveSubmission(attemptIdentifier: state.attemptIdentifier, at: 4_300)
             print("PASS: SDK-to-registration handoff survives process restart; original bytes SHA256=\(digest(submission.body))")
+        default: throw ProbeFailure.arguments
+        }
+    }
+
+    private static func runExpiryPhase(action: String, store: RendezvousRepairKeychainStorage, journal: RendezvousRegistrationJournal) async throws {
+        switch action {
         case "sdk-expire", "sdk-verify-purge":
             let now: Int64 = action == "sdk-expire" ? 120_000 : 120_001
             guard let state = try await journal.snapshot(at: now), state.phase == .registrationUncertain,
                   state.attestationCallsStarted == 2, state.callsStarted == 2, state.deadlineMS == 120_000 else { throw ProbeFailure.state }
-            try verifyPurged()
+            try verifyPurged(store)
             do { _ = try await journal.reserveAttestation(attemptIdentifier: state.attemptIdentifier, at: now); throw ProbeFailure.unexpectedAdmission }
             catch RendezvousRegistrationJournal.Failure.unavailable {}
             print("PASS: expired SDK/registration material purged; both consumed budgets and original handle retained")
+        case "expire", "verify-purge":
+            let now: Int64 = action == "expire" ? 120_000 : 120_001
+            guard let state = try await journal.snapshot(at: now), state.phase == .registrationUncertain,
+                  state.callsStarted == 2, state.deadlineMS == 120_000 else { throw ProbeFailure.state }
+            try verifyPurged(store)
+            do { _ = try await journal.reserveSubmission(attemptIdentifier: state.attemptIdentifier, at: now); throw ProbeFailure.unexpectedAdmission }
+            catch RendezvousRegistrationJournal.Failure.unavailable {}
+            print("PASS: expiry fence and persisted proof/nonce removal; original handle retained")
+        default: throw ProbeFailure.arguments
+        }
+    }
+
+    private static func runSubmissionPhase(action: String, store: RendezvousRepairKeychainStorage, journal: RendezvousRegistrationJournal) async throws {
+        switch action {
         case "prepare":
             guard try store.read() == nil else { throw ProbeFailure.state }
             let challenge = Data(repeating: 8, count: 32).base64EncodedString().replacingOccurrences(of: "=", with: "")
@@ -80,14 +130,12 @@ enum ProbeFailure: Error { case arguments, state, unexpectedAdmission, metadata,
             let submission = try await journal.reserveSubmission(attemptIdentifier: state.attemptIdentifier, at: 2_100)
             try await journal.completeSubmission(attemptIdentifier: state.attemptIdentifier, reservation: submission.reservation, outcome: .responseLost, at: 2_200)
             print("PASS: new process restored identical retry bytes; SHA256=\(digest(submission.body))")
-        case "expire", "verify-purge":
-            let now: Int64 = action == "expire" ? 120_000 : 120_001
-            guard let state = try await journal.snapshot(at: now), state.phase == .registrationUncertain,
-                  state.callsStarted == 2, state.deadlineMS == 120_000 else { throw ProbeFailure.state }
-            try verifyPurged()
-            do { _ = try await journal.reserveSubmission(attemptIdentifier: state.attemptIdentifier, at: now); throw ProbeFailure.unexpectedAdmission }
-            catch RendezvousRegistrationJournal.Failure.unavailable {}
-            print("PASS: expiry fence and persisted proof/nonce removal; original handle retained")
+        default: throw ProbeFailure.arguments
+        }
+    }
+
+    private static func runStorageInspection(action: String, service: String, account: String, store: RendezvousRepairKeychainStorage) throws {
+        switch action {
         case "metadata", "cleanup":
             let context = LAContext(); context.interactionNotAllowed = true
             var query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
@@ -110,6 +158,7 @@ enum ProbeFailure: Error { case arguments, state, unexpectedAdmission, metadata,
         default: throw ProbeFailure.arguments
         }
     }
+
     static func digest(_ bytes: Data) -> String {
         SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
     }

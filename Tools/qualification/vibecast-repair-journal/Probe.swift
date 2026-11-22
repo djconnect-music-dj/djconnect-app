@@ -20,27 +20,52 @@ enum ProbeFailure: Error { case invalidArguments, invalidState, unexpectedAdmiss
         let storage = RendezvousRepairKeychainStorage(service: service, account: "synthetic-v1")
         let journal = RendezvousRepairJournal(storage: storage)
         switch action {
-        case "write":
-            let initial = try storage.read()
-            guard initial == nil else { throw ProbeFailure.invalidState }
-            _ = try await journal.beginPause(keyIdentifier: "synthetic-not-an-app-attest-key", at: 0)
-            _ = try await journal.reserveExplicitRecovery(keyIdentifier: "synthetic-not-an-app-attest-key", at: 60_000)
-            print("PASS: synthetic reservation persisted")
-        case "restore":
-            guard let state = try await journal.snapshot() else { throw ProbeFailure.invalidState }
-            guard state.attemptsStarted == 1 && state.reservation != nil && state.pausedAtMS == 0 else { throw ProbeFailure.invalidState }
-            do { _ = try await journal.reserveExplicitRecovery(keyIdentifier: state.keyIdentifier, at: 120_000); throw ProbeFailure.unexpectedAdmission }
-            catch is RendezvousRepairWindow.Failure {}
-            try await journal.complete(keyIdentifier: state.keyIdentifier, reservation: state.reservation!, outcome: .paused, at: 120_001)
-            _ = try await journal.reserveExplicitRecovery(keyIdentifier: state.keyIdentifier, at: 120_001)
-            print("PASS: second process restored in-flight fence and original budget")
-        case "exhaust":
-            guard let state = try await journal.snapshot() else { throw ProbeFailure.invalidState }
-            guard state.attemptsStarted == 2 && state.reservation != nil && state.pausedAtMS == 0 else { throw ProbeFailure.invalidState }
-            try await journal.complete(keyIdentifier: state.keyIdentifier, reservation: state.reservation!, outcome: .paused, at: 120_002)
-            do { _ = try await journal.reserveExplicitRecovery(keyIdentifier: state.keyIdentifier, at: 180_000); throw ProbeFailure.unexpectedAdmission }
-            catch is RendezvousRepairWindow.Failure {}
-            print("PASS: third process preserved exhausted budget")
+        case "write", "restore", "exhaust":
+            try await runPausePhase(action: action, storage: storage, journal: journal)
+        case "metadata", "cleanup":
+            try runStorageInspection(action: action, service: service, account: "synthetic-v1", storage: storage)
+        default: throw ProbeFailure.invalidArguments
+        }
+    }
+
+    private static func runPausePhase(action: String, storage: RendezvousRepairKeychainStorage, journal: RendezvousRepairJournal) async throws {
+        switch action {
+        case "write": try await persistInitialPauseReservation(storage: storage, journal: journal)
+        case "restore": try await restoreInFlightPauseReservation(storage: storage, journal: journal)
+        case "exhaust": try await verifyExhaustedPauseBudget(storage: storage, journal: journal)
+        default: throw ProbeFailure.invalidArguments
+        }
+    }
+
+    private static func persistInitialPauseReservation(storage: RendezvousRepairKeychainStorage, journal: RendezvousRepairJournal) async throws {
+        let initial = try storage.read()
+        guard initial == nil else { throw ProbeFailure.invalidState }
+        _ = try await journal.beginPause(keyIdentifier: "synthetic-not-an-app-attest-key", at: 0)
+        _ = try await journal.reserveExplicitRecovery(keyIdentifier: "synthetic-not-an-app-attest-key", at: 60_000)
+        print("PASS: synthetic reservation persisted")
+    }
+
+    private static func restoreInFlightPauseReservation(storage: RendezvousRepairKeychainStorage, journal: RendezvousRepairJournal) async throws {
+        guard let state = try await journal.snapshot() else { throw ProbeFailure.invalidState }
+        guard state.attemptsStarted == 1 && state.reservation != nil && state.pausedAtMS == 0 else { throw ProbeFailure.invalidState }
+        do { _ = try await journal.reserveExplicitRecovery(keyIdentifier: state.keyIdentifier, at: 120_000); throw ProbeFailure.unexpectedAdmission }
+        catch is RendezvousRepairWindow.Failure {}
+        try await journal.complete(keyIdentifier: state.keyIdentifier, reservation: state.reservation!, outcome: .paused, at: 120_001)
+        _ = try await journal.reserveExplicitRecovery(keyIdentifier: state.keyIdentifier, at: 120_001)
+        print("PASS: second process restored in-flight fence and original budget")
+    }
+
+    private static func verifyExhaustedPauseBudget(storage: RendezvousRepairKeychainStorage, journal: RendezvousRepairJournal) async throws {
+        guard let state = try await journal.snapshot() else { throw ProbeFailure.invalidState }
+        guard state.attemptsStarted == 2 && state.reservation != nil && state.pausedAtMS == 0 else { throw ProbeFailure.invalidState }
+        try await journal.complete(keyIdentifier: state.keyIdentifier, reservation: state.reservation!, outcome: .paused, at: 120_002)
+        do { _ = try await journal.reserveExplicitRecovery(keyIdentifier: state.keyIdentifier, at: 180_000); throw ProbeFailure.unexpectedAdmission }
+        catch is RendezvousRepairWindow.Failure {}
+        print("PASS: third process preserved exhausted budget")
+    }
+
+    private static func runStorageInspection(action: String, service: String, account: String, storage: RendezvousRepairKeychainStorage) throws {
+        switch action {
         case "metadata", "cleanup":
             let authentication = LAContext(); authentication.interactionNotAllowed = true
             let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
@@ -65,4 +90,5 @@ enum ProbeFailure: Error { case invalidArguments, invalidState, unexpectedAdmiss
         default: throw ProbeFailure.invalidArguments
         }
     }
+
 }

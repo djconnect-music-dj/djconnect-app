@@ -3507,103 +3507,6 @@ struct RefreshStatusIcon: View {
     }
 }
 
-/// One family for app actions; system alerts and navigation retain native presentation.
-enum DJConnectButtonAppearance {
-    static let iconSize: CGFloat = 44
-    static let iconFont: Font = .system(size: 18, weight: .semibold)
-    static let textFont: Font = .headline.weight(.semibold)
-    static let pressedScale: CGFloat = 0.98
-}
-
-struct DJConnectButtonStyle: ButtonStyle {
-    enum Emphasis { case primary, sessionStart, secondary, tertiary, selected, destructive }
-    enum ShapeKind { case capsule, icon, segmented }
-    var emphasis: Emphasis = .secondary
-    var shape: ShapeKind = .capsule
-    var expands = false
-    var usesLiveGlass = true
-    var usesDestructiveGlass = false
-    var iconDiameter: CGFloat = DJConnectButtonAppearance.iconSize
-    var showsFocusIndicator = true
-    var foregroundColor: Color? = nil
-    var selectionTint: Color? = nil
-    /// Applied after label padding/expansion, over the complete button shape.
-    var selectionFill: Color? = nil
-    var sessionStartMood: String? = nil
-    var dimsWhenDisabled = true
-    @Environment(\.isFocused) private var isFocused
-    @Environment(\.isEnabled) private var isEnabled
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    @Environment(\.djConnectGlassEffectsEnabled) private var glassEnabled
-
-    private var outline: AnyShape {
-        switch shape {
-        case .segmented: AnyShape(DJConnectCardAppearance.segmentedItemShape)
-        case .icon: AnyShape(Circle())
-        case .capsule: AnyShape(Capsule())
-        }
-    }
-
-    func makeBody(configuration: Configuration) -> some View {
-        let role: Emphasis = configuration.role == .destructive ? .destructive : emphasis
-        let pressed = configuration.isPressed && isEnabled
-        let usesPrimarySurface = role == .primary || (role == .selected && selectionFill == nil
-            && (selectionTint == nil || selectionTint == djConnectAccent))
-        let usesOwnSurface = usesPrimarySurface || role == .sessionStart
-        configuration.label
-            .font(shape == .icon ? DJConnectButtonAppearance.iconFont : DJConnectButtonAppearance.textFont)
-            .foregroundStyle(role == .primary || role == .sessionStart ? Color.white : (foregroundColor ?? (role == .destructive ? Color.red : Color.white.opacity(role == .tertiary ? 0.72 : 1))))
-            .symbolRenderingMode(.monochrome)
-            .padding(.horizontal, shape == .icon ? 0 : 16)
-            .padding(.vertical, shape == .capsule ? 10 : 0)
-            .frame(width: shape == .icon ? iconDiameter : nil,
-                   height: shape == .icon ? iconDiameter : nil)
-            .frame(minHeight: DJConnectButtonAppearance.iconSize)
-            .frame(maxWidth: expands ? .infinity : nil)
-            .background {
-                if role == .sessionStart {
-                    DJConnectSessionStartButtonSurface(shape: outline, mood: sessionStartMood)
-                } else if usesPrimarySurface {
-                    DJConnectPrimaryButtonSurface(shape: outline)
-                } else {
-                    GlassEffectContainer(spacing: 0) {
-                        switch role {
-                        case .primary, .sessionStart:
-                            EmptyView() // Handled outside the glass compositor.
-                        case .selected:
-                            if usesLiveGlass && glassEnabled && !reduceTransparency {
-                                outline.fill(selectionFill ?? (selectionTint ?? djConnectAccent).opacity(0.10))
-                                    .glassEffect(.regular.tint((selectionTint ?? djConnectAccent).opacity(0.22)).interactive(), in: outline)
-                            } else { outline.fill(selectionFill ?? (selectionTint ?? djConnectAccent).opacity(0.22)) }
-                        case .destructive:
-                            if usesDestructiveGlass && usesLiveGlass && glassEnabled && !reduceTransparency {
-                                outline.fill(Color.red.opacity(0.04))
-                                    .glassEffect(.regular.tint(.red.opacity(0.12)).interactive(), in: outline)
-                            } else { outline.fill(Color.red.opacity(0.12)) }
-                        case .secondary:
-                            if usesLiveGlass && glassEnabled && !reduceTransparency { outline.fill(.white.opacity(0.04)).glassEffect(.regular.interactive(), in: outline) }
-                            else { outline.fill(glassEnabled && !reduceTransparency ? Color.white.opacity(0.10) : DJConnectGlassAppearance.opaqueSurface) }
-                        case .tertiary: Color.clear
-                        }
-                    }
-                }
-            }
-            .overlay {
-                if !usesOwnSurface {
-                    outline.stroke(role == .selected ? (selectionTint ?? djConnectAccent).opacity(0.55)
-                        : .white.opacity(role == .tertiary ? 0 : 0.12), lineWidth: 1).allowsHitTesting(false)
-                }
-            }
-            .overlay { outline.fill(.white.opacity(pressed ? 0.10 : 0)).allowsHitTesting(false) }
-            .overlay { outline.stroke(.white.opacity(showsFocusIndicator && isFocused ? 0.95 : 0), lineWidth: 3).allowsHitTesting(false) }
-            .contentShape(outline)
-            .opacity(isEnabled || !dimsWhenDisabled ? 1 : 0.40)
-            .scaleEffect(pressed && !reduceMotion ? DJConnectButtonAppearance.pressedScale : 1)
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: pressed)
-    }
-}
-
 private struct DJConnectNotNowLinkButton: View {
     let language: String
     let key: String
@@ -8956,21 +8859,7 @@ extension TrackVibeProfile {
             copy.animationSpeed = min(1.9, max(0.90, animationSpeed * 1.24))
             copy.motionStyle = .energetic
         }
-        copy.spectrumProfile = copy.spectrumProfile.enumerated().map { index, value in
-            let position = Double(index) / Double(max(copy.spectrumProfile.count - 1, 1))
-            let lift: Double
-            switch clampedStep {
-            case 0:
-                lift = 0.78 - position * 0.08
-            case 1:
-                lift = 0.88 + (1.0 - abs(position - 0.5) * 2.0) * 0.18
-            case 2:
-                lift = 0.96 + position * 0.24
-            default:
-                lift = 1.02 + sin(position * .pi * 3.0) * 0.20
-            }
-            return min(1.0, max(0.12, value * lift))
-        }
+        copy.spectrumProfile = copy.spectrumApplyingMoodRenderStep(clampedStep)
         return copy
     }
 
