@@ -1002,6 +1002,81 @@ public final class DJConnectClient: Sendable {
         struct Reply: Decodable { let success: Bool }
         let _ = try decoder.decode(Reply.self, from: await sessionArtworkTransport.prepare(visualDirectorRequest("revoke", payload: payload)))
     }
+    public func musicCanvas() async throws -> DJConnectCanvasSnapshot {
+        struct Capability: Decodable {
+            let success: Bool
+            let capabilities: [String: Bool]
+            let contract_versions: [String: Int]
+        }
+        let capability: Capability = try await decodedResponse(
+            for: sessionHistoryReadRequest(route: "capabilities"), using: sessionProjectionSession)
+        guard capability.success, capability.capabilities["music_canvas"] == true,
+              capability.contract_versions["music_canvas"] == 1 else { throw DJConnectError.invalidResponse }
+        let snapshot: DJConnectCanvasSnapshot = try await decodedResponse(
+            for: canvasRequest("read", body: canvasIdentity()), using: sessionProjectionSession)
+        guard snapshot.isValid else { throw DJConnectError.invalidResponse }
+        return snapshot
+    }
+
+    public func updateMusicCanvas(_ current: DJConnectCanvasSnapshot, preferences: DJConnectCanvasPreferences,
+                                 operationID: UUID) async throws -> DJConnectCanvasReceipt {
+        guard current.isValid, preferences.isValid else { throw DJConnectError.invalidResponse }
+        var body = canvasIdentity()
+        body.binding = current.binding; body.operation_id = operationID.uuidString.lowercased()
+        body.expected_revision = current.revision; body.patch = preferences
+        return try await canvasReceipt("update", body: body)
+    }
+
+    public func musicCanvasOperation(binding: String, operationID: UUID) async throws -> DJConnectCanvasReceipt {
+        var body = canvasIdentity()
+        body.binding = binding; body.operation_id = operationID.uuidString.lowercased()
+        return try await canvasReceipt("operation", body: body)
+    }
+
+    public func setupMusicCanvas(_ current: DJConnectCanvasSnapshot, targetID: String,
+                                 screen: DJConnectCanvasScreen, operationID: UUID) async throws -> DJConnectCanvasReceipt {
+        var body = canvasIdentity()
+        body.binding = current.binding; body.operation_id = operationID.uuidString.lowercased()
+        body.target_id = targetID; body.screen = screen
+        return try await canvasReceipt("setup", body: body)
+    }
+
+    public func forgetMusicCanvas(_ current: DJConnectCanvasSnapshot, targetID: String, cleanupRemote: Bool,
+                                  allowRemainingArt: Bool, operationID: UUID) async throws -> DJConnectCanvasReceipt {
+        var body = canvasIdentity()
+        body.binding = current.binding; body.operation_id = operationID.uuidString.lowercased()
+        body.target_id = targetID; body.cleanup_remote = cleanupRemote; body.allow_remaining_art = allowRemainingArt
+        return try await canvasReceipt("forget", body: body)
+    }
+
+    public func musicCanvasPreview(targetID: String) async throws -> DJConnectSessionArtworkImage {
+        var body = canvasIdentity(); body.target_id = targetID
+        return try await sessionArtworkTransport.loadForecast(canvasRequest("preview", body: body))
+    }
+
+    private func canvasReceipt(_ route: String, body: DJConnectCanvasRequest) async throws -> DJConnectCanvasReceipt {
+        let receipt: DJConnectCanvasReceipt = try await decodedResponse(
+            for: canvasRequest(route, body: body), using: sessionProjectionSession)
+        guard receipt.success, receipt.contract_version == 1, receipt.binding == body.binding,
+              receipt.operation_id == body.operation_id,
+              receipt.revision != nil || ["confirmed", "pending", "unknown", "rejected", "cleanup_failed"].contains(receipt.state ?? "")
+        else { throw DJConnectError.invalidResponse }
+        return receipt
+    }
+
+    private func canvasIdentity() -> DJConnectCanvasRequest {
+        .init(device_id: identity.deviceID, client_type: identity.clientType.rawValue)
+    }
+    private func canvasRequest(_ route: String, body: DJConnectCanvasRequest) throws -> URLRequest {
+        var request = try authenticatedRequest(path: Self.apiV1Path("music_canvas/" + route))
+        request.httpMethod = "POST"
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("no-store", forHTTPHeaderField: "Cache-Control")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(body)
+        return request
+    }
+
     private struct VisualIdentity: Encodable {
         let schema_version = 1
         let device_id: String, client_type: String, session_id: String, visit_id: String

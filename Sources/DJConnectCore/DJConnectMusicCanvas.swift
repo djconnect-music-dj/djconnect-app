@@ -1,0 +1,96 @@
+import Foundation
+
+public struct DJConnectCanvasPreferences: Codable, Equatable, Sendable {
+    public var enabled: Bool
+    public var selected_targets: [String]
+    public var composition: String
+    public var matte: String
+    public var cadence: String
+    public var cadence_overrides: [String: String]
+
+    public var isValid: Bool {
+        ["central", "free", "full"].contains(composition) &&
+        ["off", "matching", "contrast"].contains(matte) &&
+        Self.cadences.contains(cadence) && selected_targets.count <= 16 &&
+        Set(selected_targets).count == selected_targets.count &&
+        Set(cadence_overrides.keys).isSubset(of: Set(selected_targets)) &&
+        cadence_overrides.values.allSatisfy(Self.cadences.contains)
+    }
+    public static let cadences = ["track", "900", "1800", "3600"]
+}
+
+public struct DJConnectCanvasScreen: Codable, Equatable, Sendable {
+    public var width: Int?
+    public var height: Int?
+    public var orientation: String?
+    public var diagonal_inches: Double?
+    public var provenance: String?
+    public init(width: Int? = nil, height: Int? = nil, orientation: String? = nil) {
+        self.width = width; self.height = height; self.orientation = orientation
+    }
+}
+
+public struct DJConnectCanvasTarget: Decodable, Equatable, Identifiable, Sendable {
+    public let id: String
+    public let name: String
+    public let adapter: String
+    public let state: String
+    public let screen: DJConnectCanvasScreen
+    public let remote_cleanup: Bool
+    public let preview_available: Bool
+    public let shared_profiles: Int
+    public let forgetting: Bool?
+}
+
+public struct DJConnectCanvasSnapshot: Decodable, Equatable, Sendable {
+    public let success: Bool
+    public let contract_version: Int
+    public let binding: String
+    public let revision: Int
+    public let preferences: DJConnectCanvasPreferences
+    public let targets: [DJConnectCanvasTarget]
+    public let image_generation_available: Bool
+    public let can_manage_devices: Bool
+    public var isValid: Bool {
+        success && contract_version == 1 && binding.count == 64 &&
+        binding.allSatisfy({ $0.isHexDigit && $0.isASCII }) && revision >= 0 &&
+        preferences.isValid && targets.count <= 64 && Set(targets.map(\.id)).count == targets.count &&
+        Set(preferences.selected_targets).isSubset(of: Set(targets.map(\.id))) &&
+        targets.allSatisfy { target in
+            ["samsung", "switchbot"].contains(target.adapter) &&
+            !target.id.isEmpty && target.id.utf8.count <= 128 &&
+            !target.name.isEmpty && target.name.count <= 128 &&
+            target.shared_profiles >= 0 &&
+            (target.adapter != "switchbot" || !target.remote_cleanup) &&
+            (target.screen.width.map { (256...8192).contains($0) } ?? true) &&
+            (target.screen.height.map { (256...8192).contains($0) } ?? true) &&
+            (target.screen.orientation.map { ["portrait", "landscape"].contains($0) } ?? true)
+        }
+    }
+}
+
+public struct DJConnectCanvasReceipt: Decodable, Sendable {
+    public let success: Bool
+    public let contract_version: Int
+    public let binding: String
+    public let operation_id: String
+    public let state: String?
+    public let revision: Int?
+    public let remaining_art: Bool?
+    public let error: String?
+}
+
+/// A closed additive contract; synthesized optionals omit unrelated route fields.
+struct DJConnectCanvasRequest: Encodable {
+    let contract_version = 1
+    let device_id: String
+    let client_type: String
+    var binding: String?
+    var operation_id: String?
+    var expected_revision: Int?
+    var patch: DJConnectCanvasPreferences?
+    var target_id: String?
+    var screen: DJConnectCanvasScreen?
+    var cleanup_remote: Bool?
+    var allow_remaining_art: Bool?
+}

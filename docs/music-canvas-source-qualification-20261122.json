@@ -1,0 +1,15 @@
+{
+  "scope": "current Music Canvas native source; unsigned source/build qualification only",
+  "xctest": 85,
+  "existing_xctest_skips": 5,
+  "swift_testing": 1795,
+  "ios_ipados_release_build": "PASS",
+  "native_accessibility_acceptance": "OPEN",
+  "physical_screen": "NOT_RUN",
+  "real_provider": "NOT_RUN",
+  "installation": "NOT_RUN",
+  "logs": {
+    "apple-review-fixes-tests.log": "2845be68cafd98143d5c20784ad434df48aebdcd84e71a63bf792e07dc3a827f",
+    "ios-review-fixes-build.log": "369ae08517c121a372cc7ae33b8e41a37645d24c62f39f870dd4e8da4850b2fe"
+  }
+}

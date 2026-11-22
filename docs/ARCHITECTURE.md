@@ -798,3 +798,7 @@ owner, pairing and mood changes fence in-flight results; unknown authorization
 is not replayed. Source deadlines and the receive wall/uptime pair survive image
 staging. Background transport remains unavailable; expiry returns the launcher.
 Rectangular Smart Stack displays no artist, album, progress or DJ prose.
+
+## Music Canvas
+
+The [native Canvas consumer](MUSIC_CANVAS_V1.md) renders versioned Core-owned Profile preferences, target descriptors and observed delivery. The Apple client owns no cadence, device secrets, image generation or screen discovery. Existing Session menu, paired HTTP authority and bounded artwork decoding are reused.
