@@ -24,6 +24,7 @@ struct MusicCanvasView: View {
     private var scope: String {
         [model.sessionHistory.authorizedProfileID ?? "", model.activeDJSession?.id ?? "",
          String(describing: model.sessionHistory.responseEpoch), model.homeAssistantURL,
+         model.haLocalURL, model.haRemoteURL, String(describing: model.haConnectionMode),
          String(describing: model.pairingStatus), String(describing: scenePhase)].joined(separator: "|")
     }
     private func text(_ key: String) -> String {
@@ -131,7 +132,7 @@ struct MusicCanvasView: View {
                         Image(decorative: preview.image, scale: 1).resizable().scaledToFit()
                     }
                 }
-                if let snapshot, snapshot.can_manage_devices, target.state != "ready" && !target.preview_available {
+                if let snapshot, snapshot.can_manage_devices, (target.state == "canvas_manual_takeover" || target.state != "ready" && !target.preview_available) {
                     Section(text("setup")) {
                         if target.screen.width == nil { TextField(text("width"), text: $width) }
                         if target.screen.height == nil { TextField(text("height"), text: $height) }
@@ -206,7 +207,9 @@ struct MusicCanvasView: View {
             if let selected { self.selected = value.targets.first { $0.id == selected.id } }
         } catch {
             guard current(captured), !Task.isCancelled, readID == requestID else { return }
-            if snapshot == nil { notice = text("unavailable") }
+            // A failed refresh cannot retain an old management grant or private image.
+            snapshot = nil; selected = nil; preview = nil
+            notice = text("unavailable")
         }
     }
 
@@ -264,9 +267,15 @@ struct MusicCanvasView: View {
     private func loadPreview(_ target: String) {
         let captured = scope
         Task {
-            let bytes = try? await model.withHomeAssistantClient { try await $0.musicCanvasPreview(targetID: target) }
-            guard current(captured), selected?.id == target else { return }
-            preview = bytes
+            do {
+                let bytes = try await model.withHomeAssistantClient { try await $0.musicCanvasPreview(targetID: target) }
+                guard current(captured), selected?.id == target else { return }
+                preview = bytes
+            } catch {
+                guard current(captured), selected?.id == target else { return }
+                snapshot = nil; selected = nil; preview = nil
+                notice = text("unavailable")
+            }
         }
     }
 }
