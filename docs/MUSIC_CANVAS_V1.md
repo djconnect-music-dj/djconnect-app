@@ -37,3 +37,12 @@ Software fixtures, real HA producer/consumer contracts, actual image-provider
 output, iPhone/iPad/Mac accessibility and Samsung/SwitchBot visible acceptance
 remain separate. Source build is not installation or physical acceptance.
 No new Watch surface, playback authority, image provider or Cast route.
+
+## Current source qualification — 22 November 2026
+
+The final native source passed the complete suite:85 XCTest with5 existing skips,1795 Swift Testing tests, and an unsigned Release iPhone/iPad simulator build (both simulator architectures). SwiftPM compiles the macOS native renderer. This does not establish physical-screen, native accessibility, signed installation or real-provider acceptance.
+
+Review corrections: the withdrawal scope includes configured local/remote endpoints and connection mode; any failed authoritative refresh or preview removes retained private presentation and management grants until a successful read. Unknown forgetting is shown as an explicit forget-anyway decision. A persisted Samsung manual-art takeover offers explicit administrator reconnect; background refresh cannot resume delivery.
+
+Core PR: https://github.com/djconnect-music-dj/djconnect/pull/1672
+Apple PR: https://github.com/djconnect-music-dj/djconnect-app/pull/407
