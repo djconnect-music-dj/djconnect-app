@@ -1914,3 +1914,7 @@
 "ui.live.react" = "React to the current song";
 
 "ui.live.local_dynamics" = "Dynamics on this device";
+
+"ui.live.remote_control" = "VibeCast remote control";
+
+"ui.live.tv_view" = "TV view";

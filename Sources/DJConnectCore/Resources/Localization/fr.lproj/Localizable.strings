@@ -1914,3 +1914,7 @@
 "ui.live.react" = "Réagir au morceau actuel";
 
 "ui.live.local_dynamics" = "Dynamique sur cet appareil";
+
+"ui.live.remote_control" = "Télécommande VibeCast";
+
+"ui.live.tv_view" = "Affichage TV";

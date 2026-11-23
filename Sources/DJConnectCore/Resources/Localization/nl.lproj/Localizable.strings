@@ -1914,3 +1914,7 @@
 "ui.live.react" = "Reageer op het huidige nummer";
 
 "ui.live.local_dynamics" = "Dynamiek op dit apparaat";
+
+"ui.live.remote_control" = "VibeCast-afstandsbediening";
+
+"ui.live.tv_view" = "Tv-weergave";

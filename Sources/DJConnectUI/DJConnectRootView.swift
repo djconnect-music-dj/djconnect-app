@@ -9840,10 +9840,31 @@ struct VibeCastDisplayConsentForm: View {
                     }
                 }
                 if model.isVibeCastSharing {
+                    if let remote = model.vibeCastRemoteState {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(localizedKey(model.language, "ui.live.remote_control")).font(.headline)
+                            Toggle("VibeCast Live", isOn: Binding(get: { remote.policy.information }, set: { value in
+                                Task { await model.refreshVibeCastRemote(live: value) }
+                            }))
+                            .accessibilityIdentifier("vibecast-live-remote-toggle")
+                            Picker(localizedKey(model.language, "ui.live.tv_view"), selection: Binding(get: { remote.view.mode }, set: { value in
+                                Task { await model.refreshVibeCastRemote(mode: value) }
+                            })) {
+                                Text(localizedKey(model.language, "ui.session.flow")).tag("flow")
+                                Text("Vibescape").tag("vibescape")
+                            }
+                            .pickerStyle(.segmented)
+                            .accessibilityIdentifier("vibecast-remote-tv-mode")
+                        }
+                        .disabled(model.isUpdatingVibeCastRemote || model.stoppingLiveDisplay)
+                    } else {
+                        Button(localizedKey(model.language, "ui.refresh")) { Task { await model.refreshVibeCastRemote() } }
+                            .disabled(model.isUpdatingVibeCastRemote)
+                    }
                     Button(role: .destructive) { Task { await model.endVibeCastShare() } } label: {
                         Label(localizedKey(model.language, "ui.live.end_share"), systemImage: "stop.circle")
                     }
-                    .disabled(model.stoppingLiveDisplay)
+                    .disabled(model.stoppingLiveDisplay || model.isUpdatingVibeCastRemote)
                     .accessibilityIdentifier("vibecast-end-entire-share")
                 }
                 if model.displayConsentState == .approved && model.usesLegacyVibeCastStatus {

@@ -204,6 +204,86 @@ public final class DJConnectClient: Sendable {
     // The display consent coordinator and the generation-fenced stop use these paired routes.
     // It first validates a fresh selected-installation/owner context. The same
     // predicate is carried through the budget hop into synchronous dispatch.
+    /// Confirmed host presentation and participation policy for an existing share.
+    public struct VibeCastOwnerState: Decodable, Equatable, Sendable {
+        public struct Policy: Decodable, Equatable, Sendable {
+            public let information: Bool
+            public let requests: String
+            public let max_pending: Int
+            public let screen_focus: Bool
+        }
+        public struct View: Decodable, Equatable, Sendable { public let mode: String }
+        public let success: Bool
+        public let contract_version: Int
+        public let policy: Policy
+        public let view: View
+        public var isValid: Bool {
+            success && contract_version == 1 && ["flow", "vibescape"].contains(view.mode) &&
+            ["disabled", "review", "auto_queue"].contains(policy.requests) && (1...10).contains(policy.max_pending)
+        }
+    }
+
+    public func vibeCastOwnerState(shareID: String, sessionID: String, issuerEpoch: String,
+                                  expectedInstallationID: String, pairedLocalOrigin: URL?,
+                                  isCurrent: @escaping @MainActor @Sendable () -> Bool) async throws -> VibeCastOwnerState {
+        let context = try await displayOwnerContext(expectedInstallationID: expectedInstallationID,
+            pairedLocalOrigin: pairedLocalOrigin, isCurrent: isCurrent)
+        guard await isCurrent(), context.sessionID == sessionID, context.issuerEpoch == issuerEpoch,
+              context.shareID == shareID else { throw DJConnectError.invalidResponse }
+        let data = try await participationOwnerExchange("context", shareID: shareID, sessionID: sessionID, extra: [:], isCurrent: isCurrent)
+        let state = try decoder.decode(VibeCastOwnerState.self, from: data)
+        guard state.isValid else { throw DJConnectError.invalidResponse }
+        return state
+    }
+
+    public func setVibeCastLive(_ enabled: Bool, shareID: String, sessionID: String, issuerEpoch: String,
+                               expectedInstallationID: String, pairedLocalOrigin: URL?,
+                               isCurrent: @escaping @MainActor @Sendable () -> Bool) async throws -> VibeCastOwnerState {
+        let before = try await vibeCastOwnerState(shareID: shareID, sessionID: sessionID, issuerEpoch: issuerEpoch,
+            expectedInstallationID: expectedInstallationID, pairedLocalOrigin: pairedLocalOrigin, isCurrent: isCurrent)
+        if before.policy.information == enabled { return before }
+        let policy: [String: Any] = ["information": enabled, "requests": enabled ? "review" : "disabled",
+            "max_pending": before.policy.max_pending, "screen_focus": false]
+        _ = try await participationOwnerExchange("configure", shareID: shareID, sessionID: sessionID,
+            extra: ["policy": policy], isCurrent: isCurrent)
+        let after = try await vibeCastOwnerState(shareID: shareID, sessionID: sessionID, issuerEpoch: issuerEpoch,
+            expectedInstallationID: expectedInstallationID, pairedLocalOrigin: pairedLocalOrigin, isCurrent: isCurrent)
+        guard after.policy.information == enabled else { throw DJConnectError.invalidResponse }
+        return after
+    }
+
+    public func setVibeCastView(_ mode: String, shareID: String, sessionID: String, issuerEpoch: String,
+                               expectedInstallationID: String, pairedLocalOrigin: URL?,
+                               isCurrent: @escaping @MainActor @Sendable () -> Bool) async throws -> VibeCastOwnerState {
+        guard ["flow", "vibescape"].contains(mode) else { throw DJConnectError.invalidResponse }
+        let before = try await vibeCastOwnerState(shareID: shareID, sessionID: sessionID, issuerEpoch: issuerEpoch,
+            expectedInstallationID: expectedInstallationID, pairedLocalOrigin: pairedLocalOrigin, isCurrent: isCurrent)
+        if before.view.mode == mode { return before }
+        _ = try await participationOwnerExchange("presentation", shareID: shareID, sessionID: sessionID,
+            extra: ["mode": mode], isCurrent: isCurrent)
+        let after = try await vibeCastOwnerState(shareID: shareID, sessionID: sessionID, issuerEpoch: issuerEpoch,
+            expectedInstallationID: expectedInstallationID, pairedLocalOrigin: pairedLocalOrigin, isCurrent: isCurrent)
+        guard after.view.mode == mode else { throw DJConnectError.invalidResponse }
+        return after
+    }
+
+    private func participationOwnerExchange(_ action: String, shareID: String, sessionID: String, extra: [String: Any],
+                                            isCurrent: @escaping @MainActor @Sendable () -> Bool) async throws -> Data {
+        guard ["context", "configure", "presentation"].contains(action), [.ios, .macos].contains(identity.clientType),
+              DJConnectRendezvousQR.canonicalToken(shareID), !sessionID.isEmpty else { throw DJConnectError.invalidResponse }
+        let token = try loadedToken()
+        var request = try authenticatedRequest(path: "/api/djconnect/v1/participation/owner/" + action)
+        request.httpMethod = "POST"; request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: extra.merging(["contract_version": 1,
+            "identity": ["device_id": identity.deviceID, "client_type": identity.clientType.rawValue],
+            "session_id": sessionID, "share_id": shareID]) { _, binding in binding })
+        let data = try await sessionArtworkTransport.prepare(request, isCurrent: {
+            isCurrent() && (try? self.tokenStore.loadToken()) == token
+        })
+        guard await isCurrent(), try loadedToken() == token else { throw DJConnectError.invalidResponse }
+        return data
+    }
+
     /// Explicit host intent: end this share, not playback or the owner's DJ Session.
     public func endVibeCastShare(shareID: String, sessionID: String, issuerEpoch: String,
                                 expectedInstallationID: String, pairedLocalOrigin: URL?,

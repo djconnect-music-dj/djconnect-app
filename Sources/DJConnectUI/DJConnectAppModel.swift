@@ -890,6 +890,12 @@ public final class DJConnectAppModel: ObservableObject {
     @Published private(set) var displayConsentState: DJConnectDisplayConsentSession.State = .idle
     @Published private(set) var displayConsentExistingShare: DJConnectDisplayConsentSession.ExistingShare?
     @Published var vibeCastLiveEnabled = false
+    @Published private var storedVibeCastRemoteState: DJConnectClient.VibeCastOwnerState?
+    @Published private(set) var isUpdatingVibeCastRemote = false
+    private var vibeCastRemoteScope: VibeCastStatusScope?
+    var vibeCastRemoteState: DJConnectClient.VibeCastOwnerState? {
+        vibeCastRemoteScope == vibeCastStatusScope && isVibeCastSharing ? storedVibeCastRemoteState : nil
+    }
     @Published private var liveDisplayShareLifetime: DJConnectDisplayShareLifetime?
     private var displayConsentFlow: DJConnectDisplayConsentSession?
     private var displayConsentOperation = UUID()
@@ -1084,6 +1090,7 @@ public final class DJConnectAppModel: ObservableObject {
     func prepareDisplayConsentPresentation() {
         refreshDisplayConsentPresentation()
         if !blocksVibeCastScreenSelection { vibeCastLiveEnabled = false; resetDisplayConsent() }
+        Task { await refreshVibeCastRemote() }
     }
 
     func dismissDisplayConsentPresentation() {
@@ -1214,6 +1221,38 @@ public final class DJConnectAppModel: ObservableObject {
         }
         stoppingLiveDisplay = false
         if current() { await refreshLiveVibeCastDisplays(scope: scope) }
+    }
+
+    func refreshVibeCastRemote(live: Bool? = nil, mode: String? = nil) async {
+        guard !isUpdatingVibeCastRemote, !stoppingLiveDisplay, let scope = vibeCastStatusScope,
+              let shareID = vibeCastStopTarget?.shareID ?? displayConsentFlow?.receipt?.shareID,
+              let issuer = currentDisplayObservation?.issuerEpoch ?? displayConsentFlow?.resolvedClaim?.issuerEpoch else { return }
+        isUpdatingVibeCastRemote = true
+        defer { isUpdatingVibeCastRemote = false }
+        let current: @MainActor @Sendable () -> Bool = { [weak self] in
+            guard let self else { return false }
+            return self.vibeCastStatusScope == scope && !self.stoppingLiveDisplay &&
+                (self.vibeCastStopTarget?.shareID ?? self.displayConsentFlow?.receipt?.shareID) == shareID
+        }
+        do {
+            let client = try displayOwnerClient()
+            let origin = Self.normalizedHomeAssistantURL(from: localHomeAssistantURL())
+            let response: DJConnectClient.VibeCastOwnerState
+            if let live {
+                response = try await client.setVibeCastLive(live, shareID: shareID, sessionID: scope.sessionID,
+                    issuerEpoch: issuer, expectedInstallationID: scope.installationID, pairedLocalOrigin: origin, isCurrent: current)
+            } else if let mode {
+                response = try await client.setVibeCastView(mode, shareID: shareID, sessionID: scope.sessionID,
+                    issuerEpoch: issuer, expectedInstallationID: scope.installationID, pairedLocalOrigin: origin, isCurrent: current)
+            } else {
+                response = try await client.vibeCastOwnerState(shareID: shareID, sessionID: scope.sessionID,
+                    issuerEpoch: issuer, expectedInstallationID: scope.installationID, pairedLocalOrigin: origin, isCurrent: current)
+            }
+            guard current() else { return }
+            vibeCastRemoteScope = scope; storedVibeCastRemoteState = response
+        } catch {
+            if current() { storedVibeCastRemoteState = nil }
+        }
     }
     func openVibeCastDestinationPicker() {
         refreshDisplayConsentPresentation()
