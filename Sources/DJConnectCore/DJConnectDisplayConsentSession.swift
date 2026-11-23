@@ -24,6 +24,10 @@ import CryptoKit
         @MainActor public func isCurrent() -> Bool {
             isCurrent(now: Date(), uptime: ProcessInfo.processInfo.systemUptime)
         }
+        @MainActor public var remainingSeconds: TimeInterval? {
+            guard isCurrent() else { return nil }
+            return max(0, min(expiresAt.timeIntervalSinceNow, deadline - ProcessInfo.processInfo.systemUptime))
+        }
         // Internal clock injection supports boundary tests; public consumers
         // cannot replace the clocks used for displayed authority.
         @MainActor func isCurrent(now: Date, uptime: TimeInterval) -> Bool {
@@ -123,7 +127,7 @@ import CryptoKit
     /// Call only from a distinct user confirmation for the current Session and
     /// displayed share choice. The original owner predicate must capture every
     /// UI/Profile/Session/route/background revision, including ABA withdrawals.
-    public func approve(share choice: DJConnectDisplayClaim.Share) async throws -> Receipt {
+    public func approve(share choice: DJConnectDisplayClaim.Share, language: String? = nil, live: Bool? = nil) async throws -> Receipt {
         guard state == .ready else { throw DJConnectError.invalidResponse }
         guard current(), let claim = resolvedClaim, claim.isCurrent() else {
             withdraw(); throw DJConnectError.invalidResponse
@@ -139,19 +143,27 @@ import CryptoKit
             let maxDeadline: TimeInterval
             let expectedID: String?
             let expectedGeneration: Int
+            let permittedLifetime: TimeInterval
             switch choice {
             case .createTwoHours:
                 guard existingShare == nil, freshShare == nil else { throw DJConnectError.invalidResponse }
                 maxExpiry = Date().addingTimeInterval(7200); maxDeadline = ProcessInfo.processInfo.systemUptime + 7200; expectedID = nil; expectedGeneration = 1
+                permittedLifetime = 7200
+            case .createFourHours:
+                guard existingShare == nil, freshShare == nil else { throw DJConnectError.invalidResponse }
+                maxExpiry = Date().addingTimeInterval(14400); maxDeadline = ProcessInfo.processInfo.systemUptime + 14400; expectedID = nil; expectedGeneration = 1
+                permittedLifetime = 14400
             case let .existing(id, generation):
                 guard let offered = existingShare, let fresh = freshShare,
                       id == offered.identifier, generation == offered.generation,
                       id == fresh.identifier, generation == fresh.generation,
                       Date() < offered.expiresAt, ProcessInfo.processInfo.systemUptime < offered.deadline else { throw DJConnectError.invalidResponse }
                 maxExpiry = min(offered.expiresAt, fresh.expiresAt); maxDeadline = min(offered.deadline, fresh.deadline); expectedID = id; expectedGeneration = generation
+                permittedLifetime = 28800
             }
             let body = try claim.approvalBody(identity: client.identity, sessionID: sessionID,
-                currentIssuerEpoch: context.issuerEpoch, share: choice, now: Date(), uptime: ProcessInfo.processInfo.systemUptime)
+                currentIssuerEpoch: context.issuerEpoch, share: choice, language: language, live: live,
+                now: Date(), uptime: ProcessInfo.processInfo.systemUptime)
             let requestedAt = Date(), requestedUptime = ProcessInfo.processInfo.systemUptime
             possibleEffect = true
             let data = try await client.displayConsentExchange(path: "approve", body: body, isCurrent: {
@@ -163,7 +175,7 @@ import CryptoKit
                   value.state == "approved", value.session_id == sessionID,
                   DJConnectRendezvousQR.canonicalToken(value.display_id), DJConnectRendezvousQR.canonicalToken(value.share_id),
                   expectedID == nil || expectedID == value.share_id, value.share_generation == expectedGeneration,
-                  value.share_expires_in.isFinite, value.share_expires_in > 0, value.share_expires_in <= (expectedID == nil ? 7200 : 28800),
+                  value.share_expires_in.isFinite, value.share_expires_in > 0, value.share_expires_in <= permittedLifetime,
                   let expiry = displayWireDate(value.share_expires_at), min(expiry, maxExpiry) > Date() else { throw DJConnectError.invalidResponse }
             // Relative server lifetime and all original offer/request clocks are
             // independent upper bounds, not replacements for one another.

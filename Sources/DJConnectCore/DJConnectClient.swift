@@ -204,6 +204,31 @@ public final class DJConnectClient: Sendable {
     // The display consent coordinator and the generation-fenced stop use these paired routes.
     // It first validates a fresh selected-installation/owner context. The same
     // predicate is carried through the budget hop into synchronous dispatch.
+    /// Explicit host intent: end this share, not playback or the owner's DJ Session.
+    public func endVibeCastShare(shareID: String, sessionID: String, issuerEpoch: String,
+                                expectedInstallationID: String, pairedLocalOrigin: URL?,
+                                isCurrent: @escaping @MainActor @Sendable () -> Bool) async throws {
+        let token = try loadedToken()
+        let current: @MainActor @Sendable () -> Bool = {
+            isCurrent() && (try? self.tokenStore.loadToken()) == token
+        }
+        let context = try await displayOwnerContext(expectedInstallationID: expectedInstallationID,
+            pairedLocalOrigin: pairedLocalOrigin, isCurrent: current)
+        guard await current(), context.sessionID == sessionID, context.issuerEpoch == issuerEpoch,
+              context.shareID == shareID, DJConnectRendezvousQR.canonicalToken(shareID) else { throw DJConnectError.invalidResponse }
+        let body = try JSONSerialization.data(withJSONObject: ["contract_version": 1,
+            "identity": ["device_id": identity.deviceID, "client_type": identity.clientType.rawValue],
+            "session_id": sessionID, "share_id": shareID])
+        let data = try await displayConsentExchange(path: "revoke", body: body, isCurrent: current)
+        struct Reply: Decodable { let success: Bool; let contract_version: Int }
+        let reply = try decoder.decode(Reply.self, from: data)
+        guard await current(), reply.success, reply.contract_version == 1 else { throw DJConnectError.invalidResponse }
+        let verified = try await displayOwnerContext(expectedInstallationID: expectedInstallationID,
+            pairedLocalOrigin: pairedLocalOrigin, isCurrent: current)
+        guard await current(), verified.sessionID == sessionID, verified.issuerEpoch == issuerEpoch,
+              verified.shareID != shareID else { throw DJConnectError.invalidResponse }
+    }
+
     func displayConsentExchange(path: String, body: Data,
                                 isCurrent: @escaping @MainActor @Sendable () -> Bool) async throws -> Data {
         guard ["resolve", "approve", "revoke"].contains(path), [.ios, .macos].contains(identity.clientType) else {

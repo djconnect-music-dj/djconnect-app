@@ -700,6 +700,31 @@ final class DJConnectIOSUITests: XCTestCase {
         XCTAssertTrue(app.buttons["pairing-start-demo-button"].exists)
     }
 
+    func testGuestJoinIsAvailableWithoutPairingAndRequiresExplicitConfirmation() throws {
+        let app = launchApp()
+        let join = app.buttons["pairing-join-session"]
+        XCTAssertTrue(join.waitForExistence(timeout: 8)); join.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["live-guest-root"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["live-guest-confirm"].exists)
+        let link = "djconnect://join#v=1&ha_url=https%3A%2F%2Fha.example.com&issuer_epoch=\(String(repeating: "A", count: 43))&invitation_id=\(String(repeating: "B", count: 32))&invitation_secret=\(String(repeating: "C", count: 43))"
+        app.open(try XCTUnwrap(URL(string: link)))
+        XCTAssertTrue(app.buttons["live-guest-confirm"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.textFields["live-guest-composer"].exists)
+        XCTAssertFalse(app.buttons["session-welcome-start"].exists)
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "VibeCast-Live-join-confirmation"; screenshot.lifetime = .keepAlways; add(screenshot)
+        app.buttons["live-guest-leave"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["screen-pairing"].waitForExistence(timeout: 5))
+    }
+
+    func testMalformedGuestDeepLinkNeverShowsAdmissionConfirmation() throws {
+        let app = launchApp()
+        app.open(try XCTUnwrap(URL(string: "djconnect://join#v=1&ha_url=https%3A%2F%2Fha.example.com&invitation_secret=invalid")))
+        XCTAssertTrue(app.descendants(matching: .any)["live-guest-root"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["live-guest-confirm"].exists)
+        XCTAssertFalse(app.textFields["live-guest-composer"].exists)
+    }
+
     func testPairingAndNestedCameraDialogStayCenteredInsideViewport() {
         let app = launchApp(additionalArguments: [
             "-DJConnectLastSeenAppVersion", "4.0.0",

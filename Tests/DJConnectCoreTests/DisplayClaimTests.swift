@@ -66,6 +66,11 @@ private func bClaim(_ changes: [String: Any] = [:]) throws -> DJConnectDisplayCl
     #expect(Set(share.keys) == ["mode", "consent", "lifetime_seconds"])
     #expect(share["consent"] as? Bool == true)
     #expect(share["lifetime_seconds"] as? Int == 7200)
+    let fourHours = try claim.approvalBody(identity: identity, sessionID: "session-original", currentIssuerEpoch: bEpoch,
+        share: .createFourHours, now: bStart.addingTimeInterval(2), uptime: 102)
+    let fourHourBody = try #require(JSONSerialization.jsonObject(with: fourHours) as? [String: Any])
+    let fourHourShare = try #require(fourHourBody["share"] as? [String: Any])
+    #expect(fourHourShare["lifetime_seconds"] as? Int == 14400)
     let existing = try claim.approvalBody(identity: identity, sessionID: "session-original", currentIssuerEpoch: bEpoch,
         share: .existing(id: bEpoch, generation: 2), now: bStart.addingTimeInterval(2), uptime: 102)
     let existingBody = try #require(JSONSerialization.jsonObject(with: existing) as? [String: Any])

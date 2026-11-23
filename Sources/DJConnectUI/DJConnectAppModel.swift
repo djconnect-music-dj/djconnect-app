@@ -858,6 +858,7 @@ struct DJConnectLocalAudioRoute: Equatable, Sendable {
 
 @MainActor
 public final class DJConnectAppModel: ObservableObject {
+    @Published var isShowingGuestJoin = false
     // View-lifetime presentation only. Never a Profile/defaults/cache field.
     @Published var isShowingVibeScape = false {
         didSet {
@@ -888,6 +889,8 @@ public final class DJConnectAppModel: ObservableObject {
 
     @Published private(set) var displayConsentState: DJConnectDisplayConsentSession.State = .idle
     @Published private(set) var displayConsentExistingShare: DJConnectDisplayConsentSession.ExistingShare?
+    @Published var vibeCastLiveEnabled = false
+    @Published private var liveDisplayShareLifetime: DJConnectDisplayShareLifetime?
     private var displayConsentFlow: DJConnectDisplayConsentSession?
     private var displayConsentOperation = UUID()
     private var displayConsentOwner: (@MainActor @Sendable () -> Bool)?
@@ -926,6 +929,12 @@ public final class DJConnectAppModel: ObservableObject {
     var vibeCastScreenSlot: DJConnectDisplayOwnerContext.ScreenSlot? { currentDisplayObservation?.screenSlot }
     var vibeCastStopTarget: DJConnectDisplayOwnerContext.Display? {
         vibeCastScreenSlot?.display ?? liveVibeCastDisplays?.first
+    }
+    var vibeCastShareRemainingSeconds: TimeInterval? {
+        guard isVibeCastSharing else { return nil }
+        if let receipt = displayConsentFlow?.receipt { return receipt.remainingSeconds }
+        guard liveDisplayScope == vibeCastStatusScope else { return nil }
+        return liveDisplayShareLifetime?.remainingSeconds()
     }
 
     var usesLegacyVibeCastStatus: Bool {
@@ -967,16 +976,20 @@ public final class DJConnectAppModel: ObservableObject {
             self?.liveDisplayRequest == request && self?.vibeCastStatusScope == scope
         }
         do {
+            let requestedAt = Date(), requestedUptime = ProcessInfo.processInfo.systemUptime
             let context = try await displayOwnerClient().displayOwnerContext(
                 expectedInstallationID: scope.installationID,
                 pairedLocalOrigin: Self.normalizedHomeAssistantURL(from: localHomeAssistantURL()),
                 isCurrent: current)
             guard current(), !Task.isCancelled else { return }
+            liveDisplayShareLifetime = context.sessionID == scope.sessionID
+                ? DJConnectDisplayShareLifetime(context: context, requestedAt: requestedAt, requestedUptime: requestedUptime) : nil
             adoptLiveVibeCastDisplayContext(context, scope: scope)
         } catch {
             guard current(), !Task.isCancelled else { return }
             acceptedDisplayObservation = nil
             legacyDisplayStatus = false
+            liveDisplayShareLifetime = nil
         }
     }
 
@@ -1070,7 +1083,7 @@ public final class DJConnectAppModel: ObservableObject {
 
     func prepareDisplayConsentPresentation() {
         refreshDisplayConsentPresentation()
-        if !blocksVibeCastScreenSelection { resetDisplayConsent() }
+        if !blocksVibeCastScreenSelection { vibeCastLiveEnabled = false; resetDisplayConsent() }
     }
 
     func dismissDisplayConsentPresentation() {
@@ -1157,11 +1170,15 @@ public final class DJConnectAppModel: ObservableObject {
         let operation = displayConsentOperation
         let share: DJConnectDisplayClaim.Share = displayConsentExistingShare.map {
             .existing(id: $0.identifier, generation: $0.generation)
-        } ?? .createTwoHours
+        } ?? .createFourHours
         liveDisplayRequest = UUID()
         acceptedDisplayObservation = nil
         displayConsentState = .approving
-        do { _ = try await flow.approve(share: share) } catch { }
+        do {
+            _ = try await flow.approve(share: share,
+                language: displayConsentExistingShare == nil ? DJConnectLocalization.supportedLanguageCode(language) : nil,
+                live: displayConsentExistingShare == nil ? vibeCastLiveEnabled : nil)
+        } catch { }
         guard displayConsentOperation == operation else { return }
         displayConsentState = flow.state
         refreshDisplayConsentPresentation()
@@ -1174,6 +1191,29 @@ public final class DJConnectAppModel: ObservableObject {
         do { try await flow.revokeDisplay() } catch { }
         guard displayConsentOperation == operation else { return }
         displayConsentState = flow.state
+    }
+
+    func endVibeCastShare() async {
+        guard !stoppingLiveDisplay, let scope = vibeCastStatusScope,
+              let shareID = vibeCastStopTarget?.shareID ?? displayConsentFlow?.receipt?.shareID,
+              let issuer = currentDisplayObservation?.issuerEpoch ?? displayConsentFlow?.resolvedClaim?.issuerEpoch else { return }
+        stoppingLiveDisplay = true
+        let request = UUID(); liveDisplayRequest = request
+        let current: @MainActor @Sendable () -> Bool = { [weak self] in
+            self?.liveDisplayRequest == request && self?.vibeCastStatusScope == scope
+        }
+        do {
+            try await displayOwnerClient().endVibeCastShare(shareID: shareID, sessionID: scope.sessionID, issuerEpoch: issuer,
+                expectedInstallationID: scope.installationID,
+                pairedLocalOrigin: Self.normalizedHomeAssistantURL(from: localHomeAssistantURL()), isCurrent: current)
+            guard current() else { stoppingLiveDisplay = false; return }
+            cancelDisplayConsent(); displayConsentState = .revoked
+            acceptedDisplayObservation = nil; liveDisplayShareLifetime = nil
+        } catch {
+            if current() { displayConsentState = .revokeUncertain }
+        }
+        stoppingLiveDisplay = false
+        if current() { await refreshLiveVibeCastDisplays(scope: scope) }
     }
     func openVibeCastDestinationPicker() {
         refreshDisplayConsentPresentation()

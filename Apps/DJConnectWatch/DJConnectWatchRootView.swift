@@ -71,6 +71,22 @@ private func playWatchHaptic(_ haptic: WKHapticType, enabled: Bool) {
     #endif
 }
 
+private struct WatchBreathingTrackArtwork: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var isVisible = false
+
+    func body(content: Content) -> some View {
+        let animates = isVisible && scenePhase == .active && !reduceMotion
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !animates)) { context in
+            let phase = (1 - cos(context.date.timeIntervalSinceReferenceDate * .pi / 3)) / 2
+            content.scaleEffect(animates ? 0.985 + 0.015 * phase : 1)
+        }
+        .onAppear { isVisible = true }
+        .onDisappear { isVisible = false }
+    }
+}
+
 private extension Color {
     init?(watchHex: String) {
         var raw = watchHex.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -5887,6 +5903,7 @@ private struct DJConnectWatchCompanionTrackView: View {
                 }
                 .frame(width: size.width, height: size.height)
                 .clipped()
+                .modifier(WatchBreathingTrackArtwork())
                 .overlay {
                     LinearGradient(stops: [.init(color: .black.opacity(0.48), location: 0),
                                            .init(color: .clear, location: 0.32)],

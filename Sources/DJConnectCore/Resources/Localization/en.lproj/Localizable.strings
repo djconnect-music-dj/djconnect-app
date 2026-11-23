@@ -1477,7 +1477,7 @@
 "ui.displayConsent.instructions" = "Enter the code shown on your VibeCast screen. Looking up the code does not share anything.";
 "ui.displayConsent.instructions_after_scan" = "Or enter the code shown on your VibeCast screen. Looking up the code does not share anything.";
 "ui.displayConsent.lookup" = "Look up screen";
-"ui.displayConsent.create" = "Share only your current DJ Session with this screen for two hours?";
+"ui.displayConsent.create" = "Share only your current DJ Session with this screen for four hours?";
 "ui.displayConsent.existing" = "Allow this screen to use the existing share for your current Session, without extending its expiry?";
 "ui.displayConsent.confirm" = "Allow this screen";
 "ui.displayConsent.active_title" = "VibeCast is active";
@@ -1874,3 +1874,43 @@
 "ui.canvas.state.image_provider_required" = "Set up image generator";
 "ui.canvas.state.waiting_screen" = "Waiting for screen";
 "ui.canvas.state.unavailable" = "Waiting for screen or connection";
+
+"ui.displayConsent.remaining" = "Session time remaining: %@";
+
+"ui.live.join" = "Join session (guest mode)";
+
+"ui.live.leave" = "Leave joined session";
+
+"ui.live.connected" = "Connected to guest session";
+
+"ui.live.not_connected" = "Not connected to a guest session";
+
+"ui.live.join_instructions" = "Scan the current QR code on the TV with your phone camera. Confirm here to join VibeCast Live.";
+
+"ui.live.invitation_link" = "Invitation link";
+
+"ui.live.open_invitation" = "Open invitation";
+
+"ui.live.invalid_invitation" = "This invitation is unavailable. Scan the current TV QR code again.";
+
+"ui.live.request_failed" = "Your request could not be completed. It has not been sent again.";
+
+"ui.live.request_playing" = "Your requested song is playing: %@";
+
+"ui.live.help_title" = "Guest help";
+
+"ui.live.help" = "Request a song or ask about the music. You cannot control playback or change the host’s session settings. Your conversation is temporary and disappears when you leave.";
+
+"ui.live.composer" = "Ask about music or request a song…";
+
+"ui.live.host_consent" = "Allow guests to join, ask about music and submit song requests. Playback and session settings stay under your control.";
+
+"ui.live.help_information_only" = "Ask about the music in this session. Song requests are not enabled by the host. You cannot control playback or change session settings. Your temporary conversation disappears when you leave.";
+
+"ui.live.composer_information_only" = "Ask about the music…";
+
+"ui.live.end_share" = "End VibeCast session";
+
+"ui.live.react" = "React to the current song";
+
+"ui.live.local_dynamics" = "Dynamics on this device";

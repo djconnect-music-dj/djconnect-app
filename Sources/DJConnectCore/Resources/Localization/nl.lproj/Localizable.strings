@@ -1477,7 +1477,7 @@
 "ui.displayConsent.instructions" = "Vul de code in die je op je VibeCast-scherm ziet";
 "ui.displayConsent.instructions_after_scan" = "Of vul de code in die je op je VibeCast-scherm ziet";
 "ui.displayConsent.lookup" = "Scherm opzoeken";
-"ui.displayConsent.create" = "Wil je alleen je huidige DJ-sessie twee uur op dit scherm tonen?";
+"ui.displayConsent.create" = "Wil je alleen je huidige DJ-sessie vier uur op dit scherm tonen?";
 "ui.displayConsent.existing" = "Wil je je huidige DJ-sessie ook op dit scherm tonen?";
 "ui.displayConsent.confirm" = "Dit scherm toestaan";
 "ui.displayConsent.active_title" = "VibeCast is actief";
@@ -1874,3 +1874,43 @@
 "ui.canvas.state.image_provider_required" = "Beeldgenerator instellen";
 "ui.canvas.state.waiting_screen" = "Wacht op scherm";
 "ui.canvas.state.unavailable" = "Wacht op scherm of verbinding";
+
+"ui.displayConsent.remaining" = "Resterende sessietijd: %@";
+
+"ui.live.join" = "Deelnemen aan sessie (gastmodus)";
+
+"ui.live.leave" = "Gastsessie verlaten";
+
+"ui.live.connected" = "Verbonden met gastsessie";
+
+"ui.live.not_connected" = "Niet verbonden met een gastsessie";
+
+"ui.live.join_instructions" = "Scan de actuele QR-code op de tv met je telefooncamera. Bevestig hier om deel te nemen aan VibeCast Live.";
+
+"ui.live.invitation_link" = "Uitnodigingslink";
+
+"ui.live.open_invitation" = "Uitnodiging openen";
+
+"ui.live.invalid_invitation" = "Deze uitnodiging is niet beschikbaar. Scan opnieuw de actuele QR-code op de tv.";
+
+"ui.live.request_failed" = "Je verzoek kon niet worden afgerond. Het is niet opnieuw verstuurd.";
+
+"ui.live.request_playing" = "Jouw verzoeknummer speelt: %@";
+
+"ui.live.help_title" = "Hulp voor gasten";
+
+"ui.live.help" = "Vraag een nummer aan of stel een vraag over de muziek. Je kunt het afspelen niet bedienen of sessie-instellingen van de host wijzigen. Je gesprek is tijdelijk en verdwijnt als je vertrekt.";
+
+"ui.live.composer" = "Muziekvraag of verzoeknummer…";
+
+"ui.live.host_consent" = "Laat gasten deelnemen, muziekvragen stellen en verzoeknummers aanvragen. Jij houdt de controle over afspelen en sessie-instellingen.";
+
+"ui.live.help_information_only" = "Stel vragen over de muziek in deze sessie. De host heeft verzoeknummers niet ingeschakeld. Je kunt afspelen of sessie-instellingen niet wijzigen. Je tijdelijke gesprek verdwijnt als je vertrekt.";
+
+"ui.live.composer_information_only" = "Vraag over de muziek…";
+
+"ui.live.end_share" = "VibeCast-sessie beëindigen";
+
+"ui.live.react" = "Reageer op het huidige nummer";
+
+"ui.live.local_dynamics" = "Dynamiek op dit apparaat";

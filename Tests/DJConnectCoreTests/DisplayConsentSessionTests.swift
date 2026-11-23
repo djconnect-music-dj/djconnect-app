@@ -128,7 +128,7 @@ private final class ConsentWire: URLProtocol, @unchecked Sendable {
 
     private func prepareOwnerContext(_ value: inout [String: Any], mode: String, count: Int) {
         prepareOwnerIdentity(&value, mode: mode, count: count)
-        if mode == "existing" || (mode == "new-share" && count > 1) {
+        if mode == "existing" || (mode == "new-share" && count > 1) || (mode == "whole-share-stop" && count == 1) {
             value.merge(["share_id": consentShare, "share_generation": 1, "expires_in": 3600.0, "expires_at": expiry(3600)]) { _, new in new }
         }
         prepareOwnerDisplayObservation(&value, mode: mode, count: count)
@@ -155,7 +155,8 @@ private final class ConsentWire: URLProtocol, @unchecked Sendable {
             value.merge(["state": "approved", "display_id": String(repeating: "F", count: 42) + "A",
                 "session_id": mode == "bad-receipt" ? "other-session" : "fixture-session",
                 "share_id": consentShare, "share_generation": 1,
-                "share_expires_in": mode == "short-receipt" ? 1.0 : 3599.0, "share_expires_at": expiry(mode == "short-absolute-receipt" ? 1.0 : 3599)]) { _, new in new }
+                "share_expires_in": mode == "four-hour-receipt" ? 14400.0 : mode == "short-receipt" ? 1.0 : 3599.0,
+                "share_expires_at": expiry(mode == "four-hour-receipt" ? 14400 : mode == "short-absolute-receipt" ? 1.0 : 3599)]) { _, new in new }
         }
     }
 
@@ -263,6 +264,38 @@ private final class ConsentWire: URLProtocol, @unchecked Sendable {
         #expect(ConsentWire.requests.allSatisfy { $0.value(forHTTPHeaderField: "Authorization") == "Bearer synthetic-owner" })
         await #expect(throws: (any Error).self) { _ = try await flow.approve(share: .createTwoHours) }
         #expect(ConsentWire.requests.count == 6)
+    }
+    @Test(.isolatedClientResources) func fourHourShareRequiresConfirmationAndNeverRenewsOnRead() async throws {
+        let (flow, _, authority) = try make("four-hour-receipt")
+        try await flow.resolve(code: "000000")
+        #expect(!ConsentWire.requests.contains { $0.url!.path.hasSuffix("/approve") })
+        let receipt = try await flow.approve(share: .createFourHours, language: "nl", live: true)
+        let body = try ConsentWire.body(for: "/owner/approve")
+        let share = try #require(body["share"] as? [String: Any])
+        #expect(share["lifetime_seconds"] as? Int == 14400)
+        #expect(share["language"] as? String == "nl" && share["live"] as? Bool == true)
+        let first = try #require(receipt.remainingSeconds)
+        let second = try #require(flow.receipt?.remainingSeconds)
+        #expect(first > 14390 && first <= 14400 && second <= first)
+        #expect(ConsentWire.requests.filter { $0.url!.path.hasSuffix("/approve") }.count == 1)
+        authority.withdraw()
+        #expect(receipt.remainingSeconds == nil && flow.receipt == nil)
+    }
+    @Test(.isolatedClientResources) func wholeShareStopUsesFreshOwnerAndReadbackWithoutEndingDJSession() async throws {
+        ConsentWire.reset("whole-share-stop")
+        let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [ConsentWire.self]
+        let origin = URL(string: "http://127.0.0.1:18801")!
+        let client = DJConnectClient(baseURL: origin,
+            identity: DJConnectIdentity(deviceID: "djconnect-ios-ABCDEF123456", deviceName: "Fixture", clientType: .ios, firmware: "test", platform: .ios),
+            tokenStore: DJConnectInMemoryTokenStore(token: "synthetic-owner"), session: URLSession(configuration: config))
+        try await client.endVibeCastShare(shareID: consentShare, sessionID: "fixture-session", issuerEpoch: consentEpoch,
+            expectedInstallationID: "fixture-install", pairedLocalOrigin: origin, isCurrent: { true })
+        let body = try ConsentWire.body(for: "/owner/revoke")
+        #expect(Set(body.keys) == ["contract_version", "identity", "session_id", "share_id"])
+        #expect(body["share_id"] as? String == consentShare)
+        #expect(ConsentWire.requests.filter { $0.url!.path.hasSuffix("/owner/revoke") }.count == 1)
+        #expect(ConsentWire.requests.filter { $0.url!.path.hasSuffix("/owner/context") }.count == 2)
+        #expect(!ConsentWire.requests.contains { $0.url!.path.contains("/session/end") })
     }
     @Test(.isolatedClientResources) func macConsentPreservesIdentityAndRevokesOnlyTheApprovedDisplay() async throws {
         let (flow, _, _) = try make(clientType: .macos)

@@ -678,6 +678,7 @@ public struct DJConnectRootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @StateObject private var introductionAnchors = SessionIntroductionAnchors()
+    @StateObject private var liveGuest = DJConnectLiveGuestModel()
     @State private var selectedSection = DJConnectSection.djSession
     @State private var openedSavedSession: SavedSessionDestination?
     #if os(macOS)
@@ -693,6 +694,28 @@ public struct DJConnectRootView: View {
     }
 
     public var body: some View {
+        Group {
+            if liveGuest.isPresented {
+                DJConnectLiveGuestView(guest: liveGuest, language: model.language)
+            } else {
+                ordinaryRoot
+            }
+        }
+        .onOpenURL { url in
+            guard !liveGuest.receive(url.absoluteString) else { return }
+            #if !os(macOS)
+            if !model.handleAppNavigationDeepLink(url) { model.handlePairingDeepLink(url) }
+            #endif
+        }
+        .onChange(of: model.isShowingGuestJoin) { _, shown in
+            if shown { model.isShowingGuestJoin = false; liveGuest.showJoin() }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background { liveGuest.disconnect() }
+        }
+    }
+
+    private var ordinaryRoot: some View {
         ZStack {
             rootCanvas
             Group {
@@ -958,13 +981,6 @@ public struct DJConnectRootView: View {
                 selectedSection = .djSession
             }
         }
-        #if !os(macOS)
-        .onOpenURL { url in
-            if !model.handleAppNavigationDeepLink(url) {
-                model.handlePairingDeepLink(url)
-            }
-        }
-        #endif
         .task(id: model.pairingStatus) {
             await model.refreshProfileDJSettings()
             await model.refreshActiveDJSession()
@@ -1651,6 +1667,9 @@ private struct PairingSheetView: View {
                     pairingSuccess
                 } else {
                     pairingPending
+                    Button(localizedKey(model.language, "ui.live.join")) { model.isShowingGuestJoin = true }
+                        .djConnectButtonStyle(DJConnectButtonStyle(expands: true))
+                        .accessibilityIdentifier("pairing-join-session")
                 }
             }
             .padding(28)
@@ -3030,6 +3049,9 @@ private struct WelcomeView: View {
                             .djConnectButtonStyle(DJConnectButtonStyle(emphasis: isLastStep ? .primary : .tertiary, expands: true))
                             .controlSize(.large)
                             .accessibilityIdentifier("welcome-dismiss-button")
+                            Button(localizedKey(model.language, "ui.live.join")) { model.isShowingGuestJoin = true }
+                                .djConnectButtonStyle(DJConnectButtonStyle(emphasis: .secondary, expands: true))
+                                .accessibilityIdentifier("welcome-join-session")
                         }
                         .frame(maxWidth: .infinity)
                     }
@@ -3539,6 +3561,7 @@ private struct AnimatedAlbumArtworkView: View {
         }
         .aspectRatio(1, contentMode: .fit)
         .frame(maxWidth: maxWidth)
+        .djConnectBreathingArtwork()
         .frame(maxWidth: .infinity, alignment: .center)
     }
 }
@@ -7698,6 +7721,7 @@ private struct TrackInsightHeroArtwork: View {
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .djConnectBreathingArtwork()
                 .overlay {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .stroke(.white.opacity(0.32), lineWidth: 1)
@@ -9020,6 +9044,9 @@ private struct IdleDJSessionView: View {
                     dimsWhenDisabled: !refreshing && !model.isSchedulingProfileDJChoice && model.profileDJSettings.phase != .saving))
                 .disabled(model.isLoadingDJSession || (!model.isDemoMode && model.pairingStatus != .paired) || !model.canUsePlaybackFeatures || model.isSchedulingProfileDJChoice || (!model.isDemoMode && [.saving, .uncertain].contains(model.profileDJSettings.phase)))
                 .accessibilityIdentifier("session-welcome-start")
+                Button(localizedKey(model.language, "ui.live.join")) { model.isShowingGuestJoin = true }
+                    .djConnectButtonStyle(DJConnectButtonStyle(expands: true))
+                    .accessibilityIdentifier("session-welcome-join")
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "sparkles")
                         .font(.body.weight(.semibold))
@@ -9759,6 +9786,12 @@ struct VibeCastDisplayConsentForm: View {
                 }
                 if model.canSelectVibeCastScreen && model.displayConsentState == .ready {
                     Text(localizedKey(model.language, model.displayConsentExistingShare == nil ? "ui.displayConsent.create" : "ui.displayConsent.existing"))
+                    if model.displayConsentExistingShare == nil {
+                        Toggle("VibeCast Live", isOn: $model.vibeCastLiveEnabled)
+                            .accessibilityIdentifier("vibecast-live-start-toggle")
+                        Text(localizedKey(model.language, "ui.live.host_consent"))
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
                     Button {
                         Task { await model.approveDisplayConsent() }
                     } label: {
@@ -9795,6 +9828,23 @@ struct VibeCastDisplayConsentForm: View {
                     Text(localizedKey(model.language, "ui.displayConsent.status_unknown"))
                         .foregroundStyle(.secondary)
                         .accessibilityIdentifier("display-status-unknown")
+                }
+                TimelineView(.periodic(from: .now, by: 1)) { _ in
+                    if let remaining = model.vibeCastShareRemainingSeconds {
+                        let seconds = max(0, Int(remaining))
+                        Text(String(format: localizedKey(model.language, "ui.displayConsent.remaining"),
+                                    String(format: "%d:%02d", seconds / 3600, (seconds % 3600) / 60)))
+                            .font(.footnote.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("vibecast-session-remaining")
+                    }
+                }
+                if model.isVibeCastSharing {
+                    Button(role: .destructive) { Task { await model.endVibeCastShare() } } label: {
+                        Label(localizedKey(model.language, "ui.live.end_share"), systemImage: "stop.circle")
+                    }
+                    .disabled(model.stoppingLiveDisplay)
+                    .accessibilityIdentifier("vibecast-end-entire-share")
                 }
                 if model.displayConsentState == .approved && model.usesLegacyVibeCastStatus {
                     Button(role: .destructive) { Task { await model.revokeDisplayConsent() } } label: {

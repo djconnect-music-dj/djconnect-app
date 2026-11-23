@@ -684,6 +684,7 @@ struct NativeSessionMomentsView: View {
                     isPlaying: session.broadcast.playback?.state == "playing" && !artworkIsPaused)
             }
                 .aspectRatio(1, contentMode: .fit)
+                .djConnectBreathingArtwork()
                 // The base cover determines geometry. Neither the native hit
                 // surface nor an initially empty feedback view participates in sizing.
                 .overlay {

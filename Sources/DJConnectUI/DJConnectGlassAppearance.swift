@@ -39,6 +39,9 @@ struct DJConnectSessionStartButtonSurface: View {
     @Environment(\.djConnectGlassEffectsEnabled) private var glassEnabled
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var isVisible = false
     private var colors: [Color] {
         let theme = DJConnectSessionMoodTheme(sessionMood: mood)
         let values: [UInt32]
@@ -66,13 +69,19 @@ struct DJConnectSessionStartButtonSurface: View {
             }
         }
         .overlay {
-            shape.stroke(LinearGradient(colors: [.white.opacity(0.75), .white.opacity(0.25)],
-                                        startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
+            let animates = isVisible && scenePhase == .active && !reduceMotion && isEnabled
+            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !animates)) { context in
+                let phase = animates ? (1 - cos(context.date.timeIntervalSinceReferenceDate * .pi / 2)) / 2 : 0.4
+                shape.stroke(.white.opacity(0.55 + 0.35 * phase), lineWidth: 1.25)
+                    .shadow(color: .white.opacity(0.18 + 0.27 * phase), radius: 3 + 3 * phase)
+            }
         }
         .shadow(color: (colors.first ?? .blue).opacity(0.28), radius: 12)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.28), value: mood)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+        .onAppear { isVisible = true }
+        .onDisappear { isVisible = false }
     }
 }
 
@@ -147,6 +156,27 @@ private struct DJConnectPresentationSurface: ViewModifier {
 extension View {
     func djConnectGlassPreferences() -> some View { modifier(DJConnectGlassPreference()) }
     func djConnectPresentationSurface() -> some View { modifier(DJConnectPresentationSurface()) }
+    func djConnectBreathingArtwork(enabled: Bool = true) -> some View {
+        modifier(DJConnectBreathingArtwork(enabled: enabled))
+    }
+}
+
+/// Transforms the already mounted cover; it never changes its identity or loader.
+private struct DJConnectBreathingArtwork: ViewModifier {
+    var enabled: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var isVisible = false
+
+    func body(content: Content) -> some View {
+        let animates = enabled && isVisible && scenePhase == .active && !reduceMotion
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !animates)) { context in
+            let phase = (1 - cos(context.date.timeIntervalSinceReferenceDate * .pi / 3)) / 2
+            content.scaleEffect(animates ? 0.985 + 0.015 * phase : 1)
+        }
+        .onAppear { isVisible = true }
+        .onDisappear { isVisible = false }
+    }
 }
 
 struct DJConnectGlassPreferenceToggle: View {
