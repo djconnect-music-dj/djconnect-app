@@ -156,3 +156,48 @@ private func status(_ sequence: UInt64 = 1, _ state: String = "presenting", id: 
             isCurrent:{false},capability:{ throw DJConnectLegacyCastContract.Error.unavailable })
     }
 }
+
+
+@Test func legacyCastDuplicateAndEscapedAliasStatusKeysFailLosslessly() throws {
+    let id = UUID(), channel = UUID()
+    let valid = try #require(String(data: status(id:id), encoding: .utf8))
+    for duplicate in [#""state":"presenting""#, #""sequence":2"#,
+                      #""handoff_id":"00000000000000000000000000000000""#,
+                      #""st\u0061te":"presenting""#] {
+        var lease = DJConnectLegacyCastStatusLease(handoffID:id,sessionID:"actual-fixture-session",channelID:channel,now:100)
+        let duplicateBody = Data((String(valid.dropLast()) + "," + duplicate + "}").utf8)
+        let accepted = lease.receive(duplicateBody,channel:channel,now:101)
+        #expect(!accepted)
+        #expect(!lease.state.softwarePresentationConfirmed)
+    }
+}
+
+@Test func legacyCastCancelledLaunchWaitsForExactSDKObject() {
+    final class SDKObject {}
+    let manager = SDKObject(), otherManager = SDKObject(), started = SDKObject(), unrelated = SDKObject()
+    var fence = DJConnectLegacyCastLaunchFence()
+    let reserved = fence.reserve(manager: manager, deviceID: "actual-sdk-device-id")
+    #expect(reserved)
+    fence.cancel()
+    let successor = fence.reserve(manager: manager, deviceID: "next-sdk-device-id")
+    #expect(!successor)
+    #expect(!fence.shouldEnd(manager: manager, currentSession: unrelated))
+    let wrongManager = fence.willStart(manager: otherManager, deviceID: "actual-sdk-device-id", session: started)
+    #expect(!wrongManager)
+    let wrongDevice = fence.willStart(manager: manager, deviceID: "Bonjour-friendly-name", session: started)
+    #expect(!wrongDevice)
+    let actual = fence.willStart(manager: manager, deviceID: "actual-sdk-device-id", session: started)
+    #expect(actual)
+    #expect(fence.shouldEnd(manager: manager, currentSession: started))
+    #expect(!fence.shouldEnd(manager: manager, currentSession: unrelated))
+    #expect(!fence.shouldEnd(manager: otherManager, currentSession: started))
+    fence.terminal(manager: manager, session: unrelated)
+    #expect(fence.reserved)
+    fence.terminal(manager: manager, session: started)
+    #expect(!fence.reserved)
+    let next = fence.reserve(manager: manager, deviceID: "next-sdk-device-id")
+    #expect(next)
+    fence.terminal(manager: manager, session: started)
+    #expect(fence.reserved)
+    #expect(!fence.shouldEnd(manager: manager, currentSession: started))
+}

@@ -7,7 +7,7 @@ import Foundation
 /// 4.8.6 product and initialize GCKCastContext once with receiverOptions().
 /// The historical AppID still requires real Console/receiver qualification;
 /// source construction or a GCK connection is never physical TV acceptance.
-@MainActor final class DJConnectGoogleCastSender: DJConnectLegacyCastSending {
+@MainActor final class DJConnectGoogleCastSender: NSObject, DJConnectLegacyCastSending, @preconcurrency GCKSessionManagerListener {
     static func receiverOptions() -> GCKCastOptions {
         let criteria = GCKDiscoveryCriteria(applicationID: DJConnectLegacyCastContract.historicalReceiverAppID)
         let options = GCKCastOptions(discoveryCriteria: criteria)
@@ -15,6 +15,10 @@ import Foundation
         return options
     }
     private let context: GCKCastContext
+    private let clock: ContinuousClock
+    private let clockOrigin: ContinuousClock.Instant
+    private var launchFence = DJConnectLegacyCastLaunchFence()
+    private var launchSession: GCKCastSession?
     private var operation = UUID()
     private var owner: DJConnectLegacyCastOwner?
     private var ownedSession: GCKCastSession?
@@ -27,8 +31,18 @@ import Foundation
     private(set) var state: DJConnectLegacyCastState = .idle
     var onChange: (@MainActor () -> Void)?
 
-    init(context: GCKCastContext) { self.context = context }
-    private var now: TimeInterval { ProcessInfo.processInfo.systemUptime }
+    init(context: GCKCastContext) {
+        self.context = context
+        let clock = ContinuousClock()
+        self.clock = clock
+        self.clockOrigin = clock.now
+        super.init()
+        context.sessionManager.add(self)
+    }
+    private var now: TimeInterval {
+        let elapsed = clockOrigin.duration(to: clock.now).components
+        return Double(elapsed.seconds) + Double(elapsed.attoseconds) / 1e18
+    }
 
     func startDiscovery() {
         guard discoveryTask == nil else { return }
@@ -64,6 +78,8 @@ import Foundation
     }
     func connect(to deviceID: String, owner original: DJConnectLegacyCastOwner) async throws {
         invalidate()
+        // No successor may absorb a late callback from an unresolved launch.
+        guard !launchFence.reserved else { throw DJConnectLegacyCastContract.Error.unavailable }
         guard original.isCurrent(), let device = context.discoveryManager.device(withUniqueID: deviceID) else {
             throw DJConnectLegacyCastContract.Error.unavailable
         }
@@ -71,7 +87,17 @@ import Foundation
         state = .connecting; onChange?()
         do {
             if matchingSession(deviceID) == nil {
-                guard context.sessionManager.startSession(with: device) else { throw DJConnectLegacyCastContract.Error.unavailable }
+                let manager = context.sessionManager
+                // Do not replace another SDK session merely to manufacture a
+                // matching callback or a cleanup witness.
+                guard manager.currentCastSession == nil,
+                      launchFence.reserve(manager: manager, deviceID: deviceID) else {
+                    throw DJConnectLegacyCastContract.Error.unavailable
+                }
+                guard manager.startSession(with: device) else {
+                    launchFence.rejectedBeforeCallback()
+                    throw DJConnectLegacyCastContract.Error.unavailable
+                }
             }
             let connectionDeadline = now + 15
             while matchingSession(deviceID) == nil {
@@ -157,13 +183,43 @@ import Foundation
             _ = channel.sendTextMessage(message, error: nil)
         }
         if let channel { _ = ownedSession?.remove(channel) }
-        if let session = ownedSession, context.sessionManager.currentCastSession === session {
-            _ = context.sessionManager.endSessionAndStopCasting(false)
-        }
+        launchFence.cancel()
+        endCancelledLaunchIfCurrent()
         channel = nil; ownedSession = nil; owner = nil; pendingHandoff = nil
         lease?.invalidate(); lease = nil; state = .stopped; onChange?()
         // No remoteMediaClient load/play/pause/volume, HA command or Session end.
     }
+    private func endCancelledLaunchIfCurrent() {
+        let manager = context.sessionManager
+        if launchFence.shouldEnd(manager: manager, currentSession: manager.currentCastSession) {
+            _ = manager.endSessionAndStopCasting(false)
+        }
+    }
+    // The real SDK's willStart callback supplies the session object before
+    // connection completes. A cancellation before that callback remains closed
+    // to successors and cleans up only this exact object if it later arrives.
+    func sessionManager(_ manager: GCKSessionManager, willStart session: GCKCastSession) {
+        guard manager === context.sessionManager,
+              launchFence.willStart(manager: manager, deviceID: session.device.uniqueID, session: session) else { return }
+        launchSession = session
+        endCancelledLaunchIfCurrent()
+    }
+    func sessionManager(_ manager: GCKSessionManager, didStart session: GCKCastSession) {
+        guard manager === context.sessionManager, launchSession === session else { return }
+        endCancelledLaunchIfCurrent()
+    }
+    func sessionManager(_ manager: GCKSessionManager, didFailToStart session: GCKCastSession, withError error: Error) {
+        finishLaunch(manager, session: session)
+    }
+    func sessionManager(_ manager: GCKSessionManager, didEnd session: GCKCastSession, withError error: Error?) {
+        finishLaunch(manager, session: session)
+    }
+    private func finishLaunch(_ manager: GCKSessionManager, session: GCKCastSession) {
+        guard manager === context.sessionManager, launchSession === session else { return }
+        launchFence.terminal(manager: manager, session: session)
+        launchSession = nil
+    }
+
 }
 
 /// SDK callback carries only bounded content to the actual current MainActor

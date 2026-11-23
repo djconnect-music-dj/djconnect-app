@@ -126,7 +126,7 @@ public struct DJConnectLegacyCastStatusLease: Sendable {
     }
     @discardableResult public mutating func receive(_ data: Data, channel: UUID, now: TimeInterval) -> Bool {
         guard tick(now: now), channel == channelID, data.count <= 4096,
-              let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let raw = try? RendezvousFlatJSON.parse(data, maximumBytes: 4096),
               Set(raw.keys).isSubset(of: ["kind","version","handoff_id","session_id","sequence","state","lease_ms","reason","presentation"]),
               let message = try? JSONDecoder().decode(Status.self, from: data),
               message.kind == "vibecast_status", message.version == 1,
@@ -171,4 +171,42 @@ public struct DJConnectLegacyCastStatusLease: Sendable {
         static let reasons: Set<String> = ["snapshot_timeout","invalid_handoff","incompatible_snapshot",
             "access_rejected","runtime_end","host_stop","sender_disconnected","superseded"]
     }
+}
+
+/// Local SDK operation ownership only. Object identities come from real SDK
+/// callbacks; device IDs route selection and never confer Core authority.
+/// Cancellation keeps the reservation until that exact SDK session terminates.
+public struct DJConnectLegacyCastLaunchFence {
+    public private(set) var reserved = false
+    private var manager: ObjectIdentifier?
+    private var deviceID: String?
+    private var session: ObjectIdentifier?
+    private var cancelled = false
+    public init() {}
+    public mutating func reserve(manager: AnyObject, deviceID: String) -> Bool {
+        guard !reserved else { return false }
+        self.manager = ObjectIdentifier(manager); self.deviceID = deviceID
+        session = nil; cancelled = false; reserved = true
+        return true
+    }
+    public mutating func willStart(manager: AnyObject, deviceID: String, session: AnyObject) -> Bool {
+        guard reserved, self.manager == ObjectIdentifier(manager), self.deviceID == deviceID else { return false }
+        let identity = ObjectIdentifier(session)
+        guard self.session == nil || self.session == identity else { return false }
+        self.session = identity
+        return true
+    }
+    public mutating func cancel() { if reserved { cancelled = true } }
+    public func shouldEnd(manager: AnyObject, currentSession: AnyObject?) -> Bool {
+        guard reserved, cancelled, self.manager == ObjectIdentifier(manager),
+              let session, let currentSession else { return false }
+        return session == ObjectIdentifier(currentSession)
+    }
+    public mutating func terminal(manager: AnyObject, session: AnyObject) {
+        guard self.manager == ObjectIdentifier(manager), self.session == ObjectIdentifier(session) else { return }
+        self = Self()
+    }
+    /// Only a synchronous rejected start, before any SDK session callback,
+    /// establishes that no operation was accepted.
+    public mutating func rejectedBeforeCallback() { if session == nil { self = Self() } }
 }
