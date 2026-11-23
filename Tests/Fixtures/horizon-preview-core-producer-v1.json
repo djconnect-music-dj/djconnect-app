@@ -1,0 +1,971 @@
+{
+  "scope": "synthetic original queue/source/clock; actual Core producer bytes; not provider/editorial/native acceptance",
+  "cases": [
+    {
+      "locale": "en",
+      "persona": "home_dj",
+      "context": {
+        "declared_source_boundary": "synthetic accepted queue/source; actual Runtime/Broadcast producer",
+        "original_source_wall": 1800000000,
+        "original_source_monotonic": 101,
+        "queue_deadline": 121,
+        "session_id": "session-6e814521343c46419071361cc71f4428",
+        "playback": {
+          "state": "playing",
+          "item_id": "02e3d582594577327c335fc0",
+          "title": "Confirmed track",
+          "artist": "Confirmed artist",
+          "album": "Confirmed edition",
+          "updated_at": "2026-11-23T21:46:33.182370+00:00",
+          "duration_ms": 300000,
+          "position_ms": 270000,
+          "up_next": {
+            "current_item_id": "02e3d582594577327c335fc0",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original",
+            "expires_at": "2027-01-15T08:00:20+00:00"
+          },
+          "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+        }
+      },
+      "owner_payload": {
+        "horizon_moment": {
+          "contract_version": 1,
+          "type": "horizon",
+          "preview_id": "297ff1368900a71e5eff27799aa600659bd6b1c7f41c901805d2e19623872f01",
+          "session_id": "session-6e814521343c46419071361cc71f4428",
+          "current_item_id": "02e3d582594577327c335fc0",
+          "text": "Up next for you: “Observed next title” by Observed next artist.",
+          "expires_at": "2027-01-15T08:00:20+00:00",
+          "track": {
+            "item_id": "e1f96e7d01ebb78c79b8d959",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original"
+          }
+        }
+      }
+    },
+    {
+      "locale": "en",
+      "persona": "radio_dj",
+      "context": {
+        "declared_source_boundary": "synthetic accepted queue/source; actual Runtime/Broadcast producer",
+        "original_source_wall": 1800000000,
+        "original_source_monotonic": 101,
+        "queue_deadline": 121,
+        "session_id": "session-93495da66cd848d4a1c0702b66416d1b",
+        "playback": {
+          "state": "playing",
+          "item_id": "02e3d582594577327c335fc0",
+          "title": "Confirmed track",
+          "artist": "Confirmed artist",
+          "album": "Confirmed edition",
+          "updated_at": "2026-11-23T21:46:33.193243+00:00",
+          "duration_ms": 300000,
+          "position_ms": 270000,
+          "up_next": {
+            "current_item_id": "02e3d582594577327c335fc0",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original",
+            "expires_at": "2027-01-15T08:00:20+00:00"
+          },
+          "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+        }
+      },
+      "owner_payload": {
+        "horizon_moment": {
+          "contract_version": 1,
+          "type": "horizon",
+          "preview_id": "324bd25362c4f95ebe4201eb75102f016021b614703702ce3c54e7108e1b16d2",
+          "session_id": "session-93495da66cd848d4a1c0702b66416d1b",
+          "current_item_id": "02e3d582594577327c335fc0",
+          "text": "A quick look ahead: “Observed next title” by Observed next artist.",
+          "expires_at": "2027-01-15T08:00:20+00:00",
+          "track": {
+            "item_id": "e1f96e7d01ebb78c79b8d959",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original"
+          }
+        }
+      }
+    },
+    {
+      "locale": "en",
+      "persona": "club_dj",
+      "context": {
+        "declared_source_boundary": "synthetic accepted queue/source; actual Runtime/Broadcast producer",
+        "original_source_wall": 1800000000,
+        "original_source_monotonic": 101,
+        "queue_deadline": 121,
+        "session_id": "session-6956b3e0e38e433d8a31cf99bccf7f2e",
+        "playback": {
+          "state": "playing",
+          "item_id": "02e3d582594577327c335fc0",
+          "title": "Confirmed track",
+          "artist": "Confirmed artist",
+          "album": "Confirmed edition",
+          "updated_at": "2026-11-23T21:46:33.193838+00:00",
+          "duration_ms": 300000,
+          "position_ms": 270000,
+          "up_next": {
+            "current_item_id": "02e3d582594577327c335fc0",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original",
+            "expires_at": "2027-01-15T08:00:20+00:00"
+          },
+          "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+        }
+      },
+      "owner_payload": {
+        "horizon_moment": {
+          "contract_version": 1,
+          "type": "horizon",
+          "preview_id": "00f9f444b5e9c7f4d2374dbc7c159a3c130f91793d0f038c837674f299641164",
+          "session_id": "session-6956b3e0e38e433d8a31cf99bccf7f2e",
+          "current_item_id": "02e3d582594577327c335fc0",
+          "text": "Next in the mix: “Observed next title” by Observed next artist.",
+          "expires_at": "2027-01-15T08:00:20+00:00",
+          "track": {
+            "item_id": "e1f96e7d01ebb78c79b8d959",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original"
+          }
+        }
+      }
+    },
+    {
+      "locale": "en",
+      "persona": "festival_dj",
+      "context": {
+        "declared_source_boundary": "synthetic accepted queue/source; actual Runtime/Broadcast producer",
+        "original_source_wall": 1800000000,
+        "original_source_monotonic": 101,
+        "queue_deadline": 121,
+        "session_id": "session-811a5d2ab3c5498f9636d1442a1f0f9b",
+        "playback": {
+          "state": "playing",
+          "item_id": "02e3d582594577327c335fc0",
+          "title": "Confirmed track",
+          "artist": "Confirmed artist",
+          "album": "Confirmed edition",
+          "updated_at": "2026-11-23T21:46:33.194368+00:00",
+          "duration_ms": 300000,
+          "position_ms": 270000,
+          "up_next": {
+            "current_item_id": "02e3d582594577327c335fc0",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original",
+            "expires_at": "2027-01-15T08:00:20+00:00"
+          },
+          "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+        }
+      },
+      "owner_payload": {
+        "horizon_moment": {
+          "contract_version": 1,
+          "type": "horizon",
+          "preview_id": "b5a7e638d07df2a80d496014df9fb78f4d8d09403d2ce24371aa5081953f9074",
+          "session_id": "session-811a5d2ab3c5498f9636d1442a1f0f9b",
+          "current_item_id": "02e3d582594577327c335fc0",
+          "text": "Coming up: “Observed next title” by Observed next artist.",
+          "expires_at": "2027-01-15T08:00:20+00:00",
+          "track": {
+            "item_id": "e1f96e7d01ebb78c79b8d959",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original"
+          }
+        }
+      }
+    },
+    {
+      "locale": "nl",
+      "persona": "home_dj",
+      "context": {
+        "declared_source_boundary": "synthetic accepted queue/source; actual Runtime/Broadcast producer",
+        "original_source_wall": 1800000000,
+        "original_source_monotonic": 101,
+        "queue_deadline": 121,
+        "session_id": "session-35e914f0dec54a10900c049b717c3984",
+        "playback": {
+          "state": "playing",
+          "item_id": "02e3d582594577327c335fc0",
+          "title": "Confirmed track",
+          "artist": "Confirmed artist",
+          "album": "Confirmed edition",
+          "updated_at": "2026-11-23T21:46:33.194880+00:00",
+          "duration_ms": 300000,
+          "position_ms": 270000,
+          "up_next": {
+            "current_item_id": "02e3d582594577327c335fc0",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original",
+            "expires_at": "2027-01-15T08:00:20+00:00"
+          },
+          "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+        }
+      },
+      "owner_payload": {
+        "horizon_moment": {
+          "contract_version": 1,
+          "type": "horizon",
+          "preview_id": "16c1008044ea267509723260701aa5d080a4993fb10799ee9bc8f0f2f7eb7ccc",
+          "session_id": "session-35e914f0dec54a10900c049b717c3984",
+          "current_item_id": "02e3d582594577327c335fc0",
+          "text": "Hierna staat “Observed next title” van Observed next artist voor je klaar.",
+          "expires_at": "2027-01-15T08:00:20+00:00",
+          "track": {
+            "item_id": "e1f96e7d01ebb78c79b8d959",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original"
+          }
+        }
+      }
+    },
+    {
+      "locale": "nl",
+      "persona": "radio_dj",
+      "context": {
+        "declared_source_boundary": "synthetic accepted queue/source; actual Runtime/Broadcast producer",
+        "original_source_wall": 1800000000,
+        "original_source_monotonic": 101,
+        "queue_deadline": 121,
+        "session_id": "session-01368fd30f3e4f4b9f1925596b9fdca3",
+        "playback": {
+          "state": "playing",
+          "item_id": "02e3d582594577327c335fc0",
+          "title": "Confirmed track",
+          "artist": "Confirmed artist",
+          "album": "Confirmed edition",
+          "updated_at": "2026-11-23T21:46:33.195646+00:00",
+          "duration_ms": 300000,
+          "position_ms": 270000,
+          "up_next": {
+            "current_item_id": "02e3d582594577327c335fc0",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original",
+            "expires_at": "2027-01-15T08:00:20+00:00"
+          },
+          "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+        }
+      },
+      "owner_payload": {
+        "horizon_moment": {
+          "contract_version": 1,
+          "type": "horizon",
+          "preview_id": "5485baa6aaa30c1ec2bea377c1cb9b5766db27a9c27b075c0721ec7ad7946356",
+          "session_id": "session-01368fd30f3e4f4b9f1925596b9fdca3",
+          "current_item_id": "02e3d582594577327c335fc0",
+          "text": "Een korte blik vooruit: “Observed next title” van Observed next artist.",
+          "expires_at": "2027-01-15T08:00:20+00:00",
+          "track": {
+            "item_id": "e1f96e7d01ebb78c79b8d959",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original"
+          }
+        }
+      }
+    },
+    {
+      "locale": "nl",
+      "persona": "club_dj",
+      "context": {
+        "declared_source_boundary": "synthetic accepted queue/source; actual Runtime/Broadcast producer",
+        "original_source_wall": 1800000000,
+        "original_source_monotonic": 101,
+        "queue_deadline": 121,
+        "session_id": "session-2111a31fa55f48c88a3cdd02b4df3110",
+        "playback": {
+          "state": "playing",
+          "item_id": "02e3d582594577327c335fc0",
+          "title": "Confirmed track",
+          "artist": "Confirmed artist",
+          "album": "Confirmed edition",
+          "updated_at": "2026-11-23T21:46:33.196142+00:00",
+          "duration_ms": 300000,
+          "position_ms": 270000,
+          "up_next": {
+            "current_item_id": "02e3d582594577327c335fc0",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original",
+            "expires_at": "2027-01-15T08:00:20+00:00"
+          },
+          "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+        }
+      },
+      "owner_payload": {
+        "horizon_moment": {
+          "contract_version": 1,
+          "type": "horizon",
+          "preview_id": "226096dc07a8afd8d0b01176ac84afe4fbf1344265e20799aa87685db5696188",
+          "session_id": "session-2111a31fa55f48c88a3cdd02b4df3110",
+          "current_item_id": "02e3d582594577327c335fc0",
+          "text": "Straks in de mix: “Observed next title” van Observed next artist.",
+          "expires_at": "2027-01-15T08:00:20+00:00",
+          "track": {
+            "item_id": "e1f96e7d01ebb78c79b8d959",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original"
+          }
+        }
+      }
+    },
+    {
+      "locale": "nl",
+      "persona": "festival_dj",
+      "context": {
+        "declared_source_boundary": "synthetic accepted queue/source; actual Runtime/Broadcast producer",
+        "original_source_wall": 1800000000,
+        "original_source_monotonic": 101,
+        "queue_deadline": 121,
+        "session_id": "session-cb7c93a59c14467bab1727fb97d967ac",
+        "playback": {
+          "state": "playing",
+          "item_id": "02e3d582594577327c335fc0",
+          "title": "Confirmed track",
+          "artist": "Confirmed artist",
+          "album": "Confirmed edition",
+          "updated_at": "2026-11-23T21:46:33.196656+00:00",
+          "duration_ms": 300000,
+          "position_ms": 270000,
+          "up_next": {
+            "current_item_id": "02e3d582594577327c335fc0",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original",
+            "expires_at": "2027-01-15T08:00:20+00:00"
+          },
+          "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+        }
+      },
+      "owner_payload": {
+        "horizon_moment": {
+          "contract_version": 1,
+          "type": "horizon",
+          "preview_id": "098e7ce066a1dca0c887d496c5b5379382267c2eff224290ce26fd883ac253e8",
+          "session_id": "session-cb7c93a59c14467bab1727fb97d967ac",
+          "current_item_id": "02e3d582594577327c335fc0",
+          "text": "Hierna op het programma: “Observed next title” van Observed next artist.",
+          "expires_at": "2027-01-15T08:00:20+00:00",
+          "track": {
+            "item_id": "e1f96e7d01ebb78c79b8d959",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original"
+          }
+        }
+      }
+    },
+    {
+      "locale": "de",
+      "persona": "home_dj",
+      "context": {
+        "declared_source_boundary": "synthetic accepted queue/source; actual Runtime/Broadcast producer",
+        "original_source_wall": 1800000000,
+        "original_source_monotonic": 101,
+        "queue_deadline": 121,
+        "session_id": "session-cfe4808154de452dbab54522b34ffb61",
+        "playback": {
+          "state": "playing",
+          "item_id": "02e3d582594577327c335fc0",
+          "title": "Confirmed track",
+          "artist": "Confirmed artist",
+          "album": "Confirmed edition",
+          "updated_at": "2026-11-23T21:46:33.197160+00:00",
+          "duration_ms": 300000,
+          "position_ms": 270000,
+          "up_next": {
+            "current_item_id": "02e3d582594577327c335fc0",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original",
+            "expires_at": "2027-01-15T08:00:20+00:00"
+          },
+          "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+        }
+      },
+      "owner_payload": {
+        "horizon_moment": {
+          "contract_version": 1,
+          "type": "horizon",
+          "preview_id": "9709256cbe5e097643ea85f28eb801d3f5833e4414c39d3982dcd031459389e0",
+          "session_id": "session-cfe4808154de452dbab54522b34ffb61",
+          "current_item_id": "02e3d582594577327c335fc0",
+          "text": "Als Nächstes liegt „Observed next title“ von Observed next artist für dich bereit.",
+          "expires_at": "2027-01-15T08:00:20+00:00",
+          "track": {
+            "item_id": "e1f96e7d01ebb78c79b8d959",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original"
+          }
+        }
+      }
+    },
+    {
+      "locale": "de",
+      "persona": "radio_dj",
+      "context": {
+        "declared_source_boundary": "synthetic accepted queue/source; actual Runtime/Broadcast producer",
+        "original_source_wall": 1800000000,
+        "original_source_monotonic": 101,
+        "queue_deadline": 121,
+        "session_id": "session-3262438956314f089eb42159b099cef8",
+        "playback": {
+          "state": "playing",
+          "item_id": "02e3d582594577327c335fc0",
+          "title": "Confirmed track",
+          "artist": "Confirmed artist",
+          "album": "Confirmed edition",
+          "updated_at": "2026-11-23T21:46:33.197660+00:00",
+          "duration_ms": 300000,
+          "position_ms": 270000,
+          "up_next": {
+            "current_item_id": "02e3d582594577327c335fc0",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original",
+            "expires_at": "2027-01-15T08:00:20+00:00"
+          },
+          "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+        }
+      },
+      "owner_payload": {
+        "horizon_moment": {
+          "contract_version": 1,
+          "type": "horizon",
+          "preview_id": "034192f86afe1b9bef04825926948eb2a4c2ad56f529c18bdbb8d3e854c1e919",
+          "session_id": "session-3262438956314f089eb42159b099cef8",
+          "current_item_id": "02e3d582594577327c335fc0",
+          "text": "Ein kurzer Blick nach vorn: „Observed next title“ von Observed next artist.",
+          "expires_at": "2027-01-15T08:00:20+00:00",
+          "track": {
+            "item_id": "e1f96e7d01ebb78c79b8d959",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original"
+          }
+        }
+      }
+    },
+    {
+      "locale": "de",
+      "persona": "club_dj",
+      "context": {
+        "declared_source_boundary": "synthetic accepted queue/source; actual Runtime/Broadcast producer",
+        "original_source_wall": 1800000000,
+        "original_source_monotonic": 101,
+        "queue_deadline": 121,
+        "session_id": "session-a113a3168b3c423ebea1526c6b71969e",
+        "playback": {
+          "state": "playing",
+          "item_id": "02e3d582594577327c335fc0",
+          "title": "Confirmed track",
+          "artist": "Confirmed artist",
+          "album": "Confirmed edition",
+          "updated_at": "2026-11-23T21:46:33.198161+00:00",
+          "duration_ms": 300000,
+          "position_ms": 270000,
+          "up_next": {
+            "current_item_id": "02e3d582594577327c335fc0",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original",
+            "expires_at": "2027-01-15T08:00:20+00:00"
+          },
+          "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+        }
+      },
+      "owner_payload": {
+        "horizon_moment": {
+          "contract_version": 1,
+          "type": "horizon",
+          "preview_id": "c18f3ae3e4f72f664fd301af80daf984b41bc19154f23e787324f0d580b0ddc6",
+          "session_id": "session-a113a3168b3c423ebea1526c6b71969e",
+          "current_item_id": "02e3d582594577327c335fc0",
+          "text": "Als Nächstes im Mix: „Observed next title“ von Observed next artist.",
+          "expires_at": "2027-01-15T08:00:20+00:00",
+          "track": {
+            "item_id": "e1f96e7d01ebb78c79b8d959",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original"
+          }
+        }
+      }
+    },
+    {
+      "locale": "de",
+      "persona": "festival_dj",
+      "context": {
+        "declared_source_boundary": "synthetic accepted queue/source; actual Runtime/Broadcast producer",
+        "original_source_wall": 1800000000,
+        "original_source_monotonic": 101,
+        "queue_deadline": 121,
+        "session_id": "session-6bbf6a9ddf9f42f0adee8cfed009ba0b",
+        "playback": {
+          "state": "playing",
+          "item_id": "02e3d582594577327c335fc0",
+          "title": "Confirmed track",
+          "artist": "Confirmed artist",
+          "album": "Confirmed edition",
+          "updated_at": "2026-11-23T21:46:33.198982+00:00",
+          "duration_ms": 300000,
+          "position_ms": 270000,
+          "up_next": {
+            "current_item_id": "02e3d582594577327c335fc0",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original",
+            "expires_at": "2027-01-15T08:00:20+00:00"
+          },
+          "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+        }
+      },
+      "owner_payload": {
+        "horizon_moment": {
+          "contract_version": 1,
+          "type": "horizon",
+          "preview_id": "a4824b582433ed0e5c427f1d177ffcfb240137288b6a2e57e3525bd478d3fa93",
+          "session_id": "session-6bbf6a9ddf9f42f0adee8cfed009ba0b",
+          "current_item_id": "02e3d582594577327c335fc0",
+          "text": "Gleich im Programm: „Observed next title“ von Observed next artist.",
+          "expires_at": "2027-01-15T08:00:20+00:00",
+          "track": {
+            "item_id": "e1f96e7d01ebb78c79b8d959",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original"
+          }
+        }
+      }
+    },
+    {
+      "locale": "fr",
+      "persona": "home_dj",
+      "context": {
+        "declared_source_boundary": "synthetic accepted queue/source; actual Runtime/Broadcast producer",
+        "original_source_wall": 1800000000,
+        "original_source_monotonic": 101,
+        "queue_deadline": 121,
+        "session_id": "session-5cd29351ca614f0b9125975308ef6cd9",
+        "playback": {
+          "state": "playing",
+          "item_id": "02e3d582594577327c335fc0",
+          "title": "Confirmed track",
+          "artist": "Confirmed artist",
+          "album": "Confirmed edition",
+          "updated_at": "2026-11-23T21:46:33.199575+00:00",
+          "duration_ms": 300000,
+          "position_ms": 270000,
+          "up_next": {
+            "current_item_id": "02e3d582594577327c335fc0",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original",
+            "expires_at": "2027-01-15T08:00:20+00:00"
+          },
+          "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+        }
+      },
+      "owner_payload": {
+        "horizon_moment": {
+          "contract_version": 1,
+          "type": "horizon",
+          "preview_id": "7a03497ded862e7d9cb4c3cecad8c578c6a6ca208b440cefb5fa097388394b98",
+          "session_id": "session-5cd29351ca614f0b9125975308ef6cd9",
+          "current_item_id": "02e3d582594577327c335fc0",
+          "text": "Ensuite pour toi : « Observed next title » de Observed next artist.",
+          "expires_at": "2027-01-15T08:00:20+00:00",
+          "track": {
+            "item_id": "e1f96e7d01ebb78c79b8d959",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original"
+          }
+        }
+      }
+    },
+    {
+      "locale": "fr",
+      "persona": "radio_dj",
+      "context": {
+        "declared_source_boundary": "synthetic accepted queue/source; actual Runtime/Broadcast producer",
+        "original_source_wall": 1800000000,
+        "original_source_monotonic": 101,
+        "queue_deadline": 121,
+        "session_id": "session-fb42e3725a1341b59f3450a77144b4d2",
+        "playback": {
+          "state": "playing",
+          "item_id": "02e3d582594577327c335fc0",
+          "title": "Confirmed track",
+          "artist": "Confirmed artist",
+          "album": "Confirmed edition",
+          "updated_at": "2026-11-23T21:46:33.200137+00:00",
+          "duration_ms": 300000,
+          "position_ms": 270000,
+          "up_next": {
+            "current_item_id": "02e3d582594577327c335fc0",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original",
+            "expires_at": "2027-01-15T08:00:20+00:00"
+          },
+          "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+        }
+      },
+      "owner_payload": {
+        "horizon_moment": {
+          "contract_version": 1,
+          "type": "horizon",
+          "preview_id": "ba0a6010a025d0955fd0721f17d3eb595e06b2f29b53f515822cd30b5c225c9e",
+          "session_id": "session-fb42e3725a1341b59f3450a77144b4d2",
+          "current_item_id": "02e3d582594577327c335fc0",
+          "text": "Un bref regard sur la suite : « Observed next title » de Observed next artist.",
+          "expires_at": "2027-01-15T08:00:20+00:00",
+          "track": {
+            "item_id": "e1f96e7d01ebb78c79b8d959",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original"
+          }
+        }
+      }
+    },
+    {
+      "locale": "fr",
+      "persona": "club_dj",
+      "context": {
+        "declared_source_boundary": "synthetic accepted queue/source; actual Runtime/Broadcast producer",
+        "original_source_wall": 1800000000,
+        "original_source_monotonic": 101,
+        "queue_deadline": 121,
+        "session_id": "session-e8b022eae79c4a7bb38d8c9a0190315f",
+        "playback": {
+          "state": "playing",
+          "item_id": "02e3d582594577327c335fc0",
+          "title": "Confirmed track",
+          "artist": "Confirmed artist",
+          "album": "Confirmed edition",
+          "updated_at": "2026-11-23T21:46:33.200808+00:00",
+          "duration_ms": 300000,
+          "position_ms": 270000,
+          "up_next": {
+            "current_item_id": "02e3d582594577327c335fc0",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original",
+            "expires_at": "2027-01-15T08:00:20+00:00"
+          },
+          "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+        }
+      },
+      "owner_payload": {
+        "horizon_moment": {
+          "contract_version": 1,
+          "type": "horizon",
+          "preview_id": "51d30a4dd58f81acead5316e3337364cf886f870b39169da01c5c6faa7c750cf",
+          "session_id": "session-e8b022eae79c4a7bb38d8c9a0190315f",
+          "current_item_id": "02e3d582594577327c335fc0",
+          "text": "La suite du mix : « Observed next title » de Observed next artist.",
+          "expires_at": "2027-01-15T08:00:20+00:00",
+          "track": {
+            "item_id": "e1f96e7d01ebb78c79b8d959",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original"
+          }
+        }
+      }
+    },
+    {
+      "locale": "fr",
+      "persona": "festival_dj",
+      "context": {
+        "declared_source_boundary": "synthetic accepted queue/source; actual Runtime/Broadcast producer",
+        "original_source_wall": 1800000000,
+        "original_source_monotonic": 101,
+        "queue_deadline": 121,
+        "session_id": "session-ed886f22b92a4604877dc79a8f9bff2a",
+        "playback": {
+          "state": "playing",
+          "item_id": "02e3d582594577327c335fc0",
+          "title": "Confirmed track",
+          "artist": "Confirmed artist",
+          "album": "Confirmed edition",
+          "updated_at": "2026-11-23T21:46:33.201387+00:00",
+          "duration_ms": 300000,
+          "position_ms": 270000,
+          "up_next": {
+            "current_item_id": "02e3d582594577327c335fc0",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original",
+            "expires_at": "2027-01-15T08:00:20+00:00"
+          },
+          "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+        }
+      },
+      "owner_payload": {
+        "horizon_moment": {
+          "contract_version": 1,
+          "type": "horizon",
+          "preview_id": "b08266181b5639a2eb409e0417426eb7adfb44697f9300c02f70bcbbc4effa5e",
+          "session_id": "session-ed886f22b92a4604877dc79a8f9bff2a",
+          "current_item_id": "02e3d582594577327c335fc0",
+          "text": "À suivre : « Observed next title » de Observed next artist.",
+          "expires_at": "2027-01-15T08:00:20+00:00",
+          "track": {
+            "item_id": "e1f96e7d01ebb78c79b8d959",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original"
+          }
+        }
+      }
+    },
+    {
+      "locale": "es",
+      "persona": "home_dj",
+      "context": {
+        "declared_source_boundary": "synthetic accepted queue/source; actual Runtime/Broadcast producer",
+        "original_source_wall": 1800000000,
+        "original_source_monotonic": 101,
+        "queue_deadline": 121,
+        "session_id": "session-8d6f1ba411db42058b4b642d51b153d0",
+        "playback": {
+          "state": "playing",
+          "item_id": "02e3d582594577327c335fc0",
+          "title": "Confirmed track",
+          "artist": "Confirmed artist",
+          "album": "Confirmed edition",
+          "updated_at": "2026-11-23T21:46:33.201933+00:00",
+          "duration_ms": 300000,
+          "position_ms": 270000,
+          "up_next": {
+            "current_item_id": "02e3d582594577327c335fc0",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original",
+            "expires_at": "2027-01-15T08:00:20+00:00"
+          },
+          "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+        }
+      },
+      "owner_payload": {
+        "horizon_moment": {
+          "contract_version": 1,
+          "type": "horizon",
+          "preview_id": "c63e67b84000f93d1ed07e2fea762d5e08925e7730615de2132bc81ff00cdd09",
+          "session_id": "session-8d6f1ba411db42058b4b642d51b153d0",
+          "current_item_id": "02e3d582594577327c335fc0",
+          "text": "A continuación para ti: «Observed next title» de Observed next artist.",
+          "expires_at": "2027-01-15T08:00:20+00:00",
+          "track": {
+            "item_id": "e1f96e7d01ebb78c79b8d959",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original"
+          }
+        }
+      }
+    },
+    {
+      "locale": "es",
+      "persona": "radio_dj",
+      "context": {
+        "declared_source_boundary": "synthetic accepted queue/source; actual Runtime/Broadcast producer",
+        "original_source_wall": 1800000000,
+        "original_source_monotonic": 101,
+        "queue_deadline": 121,
+        "session_id": "session-a72897d0765e4ba18e71e8a4a407d81c",
+        "playback": {
+          "state": "playing",
+          "item_id": "02e3d582594577327c335fc0",
+          "title": "Confirmed track",
+          "artist": "Confirmed artist",
+          "album": "Confirmed edition",
+          "updated_at": "2026-11-23T21:46:33.202479+00:00",
+          "duration_ms": 300000,
+          "position_ms": 270000,
+          "up_next": {
+            "current_item_id": "02e3d582594577327c335fc0",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original",
+            "expires_at": "2027-01-15T08:00:20+00:00"
+          },
+          "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+        }
+      },
+      "owner_payload": {
+        "horizon_moment": {
+          "contract_version": 1,
+          "type": "horizon",
+          "preview_id": "d745778046ec387c79aa8c00676cf23b960f5865fbf033e95b4fa58b25ff8b6a",
+          "session_id": "session-a72897d0765e4ba18e71e8a4a407d81c",
+          "current_item_id": "02e3d582594577327c335fc0",
+          "text": "Un vistazo a lo que viene: «Observed next title» de Observed next artist.",
+          "expires_at": "2027-01-15T08:00:20+00:00",
+          "track": {
+            "item_id": "e1f96e7d01ebb78c79b8d959",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original"
+          }
+        }
+      }
+    },
+    {
+      "locale": "es",
+      "persona": "club_dj",
+      "context": {
+        "declared_source_boundary": "synthetic accepted queue/source; actual Runtime/Broadcast producer",
+        "original_source_wall": 1800000000,
+        "original_source_monotonic": 101,
+        "queue_deadline": 121,
+        "session_id": "session-b5c393d1c03d44069dc2d74105410c9a",
+        "playback": {
+          "state": "playing",
+          "item_id": "02e3d582594577327c335fc0",
+          "title": "Confirmed track",
+          "artist": "Confirmed artist",
+          "album": "Confirmed edition",
+          "updated_at": "2026-11-23T21:46:33.203499+00:00",
+          "duration_ms": 300000,
+          "position_ms": 270000,
+          "up_next": {
+            "current_item_id": "02e3d582594577327c335fc0",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original",
+            "expires_at": "2027-01-15T08:00:20+00:00"
+          },
+          "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+        }
+      },
+      "owner_payload": {
+        "horizon_moment": {
+          "contract_version": 1,
+          "type": "horizon",
+          "preview_id": "6f5a4741dff068d0e38872ccf0369142352fa01d028b68bbcdffa9527997fa78",
+          "session_id": "session-b5c393d1c03d44069dc2d74105410c9a",
+          "current_item_id": "02e3d582594577327c335fc0",
+          "text": "Lo siguiente en la mezcla: «Observed next title» de Observed next artist.",
+          "expires_at": "2027-01-15T08:00:20+00:00",
+          "track": {
+            "item_id": "e1f96e7d01ebb78c79b8d959",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original"
+          }
+        }
+      }
+    },
+    {
+      "locale": "es",
+      "persona": "festival_dj",
+      "context": {
+        "declared_source_boundary": "synthetic accepted queue/source; actual Runtime/Broadcast producer",
+        "original_source_wall": 1800000000,
+        "original_source_monotonic": 101,
+        "queue_deadline": 121,
+        "session_id": "session-6e57f80a9915486da0113f944181b998",
+        "playback": {
+          "state": "playing",
+          "item_id": "02e3d582594577327c335fc0",
+          "title": "Confirmed track",
+          "artist": "Confirmed artist",
+          "album": "Confirmed edition",
+          "updated_at": "2026-11-23T21:46:33.204040+00:00",
+          "duration_ms": 300000,
+          "position_ms": 270000,
+          "up_next": {
+            "current_item_id": "02e3d582594577327c335fc0",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original",
+            "expires_at": "2027-01-15T08:00:20+00:00"
+          },
+          "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+        }
+      },
+      "owner_payload": {
+        "horizon_moment": {
+          "contract_version": 1,
+          "type": "horizon",
+          "preview_id": "852eab3aa6052e01243b5204aa2487cdf665ee7d6c02886cf810d718bfd18902",
+          "session_id": "session-6e57f80a9915486da0113f944181b998",
+          "current_item_id": "02e3d582594577327c335fc0",
+          "text": "A continuación en el programa: «Observed next title» de Observed next artist.",
+          "expires_at": "2027-01-15T08:00:20+00:00",
+          "track": {
+            "item_id": "e1f96e7d01ebb78c79b8d959",
+            "title": "Observed next title",
+            "artist": "Observed next artist",
+            "source_url": "https://open.spotify.com/track/BBBBBBBBBBBBBBBBBBBBBB",
+            "artwork_url": "/api/djconnect/v1/image_proxy/prepared-original"
+          }
+        }
+      }
+    }
+  ],
+  "source_sha256": {
+    "custom_components/djconnect/horizon_preview.py": "ed8074d38f967aab1da061a439c7e91590fad3bb12f296acd8cfc6ab6652b99d",
+    "custom_components/djconnect/session_runtime.py": "75b7d0e3f5c4de40f6c8c7899b842514640fe99e17edd76729589cbc841dfd65",
+    "custom_components/djconnect/spotify_backend.py": "0960ffec3b610f2e6b498b281b4417e3b2627e62f055d97e8798aa5a12d19a47",
+    "tests/test_horizon_preview.py": "f42ec91b86f403fdf42a38457ec11538f16406da3f00d840004867e4f6805caa"
+  }
+}

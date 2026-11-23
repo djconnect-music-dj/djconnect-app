@@ -10798,3 +10798,72 @@ private struct ForYouScenarioResponses: Sendable {
     model.sessionHistory.suspend()
     #expect(!model.askDJMessages.contains(where: { $0.id == rendered.id }))
 }
+
+@Test(.isolatedClientResources, arguments: ["original-expiry", "owner", "pause", "track", "null", "replay", "device"])
+@MainActor func upNextOriginalOwnerIngressRetainsDeadlineAndFencesWithdrawnOrReplayedPreview(_ fence: String) async throws {
+    // Actual Core-authored preview bytes; the owner HTTP/history wrapper and
+    // the source/clock are explicitly synthetic. This is no provider proof.
+    let item = try #require(horizonPreviewProducerCases().first)
+    var runtime = item.runtime()
+    runtime.broadcast.delivery = .init(snapshotWatermark: 1)
+    let object = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(runtime)) as? [String: Any])
+    let response = try historyData(["success": true, "session": object])
+    let input = try ForecastScenarioInput.make(fence: "current")
+    let caps = input.caps, history = input.history
+    let fixture = HistoryWireFixture { request in
+        if request.url!.path.hasSuffix("/capabilities") { return (200, caps, 0) }
+        if request.url!.path.hasSuffix("/ask_dj/history") { return (200, history, 0) }
+        if request.url!.path.hasSuffix("/session/active") { return (200, response, 0) }
+        return (404, Data(), 0)
+    }
+    defer { fixture.close() }
+    let (model, defaults, name) = fixture.model()
+    defer { model.markInactiveSession(); defaults.removePersistentDomain(forName: name) }
+    let origin = ContinuousClock.now
+    var wall = Date(timeIntervalSince1970: item.context.original_source_wall + 1)
+    var tick = origin
+    model.horizonMomentReadClock.wallNow = { wall }
+    model.horizonMomentReadClock.monotonicNow = { tick }
+    await model.sessionHistory.prepare()
+    await model.refreshActiveDJSession()
+    model.stopSessionBroadcast()
+    var initialSnapshot = runtime.broadcast
+    initialSnapshot.delivery = .init(snapshotWatermark: 2)
+    model.applySessionBroadcastSnapshot(initialSnapshot)
+    await Task.yield()
+    let visible = model.visibleHorizonMoment(at: wall)
+    #expect(visible != nil, "owner=\(model.sessionHistory.hasAuthorizedOwner) compatible=\(model.isRuntimeCompatible) mode=\(model.haConnectionMode) recovering=\(model.djSessionIsRecovering) unavailable=\(model.djSessionLiveUnavailable) preview=\(model.activeDJSession?.broadcast.horizonMoment != nil) position=\(model.activeDJSession.flatMap { model.displayedSessionPositionMS($0) } ?? -1) foreground=\(model.isAppInForegroundForTests)")
+    guard let original = visible else { return }
+    #expect(original.text == item.owner_payload.horizon_moment.text)
+    let count = fixture.requests.count
+    for _ in 0..<20 { #expect(model.visibleHorizonMoment(at: wall) == original) }
+    #expect(fixture.requests.count == count)
+    if fence == "original-expiry" {
+        wall = Date(timeIntervalSince1970: item.context.original_source_wall + 8); tick = origin.advanced(by: .seconds(7))
+        var refreshed = initialSnapshot; refreshed.delivery = .init(snapshotWatermark: 3)
+        model.applySessionBroadcastSnapshot(refreshed)
+        #expect(model.visibleHorizonMoment(at: wall) == original)
+        wall = Date(timeIntervalSince1970: item.context.original_source_wall + 21); tick = origin.advanced(by: .seconds(20))
+        #expect(model.visibleHorizonMoment(at: wall) == nil)
+        wall = Date(timeIntervalSince1970: item.context.original_source_wall + 1)
+        refreshed.delivery = .init(snapshotWatermark: 4)
+        model.applySessionBroadcastSnapshot(refreshed)
+    } else if fence == "owner" {
+        model.sessionHistory.reset()
+    } else if fence == "device" {
+        model.playback = DJConnectPlayback(uri: "spotify:track:AAAAAAAAAAAAAAAAAAAAAA", isPlaying: true, trackName: "Confirmed track", artistName: "Confirmed artist")
+    } else {
+        let originalSnapshot = try #require(model.activeDJSession).broadcast
+        var changed = originalSnapshot; changed.delivery = .init(snapshotWatermark: 3)
+        if fence == "pause" { changed.playback?.state = "paused" }
+        else if fence == "track" { changed.playback?.itemID = "other-recording" }
+        else { changed.horizonMoment = nil }
+        model.applySessionBroadcastSnapshot(changed)
+        if fence == "replay" { model.applySessionBroadcastSnapshot(originalSnapshot) }
+    }
+    #expect(model.visibleHorizonMoment(at: wall) == nil)
+    #expect(!fixture.requests.contains { request in
+        let path = request.url!.path
+        return path.contains("ask_dj/message") || path.contains("speech") || path.contains("session/end")
+    })
+}

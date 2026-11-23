@@ -24,9 +24,11 @@ private final class ConsentWire: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) private static var calls: [URLRequest] = []
     nonisolated(unsafe) private static var bodies: [String: Data] = [:]
     nonisolated(unsafe) private static var ownerReads = 0
+    nonisolated(unsafe) private static var presentationMode = "flow"
+    nonisolated(unsafe) private static var presentationDynamics = 0.5
     nonisolated(unsafe) private static var approvalAt: Date?
     nonisolated(unsafe) private static var approvalAction: (@Sendable () -> Void)?
-    static func reset(_ mode: String = "normal") { lock.withLock { Self.mode = mode; bootstrap = [:]; calls = []; bodies = [:]; ownerReads = 0; approvalAction = nil; approvalAt = nil } }
+    static func reset(_ mode: String = "normal") { lock.withLock { Self.mode = mode; bootstrap = [:]; calls = []; bodies = [:]; ownerReads = 0; presentationMode = "flow"; presentationDynamics = 0.5; approvalAction = nil; approvalAt = nil } }
     static func withdrawOwner() { lock.withLock { mode = "owner-withdrawn"; bootstrap = [:] } }
     static var approvalStartedAt: Date? { lock.withLock { approvalAt } }
     static func onApproval(_ action: @escaping @Sendable () -> Void) { lock.withLock { approvalAction = action } }
@@ -61,7 +63,17 @@ private final class ConsentWire: URLProtocol, @unchecked Sendable {
         }
         var value: [String: Any] = ["success": true, "contract_version": 1]
         var status = 200
-        if path.hasSuffix("/transport/context") {
+        if path.contains("/participation/owner/") {
+            if path.hasSuffix("/presentation"), let payload = try? JSONSerialization.jsonObject(with: body) as? [String: Any] {
+                Self.lock.withLock {
+                    Self.presentationMode = payload["mode"] as? String ?? Self.presentationMode
+                    if let dynamics = payload["dynamics"] as? Double { Self.presentationDynamics = dynamics }
+                }
+            }
+            let state = Self.lock.withLock { (Self.presentationMode, Self.presentationDynamics) }
+            value["policy"] = ["information": true, "requests": "review", "max_pending": 3, "screen_focus": false]
+            value["view"] = ["mode": state.0, "dynamics": mode == "presentation-mismatch" ? 0.2 : state.1]
+        } else if path.hasSuffix("/transport/context") {
             prepareTransportContext(&value, mode: mode)
         } else if path.hasSuffix("/owner/context") {
             prepareOwnerContext(&value, mode: mode, count: count)
@@ -128,7 +140,7 @@ private final class ConsentWire: URLProtocol, @unchecked Sendable {
 
     private func prepareOwnerContext(_ value: inout [String: Any], mode: String, count: Int) {
         prepareOwnerIdentity(&value, mode: mode, count: count)
-        if mode == "existing" || (mode == "new-share" && count > 1) || (mode == "whole-share-stop" && count == 1) {
+        if mode == "existing" || mode.hasPrefix("presentation") || (mode == "new-share" && count > 1) || (mode == "whole-share-stop" && count == 1) {
             value.merge(["share_id": consentShare, "share_generation": 1, "expires_in": 3600.0, "expires_at": expiry(3600)]) { _, new in new }
         }
         prepareOwnerDisplayObservation(&value, mode: mode, count: count)
@@ -1255,3 +1267,29 @@ extension DisplayConsentSessionTests {
 
 }
 #endif
+
+extension DisplayConsentSessionTests {
+    @Test(.isolatedClientResources, arguments: [false, true])
+    func hostPresentationCarriesExplicitDynamicsAndRequiresIndependentAcknowledgement(_ mismatch: Bool) async throws {
+        ConsentWire.reset(mismatch ? "presentation-mismatch" : "presentation-normal")
+        let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [ConsentWire.self]
+        let origin = URL(string: "http://127.0.0.1:18801")!
+        let client = DJConnectClient(baseURL: origin,
+            identity: DJConnectIdentity(deviceID: "djconnect-ios-ABCDEF123456", deviceName: "Fixture", clientType: .ios, firmware: "test", platform: .ios),
+            tokenStore: DJConnectInMemoryTokenStore(token: "synthetic-owner"), session: URLSession(configuration: config))
+        if mismatch {
+            await #expect(throws: (any Error).self) {
+                try await client.setVibeCastView("vibescape", dynamics: 0.8, shareID: consentShare, sessionID: "fixture-session", issuerEpoch: consentEpoch,
+                    expectedInstallationID: "fixture-install", pairedLocalOrigin: origin, isCurrent: { true })
+            }
+        } else {
+            let state = try await client.setVibeCastView("vibescape", dynamics: 0.8, shareID: consentShare, sessionID: "fixture-session", issuerEpoch: consentEpoch,
+                expectedInstallationID: "fixture-install", pairedLocalOrigin: origin, isCurrent: { true })
+            #expect(state.view.mode == "vibescape" && state.view.dynamics == 0.8)
+        }
+        let body = try ConsentWire.body(for: "/participation/owner/presentation")
+        #expect(Set(body.keys) == ["contract_version", "identity", "session_id", "share_id", "mode", "dynamics"])
+        #expect(body["dynamics"] as? Double == 0.8)
+        #expect(ConsentWire.requests.filter { $0.url!.path.hasSuffix("/presentation") }.count == 1)
+    }
+}

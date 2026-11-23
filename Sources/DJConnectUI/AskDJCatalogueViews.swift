@@ -2,6 +2,17 @@ import SwiftUI
 import DJConnectCore
 
 /// Transient conversation scope for closing stale Help; no visibility preference.
+private struct VisibleHelpScope: Equatable {
+    let context: DJConnectAskDJCatalogue.Context
+    let language: String
+    let active: Bool
+    let visible: Bool
+}
+private struct AutomaticHelpScope: Equatable {
+    let visible: VisibleHelpScope
+    let enabled: Bool
+}
+
 struct AskDJHelpScope: Equatable {
     var owner: String?
     var session: String?
@@ -101,7 +112,7 @@ struct AskDJComposerHelpPopout: View {
                         .accessibilityIdentifier("ask-dj-more-" + surface.rawValue)
                     }
                 } else {
-                    AskDJSuggestionStrip(model: model, surface: surface, reading: expanded, more: showMore, select: select)
+                    AskDJSuggestionStrip(model: model, surface: surface, reading: expanded, actuallyVisible: maximumHeight > 44, more: showMore, select: select)
                 }
             } catalogue: {
                 if model.isDemoMode {
@@ -111,7 +122,7 @@ struct AskDJComposerHelpPopout: View {
                     ) { selectDemoExample($0.prompt) }
                 } else {
                     AskDJHelpContent(model: model, surface: surface,
-                        presented: Binding(get: { expanded }, set: { if !$0 { close() } }), send: send)
+                        presented: Binding(get: { expanded }, set: { if !$0 { close() } }), actuallyVisible: maximumHeight > 44, send: send)
                 }
             }
         .onChange(of: expanded) { _, value in model.askDJHelpIsPresented = value }
@@ -155,8 +166,13 @@ private struct AskDJHelpContent: View {
     @ObservedObject var model: DJConnectAppModel
     let surface: DJConnectAskDJCatalogue.Surface
     @Binding var presented: Bool
+    var actuallyVisible = true
     var send: (() -> Void)?
     @StateObject private var catalogueModel = AskDJHelpCatalogueModel()
+    @Environment(\.scenePhase) private var scenePhase
+    private var visibleScope: VisibleHelpScope {
+        .init(context: context, language: model.language, active: scenePhase == .active, visible: presented && actuallyVisible)
+    }
     private var context: DJConnectAskDJCatalogue.Context { model.askDJExampleContext() }
     private func refresh() async -> [DJConnectAskDJCatalogue.CatalogueSection]? {
         await catalogueModel.read(catalogue: .bundled, surface: surface, language: model.language,
@@ -180,8 +196,8 @@ private struct AskDJHelpContent: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            AskDJFullCatalogueReference(sections: catalogueModel.sections, busy: catalogueModel.busy,
-                enabled: catalogueModel.isCurrent && model.askDJDraft.isEmpty && model.canUseAskDJFeatures && !model.isSendingAskDJText && !model.isRecordingVoice,
+            AskDJFullCatalogueReference(sections: catalogueModel.sections, busy: catalogueModel.busy && !catalogueModel.isCurrent,
+                enabled: catalogueModel.isCurrent && !catalogueModel.busy && model.askDJDraft.isEmpty && model.canUseAskDJFeatures && !model.isSendingAskDJText && !model.isRecordingVoice,
                 language: model.language, showsTitle: false) { item in Task { await choose(item) } }
             if !catalogueModel.isCurrent && !catalogueModel.busy {
                 Button(DJConnectLocalization.localized(key: "ui.retry", language: model.language)) {
@@ -194,10 +210,24 @@ private struct AskDJHelpContent: View {
                 .accessibilityIdentifier("ask-dj-help-retry")
             }
         }
-        .task {
+        .task(id: visibleScope.active && visibleScope.visible) {
+            guard visibleScope.active, visibleScope.visible else { return }
             await model.refreshAskDJExampleCapabilities()
         }
-        .task(id: context) { _ = await refresh() }
+        .task(id: visibleScope) {
+            guard visibleScope.active, visibleScope.visible else { catalogueModel.close(); return }
+            _ = await refresh()
+        }
+        .task(id: AutomaticHelpScope(visible: visibleScope, enabled: catalogueModel.allowsVisibleRefresh)) {
+            guard visibleScope.active, visibleScope.visible, catalogueModel.allowsVisibleRefresh else { return }
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(1)) } catch { return }
+                _ = await catalogueModel.refreshIfVisible(catalogue: .bundled, surface: surface, language: model.language,
+                    visible: presented && actuallyVisible, sceneActive: scenePhase == .active,
+                    context: { model.askDJExampleContext() }, reader: model.askDJHelpCatalogueReader)
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in if phase != .active { catalogueModel.close() } }
         .onChange(of: context) { _, next in catalogueModel.contextChanged(to: next) }
         .onChange(of: model.language) { _, _ in catalogueModel.contextChanged(to: context) }
         .onDisappear { catalogueModel.close() }
@@ -314,9 +344,14 @@ struct AskDJSuggestionStrip: View {
     @ObservedObject var model: DJConnectAppModel
     let surface: DJConnectAskDJCatalogue.Surface
     var reading = false
+    var actuallyVisible = true
     let more: () -> Void
     let select: (String) -> Void
     @StateObject private var observation = AskDJHelpCatalogueModel()
+    @Environment(\.scenePhase) private var scenePhase
+    private var visibleScope: VisibleHelpScope {
+        .init(context: context, language: model.language, active: scenePhase == .active, visible: actuallyVisible && !frozen)
+    }
     @State private var suggestions: [DJConnectAskDJCatalogue.Suggestion] = []
     @State private var selecting = false
     @State private var visit = UUID().uuidString
@@ -336,7 +371,7 @@ struct AskDJSuggestionStrip: View {
         suggestions = DJConnectAskDJCatalogue.bundled?.select(admitted, surface: surface, language: model.language, epoch: visit) ?? []
     }
     private func choose(_ item: DJConnectAskDJCatalogue.Suggestion) async {
-        guard !selecting, !frozen, observation.isCurrent, suggestions.count == 3,
+        guard !selecting, !frozen, !observation.busy, observation.isCurrent, suggestions.count == 3,
               suggestions.contains(item), model.canUseAskDJFeatures else { return }
         selecting = true; defer { selecting = false }
         let original = suggestions, owner = context, language = model.language, edit = model.askDJDraftEditRevision
@@ -351,8 +386,8 @@ struct AskDJSuggestionStrip: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             AskDJSuggestionRows(suggestions: observation.isCurrent ? suggestions : [], surface: surface,
-                disabled: selecting || frozen || !model.canUseAskDJFeatures) { item in Task { await choose(item) } }
-            if observation.busy {
+                disabled: selecting || frozen || observation.busy || !model.canUseAskDJFeatures) { item in Task { await choose(item) } }
+            if observation.busy && !observation.isCurrent {
                 ProgressView()
             } else if suggestions.isEmpty || !observation.isCurrent {
                 Text(DJConnectLocalization.localized(key: "ui.askdj.help.unavailable", language: model.language))
@@ -369,13 +404,35 @@ struct AskDJSuggestionStrip: View {
             }
             .accessibilityIdentifier("ask-dj-more-" + surface.rawValue)
         }
-        .task { await model.refreshAskDJExampleCapabilities() }
-        .task(id: context) { await open(refreshCapabilities: false) }
+        .task(id: visibleScope.active && visibleScope.visible) {
+            guard visibleScope.active, visibleScope.visible else { return }
+            await model.refreshAskDJExampleCapabilities()
+        }
+        .task(id: visibleScope) {
+            guard visibleScope.active, visibleScope.visible else { observation.close(); suggestions = []; return }
+            await open(refreshCapabilities: false)
+        }
+        .task(id: AutomaticHelpScope(visible: visibleScope, enabled: observation.allowsVisibleRefresh)) {
+            guard visibleScope.active, visibleScope.visible, observation.allowsVisibleRefresh else { return }
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(1)) } catch { return }
+                let fresh = await observation.refreshIfVisible(catalogue: .bundled, surface: surface, language: model.language,
+                    visible: actuallyVisible && !frozen, sceneActive: scenePhase == .active,
+                    context: { model.askDJExampleContext() }, reader: model.askDJHelpCatalogueReader)
+                guard !Task.isCancelled else { return }
+                if fresh, !frozen, let admitted = observation.admittedContext {
+                    if !suggestions.allSatisfy({ DJConnectAskDJCatalogue.bundled?.retains($0, context: admitted, surface: surface, language: model.language) == true }) || suggestions.count != 3 {
+                        suggestions = DJConnectAskDJCatalogue.bundled?.select(admitted, surface: surface, language: model.language, epoch: visit) ?? []
+                    }
+                }
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in if phase != .active { observation.close(); suggestions = [] } }
         .onChange(of: context) { _, next in observation.contextChanged(to: next); if !observation.isCurrent { suggestions = [] } }
         .onChange(of: model.language) { _, _ in observation.contextChanged(to: context); if !observation.isCurrent { suggestions = [] } }
         .onChange(of: observation.admittedContext) { _, value in if value == nil { suggestions = [] } }
         .onChange(of: model.askDJExampleRefreshEpoch) { _, _ in if !frozen { Task { await open() } } }
-        .onChange(of: frozen) { _, value in if !value && suggestions.isEmpty { Task { await open() } } }
+        .onChange(of: frozen) { _, value in if value { observation.close(); suggestions = [] } }
         .onDisappear { observation.close(); suggestions = [] }
     }
 }

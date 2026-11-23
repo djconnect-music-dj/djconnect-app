@@ -9685,6 +9685,7 @@ struct VibeCastDisplayConsentForm: View {
     }
     @Environment(\.dismiss) private var dismiss
     @State private var code = ""
+    @State private var dynamicsDraft: Double?
     @State private var didSubmitLookup = false
     @State private var lookupFocusRequest = 0
     @FocusState private var lookupFocused: Bool
@@ -9846,6 +9847,17 @@ struct VibeCastDisplayConsentForm: View {
                             }
                             .pickerStyle(.segmented)
                             .accessibilityIdentifier("vibecast-remote-tv-mode")
+                            if remote.view.mode == "vibescape" {
+                                Slider(value: Binding(get: { dynamicsDraft ?? remote.view.dynamics }, set: { dynamicsDraft = $0 }), in: 0...1) { editing in
+                                    if !editing {
+                                        let value = dynamicsDraft ?? remote.view.dynamics
+                                        dynamicsDraft = nil
+                                        Task { await model.refreshVibeCastRemote(dynamics: value) }
+                                    }
+                                }
+                                .accessibilityLabel(localizedKey(model.language, "ui.vibescape.dynamics"))
+                                .accessibilityIdentifier("vibecast-remote-dynamics")
+                            }
                         }
                         .disabled(model.isUpdatingVibeCastRemote || model.stoppingLiveDisplay)
                     } else {

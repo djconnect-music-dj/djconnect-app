@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import Testing
 @testable import DJConnectCore
 import SwiftUI
@@ -270,6 +271,91 @@ private struct ContributionLayoutProbe: NSViewRepresentable {
         let textTop = host.isFlipped ? textRect.minY : textRect.maxY
         let artTop = host.isFlipped ? artRect.minY : artRect.maxY
         #expect(abs(textTop - artTop) < 1)
+    }
+}
+#endif
+
+struct HorizonPreviewProducerFixture: Decodable {
+    struct Case: Decodable {
+        struct Context: Decodable {
+            let original_source_wall: Double
+            let session_id: String
+            let playback: DJConnectSessionPlayback
+        }
+        struct Owner: Decodable { let horizon_moment: DJConnectHorizonMomentPreview }
+        let locale: String
+        let persona: String
+        let context: Context
+        let owner_payload: Owner
+        func runtime() -> DJConnectSessionRuntime {
+            var broadcast = DJConnectBroadcastState(session: .init(sessionID: context.session_id, runtimeState: "active", selectedMood: "groove", locale: locale),
+                planner: .init(planningState: "fixture", planningHorizonMinutes: 10, currentDirection: "fixture"),
+                sessionFlow: .init(flowID: "fixture-flow", planningHorizonMinutes: 10, createdAt: "fixture", items: []))
+            broadcast.playback = context.playback; broadcast.horizonMoment = owner_payload.horizon_moment
+            return .init(sessionID: context.session_id, room: "Fixture", selectedMood: "groove", musicBackend: "spotify", runtimeState: "active", startedAt: "fixture", planner: .init(planningHorizonMinutes: 10), broadcast: broadcast)
+        }
+    }
+    let scope: String
+    let cases: [Case]
+}
+func horizonPreviewProducerCases() throws -> [HorizonPreviewProducerFixture.Case] {
+    let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("Fixtures/horizon-preview-core-producer-v1.json")
+    let data = try Data(contentsOf: url)
+    #expect(SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() == "f6514e4c6ed24c3b5bf434f18918ad4081e88644bb4dfe846657abe61815dc77")
+    return try JSONDecoder().decode(HorizonPreviewProducerFixture.self, from: data).cases
+}
+@Test(.isolatedClientResources) func upNextPreviewKeepsActualProducerTextAndOriginalExpiryAcrossAllLocalesAndPersonas() throws {
+    let cases = try horizonPreviewProducerCases()
+    #expect(cases.count == 20 && Set(cases.map(\.locale)).count == 5 && Set(cases.map(\.persona)).count == 4)
+    for item in cases {
+        let preview = item.owner_payload.horizon_moment, runtime = item.runtime()
+        let now = Date(timeIntervalSince1970: item.context.original_source_wall + 1)
+        #expect(preview.structurallyValid && preview.isVisible(session: runtime, at: now))
+        #expect(preview.expiry == Date(timeIntervalSince1970: 1_800_000_020))
+        let originalExpiry = try #require(preview.expiry)
+        #expect(!preview.isVisible(session: runtime, at: originalExpiry))
+        var paused = runtime; paused.broadcast.playback?.state = "paused"
+        #expect(!preview.isVisible(session: paused, at: now))
+        var changed = runtime; changed.broadcast.playback?.itemID = "other-current-recording"
+        #expect(!preview.isVisible(session: changed, at: now))
+        var ended = runtime; ended.runtimeState = "ended"
+        #expect(!preview.isVisible(session: ended, at: now))
+        var other = runtime; other.sessionID = "other-session"
+        #expect(!preview.isVisible(session: other, at: now))
+        #expect(!preview.isVisible(session: runtime, positionMS: 100_000, at: now))
+        #expect(!preview.isVisible(session: runtime, positionMS: 300_000, at: now))
+        var cleared = runtime.broadcast; cleared.clearNativeAuthority()
+        #expect(cleared.horizonMoment == nil)
+        #expect(!runtime.broadcast.djMoments.contains { $0.id == preview.preview_id })
+    }
+}
+#if os(macOS)
+@Test(.isolatedClientResources) @MainActor func upNextActualNativeRendererWrapsProducerTextWithoutCreatingActions() async throws {
+    // Standalone XCTest host lacks the application's asset catalogue. Load the
+    // exact shipping mark; this does not replace provider artwork or metadata.
+    let markURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("Apps/Shared/Assets.xcassets/SpotifyAttribution.imageset/Spotify_Full_Logo_RGB_White.png")
+    let needsMark = NSImage(named: "SpotifyAttribution") == nil
+    let mark = try #require(NSImage(contentsOf: markURL))
+    if needsMark { #expect(mark.setName("SpotifyAttribution")) }
+    defer { if needsMark { mark.setName(nil) } }
+    for item in try horizonPreviewProducerCases() {
+        for width: CGFloat in [320, 768] {
+            let view = SessionHorizonMomentContent(preview: item.owner_payload.horizon_moment, mood: "groove", language: item.locale, artworkURL: nil)
+                .frame(width: width).environment(\.dynamicTypeSize, .accessibility2).environment(\.colorScheme, .dark)
+            let renderer = ImageRenderer(content: view.foregroundStyle(.white).background(Color(red: 0.08, green: 0.06, blue: 0.18)))
+            let rendered = try #require(renderer.nsImage)
+            #expect(rendered.size.width == width)
+            #expect(rendered.size.height > 100 && rendered.size.height < 2000)
+            let tiff = try #require(rendered.tiffRepresentation)
+            let bitmap = try #require(NSBitmapImageRep(data: tiff))
+            if let folder = ProcessInfo.processInfo.environment["DJCONNECT_HORIZON_PREVIEW_ARTIFACT_DIR"] {
+                let directory = URL(fileURLWithPath: folder)
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                try #require(bitmap.representation(using: .png, properties: [:])).write(to: directory.appendingPathComponent("up-next-\(item.locale)-\(item.persona)-\(Int(width)).png"))
+            }
+        }
     }
 }
 #endif

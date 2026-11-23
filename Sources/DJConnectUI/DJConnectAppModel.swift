@@ -1223,7 +1223,26 @@ public final class DJConnectAppModel: ObservableObject {
         if current() { await refreshLiveVibeCastDisplays(scope: scope) }
     }
 
-    func refreshVibeCastRemote(live: Bool? = nil, mode: String? = nil) async {
+    private var observedHostVibeScapeDynamics: (sessionID: String, epoch: UUID, value: Double)?
+    func observeHostVibeScapeDynamics(_ value: Float, sessionID: String, epoch: UUID) {
+        guard value.isFinite, (0...1).contains(value), activeDJSession?.id == sessionID,
+              sessionHistory.responseEpoch == epoch else { return }
+        observedHostVibeScapeDynamics = (sessionID, epoch, Double(value))
+    }
+    func clearHostVibeScapeDynamics(sessionID: String, epoch: UUID) {
+        if observedHostVibeScapeDynamics?.sessionID == sessionID && observedHostVibeScapeDynamics?.epoch == epoch {
+            observedHostVibeScapeDynamics = nil
+        }
+    }
+    func commitHostVibeScapeDynamics(_ value: Float, sessionID: String, epoch: UUID) {
+        observeHostVibeScapeDynamics(value, sessionID: sessionID, epoch: epoch)
+        guard value.isFinite, (0...1).contains(value), isVibeCastSharing else { return }
+        Task {
+            guard activeDJSession?.id == sessionID, sessionHistory.responseEpoch == epoch else { return }
+            await refreshVibeCastRemote(dynamics: Double(value))
+        }
+    }
+    func refreshVibeCastRemote(live: Bool? = nil, mode: String? = nil, dynamics: Double? = nil) async {
         guard !isUpdatingVibeCastRemote, !stoppingLiveDisplay, let scope = vibeCastStatusScope,
               let shareID = vibeCastStopTarget?.shareID ?? displayConsentFlow?.receipt?.shareID,
               let issuer = currentDisplayObservation?.issuerEpoch ?? displayConsentFlow?.resolvedClaim?.issuerEpoch else { return }
@@ -1241,8 +1260,12 @@ public final class DJConnectAppModel: ObservableObject {
             if let live {
                 response = try await client.setVibeCastLive(live, shareID: shareID, sessionID: scope.sessionID,
                     issuerEpoch: issuer, expectedInstallationID: scope.installationID, pairedLocalOrigin: origin, isCurrent: current)
-            } else if let mode {
-                response = try await client.setVibeCastView(mode, shareID: shareID, sessionID: scope.sessionID,
+            } else if mode != nil || dynamics != nil {
+                let currentState = try await client.vibeCastOwnerState(shareID: shareID, sessionID: scope.sessionID,
+                    issuerEpoch: issuer, expectedInstallationID: scope.installationID, pairedLocalOrigin: origin, isCurrent: current)
+                let actualVisitDynamics = observedHostVibeScapeDynamics.flatMap { $0.sessionID == scope.sessionID && $0.epoch == sessionHistory.responseEpoch ? $0.value : nil }
+                response = try await client.setVibeCastView(mode ?? currentState.view.mode,
+                    dynamics: dynamics ?? actualVisitDynamics, shareID: shareID, sessionID: scope.sessionID,
                     issuerEpoch: issuer, expectedInstallationID: scope.installationID, pairedLocalOrigin: origin, isCurrent: current)
             } else {
                 response = try await client.vibeCastOwnerState(shareID: shareID, sessionID: scope.sessionID,
@@ -1916,6 +1939,7 @@ public final class DJConnectAppModel: ObservableObject {
     private func reconcileSessionAuthorityTransition(from oldValue: DJConnectSessionRuntime?) {
         if oldValue?.id != activeDJSession?.id ||
             (oldValue?.runtimeState == "active" && activeDJSession?.runtimeState != "active") {
+            clearHorizonMomentReceipt(includingPins: true)
             cancelDisplayConsent()
             stopResponsePlayback(clearText: false)
             resetActivePersonaState()
@@ -13233,9 +13257,64 @@ public final class DJConnectAppModel: ObservableObject {
         }
     }
 
+    private struct HorizonMomentReceipt {
+        let preview: DJConnectHorizonMomentPreview
+        let epoch: UUID
+        let playbackGeneration: UUID
+        let sourceURL: String?
+        let deadline: ContinuousClock.Instant
+    }
+    var horizonMomentReadClock = HorizonMomentReadClock()
+    private var horizonMomentPins: [String: ContinuousClock.Instant] = [:]
+    private var horizonMomentExpiryTask: Task<Void, Never>?
+    private func clearHorizonMomentReceipt(includingPins: Bool = false) {
+        horizonMomentExpiryTask?.cancel(); horizonMomentExpiryTask = nil; horizonMomentReceipt = nil
+        if includingPins { horizonMomentPins = [:] }
+    }
+    @Published private var horizonMomentReceipt: HorizonMomentReceipt?
+    private func acceptHorizonMomentReceipt() {
+        let now = horizonMomentReadClock.wallNow(), tick = horizonMomentReadClock.monotonicNow()
+        guard let session = activeDJSession, let preview = session.broadcast.horizonMoment,
+              preview.isVisible(session: session, positionMS: displayedSessionPositionMS(session), at: now),
+              let expiry = preview.expiry else { clearHorizonMomentReceipt(); return }
+        let epoch = sessionHistory.responseEpoch, observation = currentInsightObservation.generation
+        let key = [epoch.uuidString, observation.uuidString, preview.preview_id, preview.expires_at,
+            session.broadcast.playback?.sourceURL ?? ""].joined(separator: "|")
+        let deadline: ContinuousClock.Instant
+        if let pin = horizonMomentPins[key] { deadline = pin }
+        else {
+            guard horizonMomentPins.count < 128 else { clearHorizonMomentReceipt(); return }
+            deadline = tick.advanced(by: .seconds(min(45, max(0, expiry.timeIntervalSince(now)))))
+            horizonMomentPins[key] = deadline
+        }
+        guard tick < deadline else { clearHorizonMomentReceipt(); return }
+        let needsExpiry = horizonMomentReceipt?.deadline != deadline
+        horizonMomentReceipt = .init(preview: preview, epoch: epoch, playbackGeneration: observation,
+            sourceURL: session.broadcast.playback?.sourceURL, deadline: deadline)
+        if needsExpiry {
+            horizonMomentExpiryTask?.cancel()
+            horizonMomentExpiryTask = Task { [weak self] in
+                do { try await ContinuousClock().sleep(until: deadline) } catch { return }
+                guard let self, self.horizonMomentReceipt?.epoch == epoch,
+                      self.horizonMomentReceipt?.deadline == deadline else { return }
+                self.clearHorizonMomentReceipt()
+            }
+        }
+    }
+    func visibleHorizonMoment(at date: Date) -> DJConnectHorizonMomentPreview? {
+        guard !isDemoMode, hasSessionForecastOwner, haConnectionMode != .offline,
+              let receipt = horizonMomentReceipt, receipt.epoch == sessionHistory.responseEpoch,
+              receipt.playbackGeneration == currentInsightObservation.generation, horizonMomentReadClock.monotonicNow() < receipt.deadline,
+              let session = activeDJSession, session.broadcast.horizonMoment == receipt.preview,
+              session.broadcast.playback?.sourceURL == receipt.sourceURL,
+              receipt.preview.isVisible(session: session, positionMS: displayedSessionPositionMS(session), at: date) else { return nil }
+        return receipt.preview
+    }
+
     private func acceptSessionSurfaceObservation(sessionID: String?) {
         guard isAppInForeground, pairingStatus == .paired, !isDemoMode,
               activeDJSession?.id == sessionID else { return }
+        acceptHorizonMomentReceipt()
         // This is existing foreground liveness bookkeeping, not a successor
         // source permission or qualified original cross-domain clock.
         if activeDJSession?.runtimeState == "active", let sessionID {

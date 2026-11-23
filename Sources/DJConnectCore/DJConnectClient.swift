@@ -212,13 +212,14 @@ public final class DJConnectClient: Sendable {
             public let max_pending: Int
             public let screen_focus: Bool
         }
-        public struct View: Decodable, Equatable, Sendable { public let mode: String }
+        public struct View: Decodable, Equatable, Sendable { public let mode: String; public let dynamics: Double }
         public let success: Bool
         public let contract_version: Int
         public let policy: Policy
         public let view: View
         public var isValid: Bool {
             success && contract_version == 1 && ["flow", "vibescape"].contains(view.mode) &&
+            view.dynamics.isFinite && (0...1).contains(view.dynamics) &&
             ["disabled", "review", "auto_queue"].contains(policy.requests) && (1...10).contains(policy.max_pending)
         }
     }
@@ -252,18 +253,20 @@ public final class DJConnectClient: Sendable {
         return after
     }
 
-    public func setVibeCastView(_ mode: String, shareID: String, sessionID: String, issuerEpoch: String,
+    public func setVibeCastView(_ mode: String, dynamics: Double? = nil, shareID: String, sessionID: String, issuerEpoch: String,
                                expectedInstallationID: String, pairedLocalOrigin: URL?,
                                isCurrent: @escaping @MainActor @Sendable () -> Bool) async throws -> VibeCastOwnerState {
-        guard ["flow", "vibescape"].contains(mode) else { throw DJConnectError.invalidResponse }
+        guard ["flow", "vibescape"].contains(mode), dynamics.map({ $0.isFinite && (0...1).contains($0) }) ?? true else { throw DJConnectError.invalidResponse }
         let before = try await vibeCastOwnerState(shareID: shareID, sessionID: sessionID, issuerEpoch: issuerEpoch,
             expectedInstallationID: expectedInstallationID, pairedLocalOrigin: pairedLocalOrigin, isCurrent: isCurrent)
-        if before.view.mode == mode { return before }
+        if before.view.mode == mode && (dynamics.map({ $0 == before.view.dynamics }) ?? true) { return before }
+        var extra: [String: Any] = ["mode": mode]
+        if let dynamics { extra["dynamics"] = dynamics }
         _ = try await participationOwnerExchange("presentation", shareID: shareID, sessionID: sessionID,
-            extra: ["mode": mode], isCurrent: isCurrent)
+            extra: extra, isCurrent: isCurrent)
         let after = try await vibeCastOwnerState(shareID: shareID, sessionID: sessionID, issuerEpoch: issuerEpoch,
             expectedInstallationID: expectedInstallationID, pairedLocalOrigin: pairedLocalOrigin, isCurrent: isCurrent)
-        guard after.view.mode == mode else { throw DJConnectError.invalidResponse }
+        guard after.view.mode == mode, dynamics.map({ $0 == after.view.dynamics }) ?? true else { throw DJConnectError.invalidResponse }
         return after
     }
 

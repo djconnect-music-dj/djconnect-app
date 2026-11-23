@@ -66,6 +66,7 @@ struct VibeScapeScreen: View {
     @State private var controlsVisible = true
     @State private var controlsGeneration = UUID()
     @State private var adjustingDynamics = false
+    @State private var dynamicsScope: (sessionID: String, epoch: UUID)?
     @State private var hoveringControls = false
     @State private var canvasBounds = CGRect.zero
     @State private var modeBounds = CGRect.zero
@@ -213,6 +214,7 @@ struct VibeScapeScreen: View {
 
         let observingSession = controls.onAppear {
             guard admitted else { model.isShowingVibeScape = false; return }
+            dynamicsScope = model.activeDJSession.map { ($0.id, model.sessionHistory.responseEpoch) }
             screenIsActive = scenePhase == .active
             displayWakeLock.setActive(scenePhase == .active)
             let confirmed = model.activeDJSession?.confirmedPersona
@@ -222,8 +224,12 @@ struct VibeScapeScreen: View {
                         personaRevision: confirmed?.personaRevision)
             synchronizePersona()
             updateAutomaticIntensity()
+            if let remote = model.vibeCastRemoteState, remote.view.mode == "vibescape" { _ = visit.setDynamics(Float(remote.view.dynamics)) }
+            publishDynamics(commit: false)
         }
         .onDisappear {
+            if let dynamicsScope { model.clearHostVibeScapeDynamics(sessionID: dynamicsScope.sessionID, epoch: dynamicsScope.epoch) }
+            dynamicsScope = nil
             screenIsActive = false; helpGeneration = UUID()
             voice.cancel(); displayWakeLock.setActive(false); visit.revoke()
         }
@@ -233,7 +239,14 @@ struct VibeScapeScreen: View {
                 visit.invalidateOccurrence()
             }
         }
-        .onChange(of: automaticIntensity) { _, _ in updateAutomaticIntensity() }
+        .onChange(of: visit.dynamics) { _, _ in publishDynamics(commit: false) }
+        .onChange(of: model.vibeCastRemoteState?.view.dynamics) { _, value in
+            if let value, !adjustingDynamics, model.vibeCastRemoteState?.view.mode == "vibescape" { _ = visit.setDynamics(Float(value)) }
+        }
+        .onChange(of: automaticIntensity) { _, _ in
+            updateAutomaticIntensity()
+            publishDynamics(commit: true)
+        }
         .onChange(of: sceneMood) { _, mood in voice.cancel(); visit.moodChanged(mood) }
         .onChange(of: VibeScapeConfirmedSettings(model.activeDJSession)) { _, _ in voice.cancel() }
         .onChange(of: model.activeDJSession?.confirmedPersona) { _, _ in synchronizePersona() }
@@ -439,9 +452,15 @@ struct VibeScapeScreen: View {
         DJConnectHaptics.selection()
         controlsVisible.toggle(); controlsGeneration = UUID()
     }
+    private func publishDynamics(commit: Bool) {
+        guard let dynamicsScope else { return }
+        if commit { model.commitHostVibeScapeDynamics(visit.dynamics, sessionID: dynamicsScope.sessionID, epoch: dynamicsScope.epoch) }
+        else { model.observeHostVibeScapeDynamics(visit.dynamics, sessionID: dynamicsScope.sessionID, epoch: dynamicsScope.epoch) }
+    }
     private func dynamicsEditingChanged(_ editing: Bool) {
         if editing { DJConnectHaptics.selection(); visit.beginDynamicsAdjustment() }
         adjustingDynamics = editing; controlsGeneration = UUID()
+        if !editing { publishDynamics(commit: true) }
     }
     private var dynamicsControl: some View {
         HStack(spacing: 12) {
@@ -476,6 +495,7 @@ struct VibeScapeScreen: View {
                 withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.35)) {
                     visit.followTrackIntensity()
                 }
+                publishDynamics(commit: true)
                 showControls()
             } label: {
                 Image(systemName: "arrow.uturn.backward").foregroundStyle(.white).frame(width: 44, height: 44)

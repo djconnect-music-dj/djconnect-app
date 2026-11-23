@@ -1352,6 +1352,7 @@ struct SessionTimelineScreen: View {
     private func currentHeader(_ session: DJConnectSessionRuntime) -> some View {
         VStack(alignment: .leading, spacing: djConnectSessionFlowSpacing) {
             SessionForYouCard(model: model)
+            SessionHorizonMomentCard(model: model, session: session)
             NativeSessionMomentsView(session: session, language: model.language,
             isRecovering: model.djSessionIsRecovering,
             isLiveUnavailable: model.djSessionLiveUnavailable,
@@ -3634,5 +3635,71 @@ private struct SessionTimelineAccessibility: ViewModifier {
         } else {
             content.accessibilityIdentifier(identifier)
         }
+    }
+}
+
+
+/// A transient owner preview. No Ask DJ context selection, speech or archive
+/// action can turn its preview identifier into a published Moment identifier.
+struct SessionHorizonMomentCard: View {
+    @ObservedObject var model: DJConnectAppModel
+    let session: DJConnectSessionRuntime
+    private func artworkURL(_ raw: String?) -> URL? {
+        guard let raw, let candidate = URL(string: raw), let parts = URLComponents(string: raw),
+              parts.user == nil, parts.password == nil, parts.query == nil, parts.fragment == nil,
+              ["/api/djconnect/v1/image_proxy/", "/api/djconnect/image_proxy/"].contains(where: parts.path.hasPrefix) else { return nil }
+        let origins = [model.homeAssistantURL, model.haLocalURL, model.haRemoteURL].compactMap { URL(string: $0) }
+        let absolute: URL
+        if let host = candidate.host {
+            guard origins.contains(where: { $0.host?.lowercased() == host.lowercased() && $0.scheme == candidate.scheme && $0.port == candidate.port }) else { return nil }
+            absolute = candidate
+        } else {
+            guard candidate.scheme == nil, let base = origins.first else { return nil }
+            absolute = URL(string: raw, relativeTo: base)!.absoluteURL
+        }
+        return model.resolvedArtworkURL(absolute)
+    }
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { clock in
+            if model.activeDJSession?.id == session.id, let preview = model.visibleHorizonMoment(at: clock.date) {
+                SessionHorizonMomentContent(preview: preview, mood: session.selectedMood, language: model.language,
+                    artworkURL: artworkURL(preview.track.artwork_url))
+            }
+        }
+    }
+}
+
+
+struct SessionHorizonMomentContent: View {
+    let preview: DJConnectHorizonMomentPreview
+    let mood: String
+    let language: String
+    let artworkURL: URL?
+    var body: some View {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 10) {
+                        DJPersonaAvatarView(confirmedMood: mood, language: language)
+                            .frame(width: 32, height: 32).accessibilityHidden(true)
+                        Text("Horizon").font(.headline)
+                    }
+                    HStack(alignment: .top, spacing: 16) {
+                        if let url = artworkURL {
+                            CachedArtworkImage(url: url, mode: .fit) { Color.clear }
+                                .frame(width: 84, height: 84).clipShape(RoundedRectangle(cornerRadius: 10))
+                                .djConnectBreathingArtwork()
+                        }
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(preview.track.title).font(.title3.bold())
+                            Text(preview.track.artist).foregroundStyle(.secondary)
+                            Text(preview.text).font(.title3).fixedSize(horizontal: false, vertical: true)
+                        }.frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    if let source = URL(string: preview.track.source_url) {
+                        SessionSpotifyAttributionLinks(urls: [source])
+                    }
+                }
+                .padding(20).frame(maxWidth: .infinity, alignment: .leading)
+                .djSessionFrostedSurface()
+                .accessibilityIdentifier("session-horizon-up-next")
     }
 }
