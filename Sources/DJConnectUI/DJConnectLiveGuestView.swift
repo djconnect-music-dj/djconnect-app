@@ -46,6 +46,7 @@ struct DJConnectLiveGuestView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     Text("VibeCast Live").font(.title2.bold())
                     Text(text(guest.requestSongsAllowed ? "ui.live.help" : "ui.live.help_information_only"))
+                    Text(text("ui.ask_dj.accuracy_notice")).font(.caption).foregroundStyle(.secondary)
                     Button(text("ui.close")) { showsHelp = false }
                 }.padding(24)
             }
@@ -100,14 +101,48 @@ struct DJConnectLiveGuestView: View {
         }
     }
 
+    @ViewBuilder private func publicRow(_ row: DJConnectLiveGuestModel.PublicRow, at date: Date) -> some View {
+        switch row {
+        case .moment(let item):
+            if item.isCurrent(at: date) {
+                VStack(alignment: .leading, spacing: 8) {
+                    if let art = item.artwork, art.item_id == item.playback_item_id,
+                       item.source_attribution?.provider?.lowercased() == "spotify",
+                       let source = DJConnectLiveGuestModel.spotifyURL(item.source_attribution?.url) {
+                        DJConnectGuestArtwork(guest: guest, artwork: art, source: source).frame(width: 72)
+                    }
+                    if let title = item.title { Text(title).font(.headline) }
+                    Text(item.content ?? item.summary ?? "").font(.title3)
+                }
+            }
+        case .playback(let item):
+            if item.isCurrent(at: date), let source = DJConnectLiveGuestModel.spotifyURL(item.source_url) {
+                HStack(alignment: .top, spacing: 16) {
+                    if let art = item.artwork, art.item_id == item.playback_item_id {
+                        DJConnectGuestArtwork(guest: guest, artwork: art, source: source, showsAttribution: false).frame(width: 72)
+                    }
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(text("ui.session.history.playback")).font(.caption)
+                        Text(item.title).font(.title3)
+                        if let artist = item.artist { Text(artist) }
+                        if let album = item.album { Text(album).foregroundStyle(.secondary) }
+                        Link(destination: source) { Image("SpotifyAttribution").resizable().scaledToFit().frame(width: 72, height: 24) }
+                            .accessibilityLabel("Spotify")
+                    }
+                }.accessibilityIdentifier("live-guest-observed-playback")
+            }
+        }
+    }
+
     private var joinedContent: some View {
         TabView {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     if let playback = guest.playback {
                         VStack(alignment: .leading, spacing: 4) {
-                            if let art = playback.artwork {
-                                DJConnectGuestArtwork(guest: guest, artwork: art).frame(width: 100, height: 100)
+                            if let art = playback.artwork, art.item_id == playback.item_id,
+                               let source = DJConnectLiveGuestModel.spotifyURL(playback.source_url) {
+                                DJConnectGuestArtwork(guest: guest, artwork: art, source: source).frame(width: 100)
                             }
                             Text(playback.title ?? "").font(.title2.bold())
                             Text(playback.artist ?? "").foregroundStyle(.secondary)
@@ -132,14 +167,8 @@ struct DJConnectLiveGuestView: View {
                             .accessibilityIdentifier("live-guest-request-playing")
                     }
                     TimelineView(.periodic(from: .now, by: 1)) { context in
-                        ForEach(guest.sharedFlow.filter { $0.isCurrent(at: context.date) }) { item in
-                            VStack(alignment: .leading, spacing: 6) {
-                                if let art = item.artwork {
-                                    DJConnectGuestArtwork(guest: guest, artwork: art).frame(width: 72, height: 72)
-                                }
-                                if let title = item.title { Text(title).font(.headline) }
-                                Text(item.content ?? item.summary ?? "")
-                            }
+                        ForEach(guest.publicRows) { row in
+                            publicRow(row, at: context.date)
                         }
                     }
                     ForEach(guest.sharedFlow.isEmpty ? guest.moments : []) { moment in
@@ -237,14 +266,23 @@ private struct DJConnectGuestVibescape: View {
 private struct DJConnectGuestArtwork: View {
     @ObservedObject var guest: DJConnectLiveGuestModel
     let artwork: DJConnectLiveGuestModel.Artwork
+    let source: URL
+    var showsAttribution = true
     @State private var image: CGImage?
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { _ in
             if guest.artworkIsCurrent(artwork), let image {
-                Image(decorative: image, scale: 1).resizable().scaledToFit()
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .djConnectBreathingArtwork()
-                    .accessibilityIdentifier("live-guest-artwork")
+                VStack(alignment: .leading, spacing: 6) {
+                    Image(decorative: image, scale: 1).resizable().scaledToFit()
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .djConnectBreathingArtwork()
+                        .accessibilityIdentifier("live-guest-artwork")
+                    if showsAttribution {
+                        Link(destination: source) {
+                            Image("SpotifyAttribution").resizable().scaledToFit().frame(width: 72, height: 24)
+                        }.accessibilityLabel("Spotify")
+                    }
+                }
             }
         }
         .task(id: artwork) {

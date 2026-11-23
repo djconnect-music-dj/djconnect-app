@@ -16,12 +16,12 @@ import DJConnectCore
                 !item_id.isEmpty && DJConnectHistoryEntry.date(expires_at).map { $0 > date } == true
         }
     }
-    struct Playback: Decodable { let item_id: String?; let title: String?; let artist: String?; let state: String; let artwork: Artwork? }
+    struct Playback: Decodable { let item_id: String?; let title: String?; let artist: String?; let state: String; let artwork: Artwork?; let source_url: String? }
     struct Session: Decodable { let session_id: String; let locale: String; let mood: String; let persona: String; let presence: String }
     struct ViewState: Decodable { let mode: String; let dynamics: Double; let mood: String; let persona: String }
     struct FlowItem: Decodable, Identifiable {
         let moment_id: String; let title: String?; let summary: String?; let content: String?
-        let artwork: Artwork?
+        let artwork: Artwork?; let playback_item_id: String?; let source_attribution: Attribution?; let created_at: String?
         let flow_expires_at: String?; let display_expires_at: String?; let source_expires_at: String?
         var id: String { moment_id }
         func isCurrent(at now: Date) -> Bool {
@@ -29,6 +29,34 @@ import DJConnectCore
             return dates.min().map { $0 > now } == true
         }
     }
+    struct Attribution: Decodable { let provider: String?; let url: String? }
+    struct ObservedPlayback: Decodable, Identifiable {
+        let entry_id: String; let playback_item_id: String; let title: String; let artist: String?; let album: String?
+        let source_url: String; let observed_at: String; let expires_at: String; let artwork: Artwork?
+        var id: String { entry_id }
+        func isCurrent(at date: Date) -> Bool {
+            !entry_id.isEmpty && !playback_item_id.isEmpty &&
+                DJConnectHistoryEntry.date(observed_at).map { $0 <= date } == true &&
+                DJConnectHistoryEntry.date(expires_at).map { date < $0 } == true && Self.spotifyURL(source_url) != nil
+        }
+        private static func spotifyURL(_ value: String) -> URL? { DJConnectLiveGuestModel.spotifyURL(value) }
+    }
+    enum PublicRow: Identifiable {
+        case moment(FlowItem), playback(ObservedPlayback)
+        var id: String { switch self { case .moment(let item): "moment:" + item.id; case .playback(let item): "playback:" + item.id } }
+        var date: Date { switch self {
+            case .moment(let item): DJConnectHistoryEntry.date(item.created_at ?? "") ?? .distantPast
+            case .playback(let item): DJConnectHistoryEntry.date(item.observed_at) ?? .distantPast
+        } }
+    }
+    nonisolated static func spotifyURL(_ value: String?) -> URL? {
+        guard let value, value.range(of: "^https://open\\.spotify\\.com/track/[A-Za-z0-9]{22}$", options: .regularExpression) != nil else { return nil }
+        return URL(string: value)
+    }
+    var publicRows: [PublicRow] {
+        (sharedFlow.map(PublicRow.moment) + observedPlayback.map(PublicRow.playback)).sorted { $0.date < $1.date }
+    }
+
     struct Horizon: Decodable {
         struct Section: Decodable { let title: String; let text: String }
         let valid_until: String; let sections: [Section]
@@ -47,7 +75,7 @@ import DJConnectCore
     private struct Context: Decodable {
         let guest_id: String; let capabilities: Capabilities
         let playback: Playback; let moments: [Moment]
-        let session: Session?; let shared_flow: [FlowItem]?; let horizon: Horizon?; let view: ViewState?
+        let session: Session?; let shared_flow: [FlowItem]?; let observed_playback: [ObservedPlayback]?; let horizon: Horizon?; let view: ViewState?
     }
     private struct RequestState: Decodable { let request_id: String; let state: String; let title: String }
     struct Choice: Decodable, Identifiable { let action_id: String; let title: String; let artist: String?; var id: String { action_id } }
@@ -67,6 +95,7 @@ import DJConnectCore
     @Published private(set) var playback: Playback?
     @Published private(set) var session: Session?
     @Published private(set) var sharedFlow: [FlowItem] = []
+    @Published private(set) var observedPlayback: [ObservedPlayback] = []
     @Published private(set) var horizon: Horizon?
     @Published private(set) var viewState: ViewState?
     @Published private(set) var choices: [Choice] = []
@@ -84,11 +113,28 @@ import DJConnectCore
     private var renewSequence = 0
     private var pendingRequests: Set<String> = [], notifiedRequests: Set<String> = []
     private var choiceSetID: String?
+    struct ArtworkClock {
+        private struct Receipt { let artwork: Artwork; let deadline: ContinuousClock.Instant }
+        private var receipts: [String: Receipt] = [:]
+        mutating func observe(_ artwork: [Artwork], wall: Date, tick: ContinuousClock.Instant) {
+            for art in artwork where receipts[art.reference] == nil && receipts.count < 128 {
+                guard art.isCurrent(at: wall), let expiry = DJConnectHistoryEntry.date(art.expires_at) else { continue }
+                receipts[art.reference] = Receipt(artwork: art,
+                    deadline: tick.advanced(by: .seconds(min(28800, expiry.timeIntervalSince(wall)))))
+            }
+        }
+        func accepts(_ art: Artwork, wall: Date, tick: ContinuousClock.Instant) -> Bool {
+            guard let receipt = receipts[art.reference] else { return false }
+            return receipt.artwork == art && art.isCurrent(at: wall) && tick < receipt.deadline
+        }
+    }
+    private var artworkClock = ArtworkClock()
     private var artworkCache: [Artwork: Data] = [:]
     private func admitsArtwork(_ art: Artwork) -> Bool {
-        guard current, art.isCurrent(at: Date()) else { return false }
+        guard current, artworkClock.accepts(art, wall: Date(), tick: .now) else { return false }
         return (playback?.artwork == art && playback?.item_id == art.item_id) ||
-            sharedFlow.contains { $0.artwork == art && $0.isCurrent(at: Date()) }
+            sharedFlow.contains { $0.artwork == art && $0.playback_item_id == art.item_id && $0.isCurrent(at: Date()) } ||
+            observedPlayback.contains { $0.artwork == art && $0.playback_item_id == art.item_id && $0.isCurrent(at: Date()) }
     }
     func loadArtwork(_ art: Artwork) async -> Data? {
         guard admitsArtwork(art), let grant, let transport else { return nil }
@@ -195,8 +241,10 @@ import DJConnectCore
             playback = value.playback; moments = value.moments
             session = value.session
             sharedFlow = Array((value.shared_flow ?? []).prefix(64))
+            observedPlayback = Array((value.observed_playback ?? []).prefix(12))
             horizon = value.horizon.flatMap { $0.isCurrent && $0.sections.count <= 3 ? $0 : nil }
             viewState = value.view.flatMap { ["flow", "vibescape"].contains($0.mode) && $0.dynamics.isFinite && (0...1).contains($0.dynamics) ? $0 : nil }
+            artworkClock.observe(([playback?.artwork].compactMap { $0 }) + sharedFlow.compactMap(\.artwork) + observedPlayback.compactMap(\.artwork), wall: Date(), tick: .now)
             artworkCache = artworkCache.filter { admitsArtwork($0.key) }
             requestSongsAllowed = value.capabilities.request_song
             for identifier in pendingRequests {
@@ -277,12 +325,12 @@ import DJConnectCore
     func disconnect() {
         let previousTransport = transport, previousGrant = grant
         let leaveBody = try? body()
-        artworkCache.removeAll()
+        artworkCache.removeAll(); artworkClock = ArtworkClock()
         generation = UUID(); loop?.cancel(); loop = nil
         leaseTask?.cancel(); leaseTask = nil
         grant = nil; transport = nil; invitation = nil; leaseDeadline = nil
         messages = []; moments = []; playback = nil; choices = []; choiceSetID = nil
-        session = nil; sharedFlow = []; horizon = nil; viewState = nil
+        session = nil; sharedFlow = []; observedPlayback = []; horizon = nil; viewState = nil
         pendingRequests = []; notifiedRequests = []; playingRequestTitle = nil
         draft = ""; renewSequence = 0; thread = UUID().uuidString
         isJoined = false; isBusy = false; isPresented = false; statusKey = nil

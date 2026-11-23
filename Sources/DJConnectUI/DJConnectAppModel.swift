@@ -6562,6 +6562,13 @@ public final class DJConnectAppModel: ObservableObject {
         }
     }
 
+    /// Presentation identity only. Pausing does not authorize new analysis,
+    /// but a previously admitted hero may retain the observed track shell.
+    var trackInsightPlaybackPresentationID: String? {
+        guard isAppInForeground, hasActiveNowPlaying, canStartTrackInsightAnalysis else { return nil }
+        return Self.nonBlank(playback?.uri) ?? Self.playbackAutoInsightIdentity(playback)
+    }
+
     var visibleTrackInsightPlaybackID: String? {
         guard isAppInForeground, hasPlayingNow, isPlaying, canStartTrackInsightAnalysis else { return nil }
         return Self.nonBlank(playback?.uri) ?? Self.playbackAutoInsightIdentity(playback)

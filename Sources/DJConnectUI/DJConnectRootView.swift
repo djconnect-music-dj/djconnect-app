@@ -4061,7 +4061,7 @@ struct TrackInsightView: View {
 
     private var playbackVisual: TrackInsight? {
         guard !explicitMoment, let visualPlaybackID,
-              visualPlaybackID == model.visibleTrackInsightPlaybackID,
+              visualPlaybackID == model.trackInsightPlaybackPresentationID,
               let playback = model.playback, let title = playback.trackName else { return nil }
         return TrackInsight(
             title: title,
@@ -4124,7 +4124,7 @@ struct TrackInsightView: View {
                                         isAnimationActive: isAnimationActive && isHeroVisible,
                                         isPinnedSubject: explicitMoment
                                     )
-                                    .id(explicitMoment ? trackInsightHeroRenderID(for: visual) : model.visibleTrackInsightPlaybackID ?? visual.id)
+                                    .id(explicitMoment ? trackInsightHeroRenderID(for: visual) : model.trackInsightPlaybackPresentationID ?? visual.id)
                                     .onAppear { isHeroVisible = true }
                                     .onDisappear { isHeroVisible = false }
                                     .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -4260,10 +4260,10 @@ struct TrackInsightView: View {
         }
         .onAppear {
             isAnimationActive = true
-            if insight != nil { visualPlaybackID = model.visibleTrackInsightPlaybackID }
+            if insight != nil { visualPlaybackID = model.trackInsightPlaybackPresentationID }
         }
         .onChange(of: insight != nil) { _, hasInsight in
-            if hasInsight { visualPlaybackID = model.visibleTrackInsightPlaybackID }
+            if hasInsight { visualPlaybackID = model.trackInsightPlaybackPresentationID }
         }
         .task(id: explicitMoment ? nil : model.visibleTrackInsightPlaybackID) {
             guard !explicitMoment else { return }
@@ -7480,18 +7480,18 @@ private struct TrackInsightHeroScene: View {
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { sceneWidth = $0 }
         .onAppear {
             updateMotionClock()
-            playbackAnchor.update(from: playback, at: Date())
+            playbackAnchor.update(from: playback, at: Date(), uptime: ProcessInfo.processInfo.systemUptime)
         }
         .onChange(of: clockRuns) { updateMotionClock() }
         .onChange(of: motionRate) { updateMotionClock() }
         .onChange(of: playbackSignature) {
-            playbackAnchor.update(from: playback, at: Date())
+            playbackAnchor.update(from: playback, at: Date(), uptime: ProcessInfo.processInfo.systemUptime)
         }
         .onChange(of: playback?.progressMS) {
-            playbackAnchor.update(from: playback, at: Date())
+            playbackAnchor.update(from: playback, at: Date(), uptime: ProcessInfo.processInfo.systemUptime)
         }
         .onChange(of: playback?.isPlaying) {
-            playbackAnchor.update(from: playback, at: Date())
+            playbackAnchor.update(from: playback, at: Date(), uptime: ProcessInfo.processInfo.systemUptime)
         }
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay {
@@ -8380,11 +8380,12 @@ struct TrackVibePlaybackPhase {
     let positionSeconds: TimeInterval
     let energyLift: Double
 
-    init(playback: DJConnectPlayback?, anchor: TrackVibePlaybackAnchor = TrackVibePlaybackAnchor(), date: Date) {
+    init(playback: DJConnectPlayback?, anchor: TrackVibePlaybackAnchor = TrackVibePlaybackAnchor(), date: Date,
+         uptime: TimeInterval = ProcessInfo.processInfo.systemUptime) {
         let durationMS = max(playback?.durationMS ?? 0, 0)
         let progressMS = max(playback?.progressMS ?? 0, 0)
         let durationSeconds = durationMS > 0 ? Double(durationMS) / 1_000 : 240
-        let positionSeconds = anchor.positionSeconds(for: playback, fallbackProgressMS: progressMS, durationSeconds: durationSeconds, at: date)
+        let positionSeconds = anchor.positionSeconds(for: playback, fallbackProgressMS: progressMS, durationSeconds: durationSeconds, at: date, uptime: uptime)
         let progress = durationSeconds > 0 ? min(max(positionSeconds / durationSeconds, 0), 1) : 0
         let phrase = sin(progress * .pi * 10)
         let section = sin(progress * .pi * 2 - .pi / 2) * 0.5 + 0.5
@@ -8413,6 +8414,7 @@ struct TrackVibePlaybackAnchor: Equatable {
     var progressMS: Int = 0
     var durationMS: Int = 0
     var snapshotDate: Date = .distantPast
+    var snapshotUptime: TimeInterval?
     var isPlaying: Bool = false
 
     static func signature(for playback: DJConnectPlayback?) -> String {
@@ -8428,7 +8430,7 @@ struct TrackVibePlaybackAnchor: Equatable {
         .joined(separator: "|")
     }
 
-    mutating func update(from playback: DJConnectPlayback?, at date: Date) {
+    mutating func update(from playback: DJConnectPlayback?, at date: Date, uptime: TimeInterval? = nil) {
         let nextSignature = Self.signature(for: playback)
         let nextProgressMS = max(playback?.progressMS ?? 0, 0)
         let nextDurationMS = max(playback?.durationMS ?? 0, 0)
@@ -8437,7 +8439,7 @@ struct TrackVibePlaybackAnchor: Equatable {
             for: playback,
             fallbackProgressMS: progressMS,
             durationSeconds: nextDurationMS > 0 ? Double(nextDurationMS) / 1_000 : 240,
-            at: date
+            at: date, uptime: uptime
         ) * 1_000).rounded())
 
         let didChangeTrack = nextSignature != signature
@@ -8448,6 +8450,7 @@ struct TrackVibePlaybackAnchor: Equatable {
         progressMS = anchoredProgressMS
         durationMS = nextDurationMS
         snapshotDate = date
+        snapshotUptime = uptime.flatMap { $0.isFinite ? $0 : nil }
         isPlaying = nextIsPlaying
     }
 
@@ -8455,11 +8458,16 @@ struct TrackVibePlaybackAnchor: Equatable {
         for playback: DJConnectPlayback?,
         fallbackProgressMS: Int,
         durationSeconds: TimeInterval,
-        at date: Date
+        at date: Date,
+        uptime: TimeInterval? = nil
     ) -> TimeInterval {
         let playbackSignature = Self.signature(for: playback)
         let baseMS = playbackSignature == signature && !signature.isEmpty ? progressMS : max(playback?.progressMS ?? fallbackProgressMS, 0)
-        let elapsed = playback?.isPlaying == true && isPlaying ? max(0, date.timeIntervalSince(snapshotDate)) : 0
+        let clockElapsed: TimeInterval
+        if let snapshotUptime, let uptime, uptime.isFinite {
+            clockElapsed = max(0, uptime - snapshotUptime)
+        } else { clockElapsed = max(0, date.timeIntervalSince(snapshotDate)) }
+        let elapsed = playback?.isPlaying == true && isPlaying ? clockElapsed : 0
         return min(Double(baseMS) / 1_000 + elapsed, durationSeconds)
     }
 }

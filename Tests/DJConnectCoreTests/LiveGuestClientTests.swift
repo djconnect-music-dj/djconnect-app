@@ -10,6 +10,8 @@ private final class GuestFixtureTransport: DJConnectGuestTransporting, @unchecke
     private var state = "queue_confirmed"
     private var wrongGuest = false
     private var hasArtwork = false
+    private var hasObserved = false
+    func setObserved(_ value: Bool) { lock.withLock { hasObserved = value } }
     func setArtwork(_ value: Bool) { lock.withLock { hasArtwork = value } }
     var recorded: [Call] { lock.withLock { calls } }
     func setState(_ value: String) { lock.withLock { state = value } }
@@ -17,7 +19,7 @@ private final class GuestFixtureTransport: DJConnectGuestTransporting, @unchecke
     func cancel() {}
 
     func send(_ action: DJConnectGuestTransport.Action, body: Data, bearer: String?) async throws -> Data {
-        let snapshot = lock.withLock { calls.append(.init(action: action, body: body, bearer: bearer)); return (state, wrongGuest, hasArtwork) }
+        let snapshot = lock.withLock { calls.append(.init(action: action, body: body, bearer: bearer)); return (state, wrongGuest, hasArtwork, hasObserved) }
         let caps: [String: Any] = ["shared_information": true, "request_song": true,
             "owner_controls": false, "profile_history": false, "music_dna": false]
         let request: [String: Any] = ["request_id": "own-request", "title": "Strong", "state": snapshot.0]
@@ -31,9 +33,12 @@ private final class GuestFixtureTransport: DJConnectGuestTransporting, @unchecke
         case .context:
             var playback: [String: Any] = ["item_id": "current-recording", "state": "playing", "title": "Strong", "artist": "London Grammar"]
             if snapshot.2 { playback["artwork"] = ["reference": String(repeating: "a", count: 64), "item_id": "current-recording", "expires_at": ISO8601DateFormatter().string(from: Date().addingTimeInterval(30))] }
+            let now = Date(), format = ISO8601DateFormatter()
             value = ["guest_id": snapshot.1 ? "other-guest" : "guest-one", "capabilities": caps,
                 "playback": playback,
-                "moments": [["moment_id": "public-moment", "title": "Public DJ contribution", "summary": "Public text"]]]
+                "moments": [["moment_id": "public-moment", "title": "Public DJ contribution", "summary": "Public text"]],
+                "shared_flow": snapshot.3 ? [["moment_id": "public-moment", "title": "DJ contribution", "content": "Original text", "created_at": format.string(from: now.addingTimeInterval(-2)), "flow_expires_at": format.string(from: now.addingTimeInterval(30))]] : [],
+                "observed_playback": snapshot.3 ? [["entry_id": "public-observation", "playback_item_id": "observed-recording", "title": "Observed track", "artist": "Artist", "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA", "observed_at": format.string(from: now.addingTimeInterval(-1)), "expires_at": format.string(from: now.addingTimeInterval(30))]] : []]
         case .ask, .request:
             value = ["success": true, "guest_id": "guest-one", "text": "Je verzoek is ontvangen.", "guest_request": request]
         case .requestStatus: value = ["request": request]
@@ -121,4 +126,36 @@ private final class GuestFixtureTransport: DJConnectGuestTransporting, @unchecke
     model.disconnect()
     #expect(await pending.value == nil)
     #expect(await model.loadArtwork(fresh) == nil)
+}
+
+@Test @MainActor func guestArtworkOriginalDeadlineCannotBeRenewedByCachedContextOrWallClockRollback() {
+    let wall = Date(timeIntervalSince1970: 1_900_000_000), tick = ContinuousClock.now
+    let expiry = ISO8601DateFormatter().string(from: wall.addingTimeInterval(15))
+    let art = DJConnectLiveGuestModel.Artwork(reference: String(repeating: "a", count: 64), item_id: "track-one", expires_at: expiry)
+    var clock = DJConnectLiveGuestModel.ArtworkClock()
+    clock.observe([art], wall: wall, tick: tick)
+    clock.observe([art], wall: wall.addingTimeInterval(8), tick: tick.advanced(by: .seconds(8)))
+    #expect(clock.accepts(art, wall: wall.addingTimeInterval(14), tick: tick.advanced(by: .seconds(14))))
+    #expect(!clock.accepts(art, wall: wall.addingTimeInterval(-60), tick: tick.advanced(by: .seconds(16))))
+    let changed = DJConnectLiveGuestModel.Artwork(reference: art.reference, item_id: "track-two", expires_at: expiry)
+    clock.observe([changed], wall: wall, tick: tick)
+    #expect(!clock.accepts(changed, wall: wall, tick: tick))
+    let fresh = DJConnectLiveGuestModel.Artwork(reference: String(repeating: "b", count: 64), item_id: "track-one", expires_at: ISO8601DateFormatter().string(from: wall.addingTimeInterval(40)))
+    clock.observe([fresh], wall: wall.addingTimeInterval(16), tick: tick.advanced(by: .seconds(16)))
+    #expect(clock.accepts(fresh, wall: wall.addingTimeInterval(30), tick: tick.advanced(by: .seconds(30))))
+}
+
+@Test @MainActor func guestObservedPlaybackStaysMetadataOnlyAndLeavesNoPublicFlowAfterDisconnect() async throws {
+    let wire = GuestFixtureTransport(); wire.setObserved(true)
+    let model = try await joinedGuest(wire)
+    #expect(model.observedPlayback.count == 1)
+    #expect(model.publicRows.map(\.id) == ["moment:public-moment", "playback:public-observation"])
+    #expect(model.observedPlayback.first?.isCurrent(at: Date()) == true)
+    model.draft = "Tell me about the current music"
+    await model.send(language: "en")
+    let call = try #require(wire.recorded.last(where: { $0.action == .ask }))
+    let body = try #require(JSONSerialization.jsonObject(with: call.body) as? [String: Any])
+    #expect(body["selected_moment"] == nil && body["selected_entry"] == nil)
+    model.disconnect()
+    #expect(model.observedPlayback.isEmpty && model.publicRows.isEmpty)
 }

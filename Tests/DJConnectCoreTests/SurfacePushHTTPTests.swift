@@ -315,3 +315,27 @@ extension SurfacePushHTTPTests {
     }
 
 }
+
+extension SurfacePushHTTPTests {
+    @Test(.isolatedClientResources) func selectedWatchWidgetRequestKeepsOwnIdentityAndClosedCanonicalTarget() throws {
+        let raw = try #require(pushHTTPFixture("register")["request_json"] as? [String: Any])
+        let consent = try #require(raw["consent"] as? [String: Bool])
+        let identity = DJConnectIdentity(deviceID: "djconnect-watchos-ABCDEF123456", deviceName: "Watch fixture", clientType: .watchos, firmware: "4.1.0", platform: .watchos)
+        let target = ["instance_id": "watch-own-instance", "app_bundle_id": "dev.djconnect.ios.watch",
+            "extension_bundle_id": "dev.djconnect.ios.watch.complications", "widget_kind": "DJConnectComplication"]
+        func request(_ target: [String: String], version: String = "26.0") -> DJConnectSurfacePushRequest? {
+            .init(identity: identity, sessionID: raw["session_id"] as! String, operationID: raw["operation_id"] as! String,
+                platform: "watchos", osVersion: version, target: target, token: Data(repeating: 1, count: 32),
+                environment: "sandbox", consent: consent, expected: nil)
+        }
+        let selected = try #require(request(target))
+        let body = try #require(JSONSerialization.jsonObject(with: selected.bytes) as? [String: Any])
+        #expect(body["client_type"] as? String == "watchos" && body["platform"] as? String == "watchos")
+        #expect(body["target"] as? [String: String] == target)
+        #expect(request(target, version: "25.0") == nil)
+        var phone = target; phone["app_bundle_id"] = "dev.djconnect.ios"
+        #expect(request(phone) == nil)
+        var alias = target; alias["widget_kind"] = "DJConnectNowPlayingComplication"
+        #expect(request(alias) == nil)
+    }
+}

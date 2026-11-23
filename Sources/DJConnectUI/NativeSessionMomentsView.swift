@@ -1297,7 +1297,19 @@ struct SessionPlaybackCardButton: View {
             .presentationCompactAdaptation(.popover)
         }
         }
-        .sheet(isPresented: $showsInsight) { TrackInsightView(model: model) }
+        .sheet(isPresented: $showsInsight) {
+            VStack(spacing: 0) {
+                HStack {
+                    Spacer()
+                    Button(DJConnectLocalization.localized(key: "ui.close", language: model.language)) { showsInsight = false }
+                        .accessibilityIdentifier("session-track-insight-close")
+                }.padding()
+                TrackInsightView(model: model)
+            }
+            #if os(macOS)
+            .frame(minWidth: 640, minHeight: 600)
+            #endif
+        }
         .onChange(of: context) { _, _ in showsPlayback = false; showsInsight = false }
         .onChange(of: canOpenPlayback) { _, allowed in if !allowed { showsPlayback = false } }
         .onChange(of: scenePhase) { _, phase in if phase != .active { showsPlayback = false } }

@@ -155,7 +155,7 @@ enum DJConnectSurfacePushV3Data {
     private static func valid(_ receipt: Receipt) -> Bool {
         identifier(receipt.registration_id) && identifier(receipt.generation) &&
         (1..<9_007_199_254_740_991).contains(receipt.revision) && identifier(receipt.state) && safePositive(receipt.expires_at_ms) &&
-        receipt.token_role == "widget" && ["ios", "ipados", "macos"].contains(receipt.platform) &&
+        receipt.token_role == "widget" && ["ios", "ipados", "macos", "watchos"].contains(receipt.platform) &&
         optionalIdentifier(receipt.last_error) && receipt.cache_policy == "private,no-store"
     }
 

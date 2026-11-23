@@ -4608,7 +4608,8 @@ private struct DJConnectWatchCompanionPages: View {
         }
         .onChange(of: model.watchHomeOpenSequence) { _, _ in page = 0; flowPosition = 0; destination = nil }
         .onChange(of: model.watchMomentOpenIntent, initial: true) { _, intent in
-            if let intent { destination = .notification(intent) }
+            if let intent { page = 0; destination = .notification(intent) }
+            else if case .notification = destination { page = 0; destination = nil }
         }
         .onChange(of: demoSession?.id) { _, _ in
             page = 0; flowPosition = 0; destination = nil

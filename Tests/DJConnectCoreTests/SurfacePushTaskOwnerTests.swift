@@ -22,11 +22,13 @@ private final class OwnerFixture: @unchecked Sendable {
     let gate: OwnerGate?
     let gatedPart: String?
     let uncertain: Bool
+    let receiptPlatform: String
     let expiry = Int64(Date().timeIntervalSince1970 * 1000) + 60_000
     private let lock = NSLock()
     private var captures: [URLRequest] = []
     private var cancellations: [String] = []
-    init(gatedPart: String? = nil, uncertain: Bool = false) {
+    init(gatedPart: String? = nil, uncertain: Bool = false, receiptPlatform: String = "ios") {
+        self.receiptPlatform = receiptPlatform
         self.gatedPart = gatedPart; self.gate = gatedPart == nil ? nil : OwnerGate(); self.uncertain = uncertain
         OwnerProtocol.add(self)
     }
@@ -54,7 +56,7 @@ private final class OwnerFixture: @unchecked Sendable {
         let expected = body["expected_registration"] as? [String: Any]
         let revision = (expected?["revision"] as? Int ?? 0) + 1
         let receipt: [String: Any] = ["registration_id": "model-reg", "generation": "model-generation", "revision": revision,
-            "state": "registered", "expires_at_ms": expiry, "token_role": "widget", "platform": "ios", "last_error": NSNull(), "cache_policy": "private,no-store"]
+            "state": "registered", "expires_at_ms": expiry, "token_role": "widget", "platform": receiptPlatform, "last_error": NSNull(), "cache_policy": "private,no-store"]
         let operation: [String: Any] = ["contract_version": 1, "operation_id": op, "operation_epoch": "model-epoch",
             "phase": "confirmed", "expires_at_ms": expiry, "result_available": false, "response_status": 200, "error": NSNull()]
         let result: [String: Any]
@@ -415,5 +417,23 @@ private final class OwnerProtocol: URLProtocol, @unchecked Sendable {
         model.markInactiveSession()
         #expect(model.nativeWidgetPushOwner.phase == .withdrawn && model.nativeActivityPushOwner.phase == .withdrawn)
         #expect(f.requests.isEmpty)
+    }
+}
+
+extension SurfacePushTaskOwnerTests {
+    @Test(.isolatedClientResources) func modeledWatchReceiptCannotAuthorizeOriginalPhoneCandidate() async throws {
+        let fixture = OwnerFixture(receiptPlatform: "watchos")
+        defer { fixture.close() }
+        let original = admission()
+        let owner = Owner(role: .widget, modelProvider: { _, _ in original })
+        defer { owner.withdrawLocally() }
+        owner.bind(try fixture.scope()); owner.observe(try candidate())
+        owner.register(using: fixture.client(), observationGeneration: owner.observationGeneration)
+        try await settle(owner)
+        #expect(owner.phase == .uncertain)
+        #expect(owner.coordinate == nil && !owner.hasReadCustody)
+        #expect(fixture.requests.count == 2)
+        owner.register(using: fixture.client(), observationGeneration: owner.observationGeneration)
+        #expect(fixture.requests.count == 2)
     }
 }

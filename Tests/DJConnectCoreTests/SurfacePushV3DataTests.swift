@@ -137,7 +137,7 @@ private final class SurfacePushV3FixtureAnchor: NSObject {}
         for (parent, key, bad) in [
             ("registration", "expires_at_ms", 1792844680882 as Any),
             ("registration", "revision", true as Any), ("registration", "revision", 0 as Any),
-            ("registration", "token_role", "live_activity_update" as Any), ("registration", "platform", "watchos" as Any),
+            ("registration", "token_role", "live_activity_update" as Any), ("registration", "platform", "visionos" as Any),
             ("registration", "state", "unknown" as Any), ("registration", "last_error", "surface_relay_outcome_unknown" as Any),
             ("background_read", "registration_id", "other" as Any), ("background_read", "expires_at_ms", 1 as Any),
             ("background_read", "credential", "bearer" as Any), ("background_read", "scope", "session" as Any),
