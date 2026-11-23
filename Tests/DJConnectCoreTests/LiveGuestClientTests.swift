@@ -9,13 +9,15 @@ private final class GuestFixtureTransport: DJConnectGuestTransporting, @unchecke
     private var calls: [Call] = []
     private var state = "queue_confirmed"
     private var wrongGuest = false
+    private var hasArtwork = false
+    func setArtwork(_ value: Bool) { lock.withLock { hasArtwork = value } }
     var recorded: [Call] { lock.withLock { calls } }
     func setState(_ value: String) { lock.withLock { state = value } }
     func withdrawGuest() { lock.withLock { wrongGuest = true } }
     func cancel() {}
 
     func send(_ action: DJConnectGuestTransport.Action, body: Data, bearer: String?) async throws -> Data {
-        let snapshot = lock.withLock { calls.append(.init(action: action, body: body, bearer: bearer)); return (state, wrongGuest) }
+        let snapshot = lock.withLock { calls.append(.init(action: action, body: body, bearer: bearer)); return (state, wrongGuest, hasArtwork) }
         let caps: [String: Any] = ["shared_information": true, "request_song": true,
             "owner_controls": false, "profile_history": false, "music_dna": false]
         let request: [String: Any] = ["request_id": "own-request", "title": "Strong", "state": snapshot.0]
@@ -27,12 +29,17 @@ private final class GuestFixtureTransport: DJConnectGuestTransporting, @unchecke
         case .renew:
             value = ["guest_id": "guest-one", "lease_expires_in": 60.0, "capabilities": caps]
         case .context:
+            var playback: [String: Any] = ["item_id": "current-recording", "state": "playing", "title": "Strong", "artist": "London Grammar"]
+            if snapshot.2 { playback["artwork"] = ["reference": String(repeating: "a", count: 64), "item_id": "current-recording", "expires_at": ISO8601DateFormatter().string(from: Date().addingTimeInterval(30))] }
             value = ["guest_id": snapshot.1 ? "other-guest" : "guest-one", "capabilities": caps,
-                "playback": ["item_id": "current-recording", "state": "playing", "title": "Strong", "artist": "London Grammar"],
+                "playback": playback,
                 "moments": [["moment_id": "public-moment", "title": "Public DJ contribution", "summary": "Public text"]]]
         case .ask, .request:
             value = ["success": true, "guest_id": "guest-one", "text": "Je verzoek is ontvangen.", "guest_request": request]
         case .requestStatus: value = ["request": request]
+        case .artwork:
+            try await Task.sleep(for: .milliseconds(30))
+            return Data([1, 2, 3])
         case .leave, .emotion: value = ["success": true]
         }
         return try JSONSerialization.data(withJSONObject: value)
@@ -92,4 +99,26 @@ private final class GuestFixtureTransport: DJConnectGuestTransporting, @unchecke
     let wire = GuestFixtureTransport(), model = try await joinedGuest(wire)
     wire.withdrawGuest(); await model.refreshForDisplay()
     #expect(!model.isJoined && model.moments.isEmpty && model.playback == nil && model.messages.isEmpty)
+}
+
+@Test @MainActor func guestArtworkUsesOnlyCurrentGuestPurposeAndCannotReturnAfterLeave() async throws {
+    let wire = GuestFixtureTransport()
+    wire.setArtwork(true)
+    let model = try await joinedGuest(wire)
+    let art = try #require(model.playback?.artwork)
+    #expect(await model.loadArtwork(art) == Data([1, 2, 3]))
+    let call = try #require(wire.recorded.last(where: { $0.action == .artwork }))
+    let body = try #require(JSONSerialization.jsonObject(with: call.body) as? [String: Any])
+    #expect(Set(body.keys) == ["contract_version", "issuer_epoch", "guest_id", "reference"])
+    #expect(call.bearer == "djcg_synthetic")
+    wire.setArtwork(false); await model.refreshForDisplay()
+    #expect(!model.artworkIsCurrent(art))
+    #expect(await model.loadArtwork(art) == nil)
+    wire.setArtwork(true); await model.refreshForDisplay()
+    let fresh = try #require(model.playback?.artwork)
+    let pending = Task { await model.loadArtwork(fresh) }
+    try await Task.sleep(for: .milliseconds(1))
+    model.disconnect()
+    #expect(await pending.value == nil)
+    #expect(await model.loadArtwork(fresh) == nil)
 }

@@ -222,6 +222,9 @@ struct AskDJFullCatalogueReference: View {
                 }
                 Text(DJConnectLocalization.localized(key: "ui.askdj.help.catalogue.instructions", language: language))
                     .foregroundStyle(.secondary)
+                Text(DJConnectLocalization.localized(key: "ui.ask_dj.accuracy_notice", language: language))
+                    .font(.caption).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("ask-dj-help-accuracy-notice")
                 if busy { ProgressView() }
                 ForEach(sections) { section in
                     Text(section.title).font(.headline).accessibilityAddTraits(.isHeader)

@@ -7981,6 +7981,11 @@ private struct ForecastScenarioResponses: Sendable {
 
     private func forecastResponse() throws -> (Int, Data, TimeInterval) {
         let reply = forecastReplies.read()
+        if !forecastReplies.isFirstRead() {
+            if fence == "network-refresh" { throw URLError(.timedOut) }
+            if fence == "malformed-refresh" { return (200, Data("not-json".utf8), 0) }
+            if fence == "auth-refresh" { return (401, Data(#"{"success":false,"error":"device_token_invalid"}"#.utf8), 0) }
+        }
         if ["context-read-replacement", "disconnect-during-read"].contains(fence), forecastReplies.isFirstRead() {
             throw HistoryWireHeldResponse(data: reply, gate: gate)
         }
@@ -8075,6 +8080,17 @@ private struct ForecastScenarioResponses: Sendable {
 }
 
 @MainActor private func verifyAcceptedForecastFences(model: DJConnectAppModel, fence: String, id: String) async throws {
+    if ["network-refresh", "malformed-refresh", "auth-refresh"].contains(fence) {
+        let original = try #require(model.visibleSessionForecast(at: Date()))
+        await model.refreshSessionForecast()
+        if fence == "network-refresh" {
+            #expect(model.forecastCursor?.projection == original)
+            let expiry = try #require(DJConnectSessionForecast.timestamp(original.valid_until))
+            #expect(model.visibleSessionForecast(at: expiry.addingTimeInterval(1)) == nil)
+            model.sessionHistory.reset()
+            #expect(model.visibleSessionForecast(at: Date()) == nil)
+        } else { #expect(model.forecastCursor?.projection == nil) }
+    }
     if fence == "sequenced-withdrawal-equal-read" {
         let floor = try #require(model.forecastCursor?.revisionFloor)
         let watermark = model.activeDJSession?.broadcast.delivery?.snapshotWatermark ?? 0
@@ -8163,7 +8179,7 @@ private struct ForecastScenarioResponses: Sendable {
 #endif
 
 // Native Forecast crosses ordinary paired transport; all replies here are explicit fixtures.
-@Test(.isolatedClientResources, arguments: ["current", "background", "owner-reset", "context-same", "context-older", "persona-conflict", "unsequenced-live", "unsequenced-live-during-read", "context-locale", "context-direction", "context-read-replacement", "transport-recovery", "disconnect-during-read", "sequenced-event-withdrawal", "sequenced-snapshot-withdrawal", "sequenced-withdrawal-equal-read"]) @MainActor
+@Test(.isolatedClientResources, arguments: ["current", "background", "owner-reset", "context-same", "context-older", "persona-conflict", "unsequenced-live", "unsequenced-live-during-read", "context-locale", "context-direction", "context-read-replacement", "transport-recovery", "disconnect-during-read", "sequenced-event-withdrawal", "sequenced-snapshot-withdrawal", "sequenced-withdrawal-equal-read", "network-refresh", "malformed-refresh", "auth-refresh"]) @MainActor
 func forecastNativeOwnerReadRetainsDraftAndFencesLateBackgroundResponse(fence: String) async throws {
     let input = try ForecastScenarioInput.make(fence: fence)
     let id = input.id

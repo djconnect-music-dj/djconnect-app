@@ -329,3 +329,23 @@ import DJConnectUI
     #expect(try !DJConnectActivityPushToken.recordIfCurrent(replacement, in: defaults))
     #expect(DJConnectActivityPushToken.load(from: defaults) == nil)
 }
+
+
+@Test @MainActor func watchWidgetPushCandidateCannotBorrowPhoneTargetOrMomentConsent() throws {
+    let suite = "watch-push-test-" + UUID().uuidString
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let token = try #require(DJConnectWatchWidgetPushToken(token: Data(repeating: 9, count: 32),
+        extensionBundleID: "dev.djconnect.ios.watch.complications", widgetKinds: ["DJConnectComplication"]))
+    try DJConnectWatchWidgetPushToken.replace(token, in: defaults)
+    #expect(DJConnectWatchWidgetPushToken.load(from: defaults) == token)
+    #expect(DJConnectWidgetPushToken.load(from: defaults) == nil)
+    #expect(DJConnectWatchWidgetPushToken(token: token.token, extensionBundleID: "dev.djconnect.ios.track-insight-widget", widgetKinds: ["DJConnectComplication"]) == nil)
+    #expect(DJConnectWatchWidgetPushToken(token: token.token, extensionBundleID: DJConnectWatchWidgetPushToken.extensionBundleID, widgetKinds: ["DJConnectNowPlayingComplication"]) == nil)
+    let owner = DJConnectWatchWidgetPushOwner()
+    let scope = try #require(DJConnectSurfacePushTaskOwner.Scope(installation: "watch-install", binding: "watch-binding", sessionID: "session-one", origin: URL(string: "https://ha.example")!, deviceID: "djconnect-watchos-test", clientType: "watchos"))
+    owner.bind(scope) // A generic scope without this channel's consent cannot become ready.
+    #expect(owner.phase == .withdrawn)
+    try DJConnectWatchWidgetPushToken.replace(nil, in: defaults)
+    #expect(DJConnectWatchWidgetPushToken.load(from: defaults) == nil)
+}

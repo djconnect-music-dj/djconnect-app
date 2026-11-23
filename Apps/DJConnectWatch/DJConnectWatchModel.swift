@@ -2599,6 +2599,11 @@ final class DJConnectWatchModel: NSObject, ObservableObject {
         }
     }
 
+    func canPresentWatchMomentNotification(_ intent: DJConnectWatchMomentOpenIntent) -> Bool {
+        watchMomentNotificationsEnabled && isAppForeground && canUseBackend && !isDemoMode &&
+            intent.isPending() && foregroundSession.current()?.session?.id == intent.sessionID
+    }
+
     @Published private(set) var watchHomeOpenSequence = 0
     func openWatchHome(from url: URL) {
         guard url.absoluteString == "djconnect://" ||

@@ -1,5 +1,6 @@
 import SwiftUI
 import DJConnectCore
+import ImageIO
 
 /// Guest navigation has no paired model, owner controls or personal data sources.
 struct DJConnectLiveGuestView: View {
@@ -105,6 +106,9 @@ struct DJConnectLiveGuestView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     if let playback = guest.playback {
                         VStack(alignment: .leading, spacing: 4) {
+                            if let art = playback.artwork {
+                                DJConnectGuestArtwork(guest: guest, artwork: art).frame(width: 100, height: 100)
+                            }
                             Text(playback.title ?? "").font(.title2.bold())
                             Text(playback.artist ?? "").foregroundStyle(.secondary)
                         }
@@ -130,6 +134,9 @@ struct DJConnectLiveGuestView: View {
                     TimelineView(.periodic(from: .now, by: 1)) { context in
                         ForEach(guest.sharedFlow.filter { $0.isCurrent(at: context.date) }) { item in
                             VStack(alignment: .leading, spacing: 6) {
+                                if let art = item.artwork {
+                                    DJConnectGuestArtwork(guest: guest, artwork: art).frame(width: 72, height: 72)
+                                }
                                 if let title = item.title { Text(title).font(.headline) }
                                 Text(item.content ?? item.summary ?? "")
                             }
@@ -221,5 +228,41 @@ private struct DJConnectGuestVibescape: View {
             _ = visit.setDynamics(Float(state.dynamics))
         }
         .onDisappear { visit.revoke() }
+    }
+}
+
+
+/// Only the current guest-purpose bytes render here, with original source
+/// expiry. Pixels and the guest bearer never enter a file or owner cache.
+private struct DJConnectGuestArtwork: View {
+    @ObservedObject var guest: DJConnectLiveGuestModel
+    let artwork: DJConnectLiveGuestModel.Artwork
+    @State private var image: CGImage?
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+            if guest.artworkIsCurrent(artwork), let image {
+                Image(decorative: image, scale: 1).resizable().scaledToFit()
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .djConnectBreathingArtwork()
+                    .accessibilityIdentifier("live-guest-artwork")
+            }
+        }
+        .task(id: artwork) {
+            image = nil
+            guard let bytes = await guest.loadArtwork(artwork), !Task.isCancelled,
+                  guest.artworkIsCurrent(artwork),
+                  let source = CGImageSourceCreateWithData(bytes as CFData, nil),
+                  let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+                  let width = properties[kCGImagePropertyPixelWidth] as? Int,
+                  let height = properties[kCGImagePropertyPixelHeight] as? Int,
+                  width > 0, height > 0, width <= 8192, height <= 8192,
+                  width * height <= 20_000_000 else { return }
+            image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceThumbnailMaxPixelSize: 512,
+                kCGImageSourceCreateThumbnailWithTransform: true
+            ] as CFDictionary)
+        }
+        .onDisappear { image = nil }
     }
 }

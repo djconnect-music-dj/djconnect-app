@@ -444,6 +444,31 @@ public struct DJConnectWidgetPushToken: Codable, Equatable, Sendable {
     }
 }
 
+/// Watch extension-local delivery candidate. It grants neither enrollment nor a
+/// background read; it cannot be loaded as an iPhone widget token.
+public struct DJConnectWatchWidgetPushToken: Codable, Equatable, Sendable {
+    public static let storageKey = "DJConnectWatchWidgetPushToken.pending.v1"
+    public static let extensionBundleID = "dev.djconnect.ios.watch.complications"
+    public static let widgetKind = "DJConnectComplication"
+    public let token: Data
+    public let observedAt: Date
+    public init?(token: Data, extensionBundleID: String, widgetKinds: [String], at now: Date = Date()) {
+        guard (16...2048).contains(token.count), extensionBundleID == Self.extensionBundleID,
+              widgetKinds.contains(Self.widgetKind) else { return nil }
+        self.token = token; observedAt = now
+    }
+    public static func replace(_ value: Self?, in defaults: UserDefaults) throws {
+        if let value { defaults.set(try JSONEncoder().encode(value), forKey: storageKey) }
+        else { defaults.removeObject(forKey: storageKey) }
+    }
+    public static func load(from defaults: UserDefaults) -> Self? {
+        guard let data = defaults.data(forKey: storageKey), data.count <= 4096,
+              let value = try? JSONDecoder().decode(Self.self, from: data) else { return nil }
+        return Self(token: value.token, extensionBundleID: extensionBundleID,
+                    widgetKinds: [widgetKind], at: value.observedAt)
+    }
+}
+
 /// ActivityKit delivery token for an already admitted local presentation.
 /// Separate from widget/app tokens. Pending plumbing grants no server authority.
 public struct DJConnectActivityPushToken: Codable, Equatable, Sendable {

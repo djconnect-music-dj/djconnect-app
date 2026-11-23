@@ -1764,6 +1764,23 @@ struct SessionTimestampText: View {
 }
 
 
+/// Stable two-column card layout on iPad/Mac; compact phone cards keep their stack.
+struct SessionContributionColumns<Artwork: View, Detail: View>: View {
+    let horizontal: Bool
+    @ViewBuilder let artwork: () -> Artwork
+    @ViewBuilder let detail: () -> Detail
+    private var layout: AnyLayout {
+        horizontal ? AnyLayout(HStackLayout(alignment: .top, spacing: 16))
+            : AnyLayout(VStackLayout(alignment: .leading, spacing: 10))
+    }
+    var body: some View {
+        layout {
+            artwork()
+            detail().frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
 struct SessionEntryView: View, Equatable {
     @Environment(\.openURL) private var openURL
     let entry: DJConnectHistoryEntry
@@ -1839,10 +1856,14 @@ struct SessionEntryView: View, Equatable {
                 } else {
                     VStack(alignment: .leading, spacing: 10) {
                         if entry.momentType == "music_origin", let origin = entry.musicOrigin, origin.isValid {
-                            MusicOriginContentView(origin: origin, title: entry.title ?? "", story: entry.text ?? "", language: language,
-                                discover: opensActiveComposer ? artworkModel.map { model in
-                                    { discoverMusicOrigin(origin, sessionID: entry.sessionID, model: model, begin: askAction) }
-                                } : nil)
+                            SessionContributionColumns(horizontal: horizontalContribution) {
+                                if horizontalContribution { entryArtwork }
+                            } detail: {
+                                MusicOriginContentView(origin: origin, title: entry.title ?? "", story: entry.text ?? "", language: language,
+                                    discover: opensActiveComposer ? artworkModel.map { model in
+                                        { discoverMusicOrigin(origin, sessionID: entry.sessionID, model: model, begin: askAction) }
+                                    } : nil)
+                            }
                             Button(DJConnectLocalization.localized(key: "ui.live_impression.ask", language: language), action: askAction).frame(minHeight: 44)
                         } else if entry.momentType == "live_impression", let impression = entry.liveImpression,
                            impression.isValid, let model = artworkModel {
@@ -1851,25 +1872,17 @@ struct SessionEntryView: View, Equatable {
                                 sessionID: entry.sessionID, target: .entry(entry.id), model: model)
                             Button(DJConnectLocalization.localized(key: "ui.live_impression.ask", language: language), action: askAction)
                                 .frame(minHeight: 44)
-                        } else if horizontalPlayback {
-                            HStack(alignment: .top, spacing: 16) {
+                        } else if horizontalPlayback || horizontalContribution {
+                            SessionContributionColumns(horizontal: true) {
                                 entryArtwork
-                                playbackDescription
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            } detail: {
+                                if horizontalPlayback { playbackDescription }
+                                else { contributionDescription }
                             }
                             .padding(.trailing, replayAction != nil ? 88 : 40)
                         } else {
                             entryArtwork
-                            entryHeading
-                            HStack(alignment: .top, spacing: 12) {
-                                if let settingsConfirmationMood {
-                                    DJPersonaAvatarView(confirmedMood: settingsConfirmationMood, language: language)
-                                        .frame(width: 44, height: 44)
-                                        .accessibilityHidden(true)
-                                }
-                                SessionHighlightedText(text: entry.text ?? "", highlights: highlights).font(.title3)
-                                    .modifier(ContributionContentAction(question: contributionQuestion, action: contributionAction))
-                            }
+                            contributionDescription
                         }
                         SessionTimestampText(value: entry.occurredAt, language: language).font(.caption).foregroundStyle(.secondary)
                         if entry.momentType == "live_impression" {
@@ -1951,6 +1964,28 @@ struct SessionEntryView: View, Equatable {
         #else
         return true
         #endif
+    }
+    private var horizontalContribution: Bool {
+        guard entry.kind == .djMoment,
+              ["cover", "playback_thumbnail", "contextual_artist"].contains(entry.sessionMedia?.artwork.role ?? "") else { return false }
+        #if os(iOS)
+        return UIDevice.current.userInterfaceIdiom == .pad
+        #else
+        return true
+        #endif
+    }
+    private var contributionDescription: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            entryHeading
+            HStack(alignment: .top, spacing: 12) {
+                if let settingsConfirmationMood {
+                    DJPersonaAvatarView(confirmedMood: settingsConfirmationMood, language: language)
+                        .frame(width: 44, height: 44).accessibilityHidden(true)
+                }
+                SessionHighlightedText(text: entry.text ?? "", highlights: highlights).font(.title3)
+                    .modifier(ContributionContentAction(question: contributionQuestion, action: contributionAction))
+            }
+        }
     }
     @ViewBuilder private var entryArtwork: some View {
         if let media = entry.sessionMedia, let model = artworkModel {

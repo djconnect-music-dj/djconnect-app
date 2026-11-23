@@ -3733,6 +3733,8 @@ private struct AskDJWatchActionPopover: View {
     @EnvironmentObject private var model: DJConnectWatchModel
     @State private var isPresented = false
     let offer: DJConnectWatchModel.LiveAnswerActions
+    var automaticallyPresentsOutputChoice = false
+    @State private var presentedAutomaticChoice = false
 
     var body: some View {
         TimelineView(.explicit([Date(), offer.expiresAt])) { _ in
@@ -3763,6 +3765,14 @@ private struct AskDJWatchActionPopover: View {
                     .watchStandardBackground()
                 }
             }
+        }
+        .task(id: offer.answerID) {
+            let actions = availableActions
+            guard automaticallyPresentsOutputChoice, !presentedAutomaticChoice,
+                  actions.contains(where: \.isOutputAction),
+                  !actions.contains(where: \.isActiveOutputAction) else { return }
+            presentedAutomaticChoice = true
+            isPresented = true
         }
     }
 
@@ -5650,7 +5660,7 @@ private struct DJConnectWatchCompanionVoiceView: View {
                         if let binding = state.current()?.settings.binding,
                            let offer = model.answerActions(id: model.lastWatchVoiceAnswerID, binding: binding, sessionID: context.sessionID),
                            offer.text == reply {
-                            AskDJWatchActionPopover(offer: offer)
+                            AskDJWatchActionPopover(offer: offer, automaticallyPresentsOutputChoice: true)
                         }
                     }
                 } else if case .failed(let message) = model.voiceState {

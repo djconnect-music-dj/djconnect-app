@@ -2038,14 +2038,17 @@ public final class DJConnectAppModel: ObservableObject {
 
     /// Shared read/presentation admission; retry must not advertise an operation
     /// that the current owner or runtime cannot perform.
-    var canRefreshSessionForecast: Bool {
+    private var forecastPreservedTransportScope: ForecastReadContext?
+    private var hasSessionForecastOwner: Bool {
         canRefreshSessionHistory && isRuntimeCompatible && sessionHistory.hasAuthorizedOwner &&
-            !djSessionIsRecovering && !djSessionLiveUnavailable && haConnectionMode != .offline &&
-            activeDJSession?.runtimeState == "active"
+            !djSessionIsRecovering && !djSessionLiveUnavailable && activeDJSession?.runtimeState == "active"
     }
+    var canRefreshSessionForecast: Bool { hasSessionForecastOwner && haConnectionMode != .offline }
 
     public func visibleSessionForecast(at date: Date) -> DJConnectSessionForecast? {
-        guard canRefreshSessionForecast, let session = activeDJSession, forecastAvailable,
+        guard hasSessionForecastOwner, let session = activeDJSession, forecastAvailable,
+              haConnectionMode != .offline || forecastPreservedTransportScope == ForecastReadContext(
+                scope: ForecastScope(session), ownerEpoch: sessionHistory.responseEpoch, authority: forecastAuthorityGeneration),
               forecastEpoch == sessionHistory.responseEpoch,
               forecastCursor?.sessionID == session.id, forecastScope == ForecastScope(session) else { return nil }
         if forecastCursor?.projection?.current_anchor != nil && session.broadcast.playback?.state != "playing" { return nil }
@@ -2080,10 +2083,21 @@ public final class DJConnectAppModel: ObservableObject {
                   canRefreshSessionHistory, !djSessionIsRecovering, !djSessionLiveUnavailable,
                   readContext.authority == forecastAuthorityGeneration,
                   activeDJSession.map(ForecastScope.init) == scope else { return }
+            forecastPreservedTransportScope = nil
             acceptSessionForecast(projection)
         } catch {
             if Task.isCancelled || error is CancellationError || (error as? URLError)?.code == .cancelled { return }
             guard generation == forecastGeneration, epoch == sessionHistory.responseEpoch else { return }
+            if (error as? DJConnectError)?.isTransientConnectivityFailure == true,
+               readContext.authority == forecastAuthorityGeneration,
+               forecastEpoch == epoch, activeDJSession.map(ForecastScope.init) == scope,
+               hasSessionForecastOwner {
+                forecastPreservedTransportScope = readContext
+                // Keep only the original still-bounded read. No new receipt or
+                // deadline is created; normal source/owner/expiry gates remain.
+                return
+            }
+            forecastPreservedTransportScope = nil
             forecastCursor?.withdraw()
             _ = sessionHistory.withdrawAuthority(for: error)
         }
@@ -8213,7 +8227,7 @@ public final class DJConnectAppModel: ObservableObject {
 
     private func applyPairingAvailabilityFailure(_ error: DJConnectError) {
         switch error {
-        case let .network(message):
+        case let .network(message, _):
             applyConnectionUnavailableState(message: message)
         case let .authStale(_, message):
             recoverFromStalePairing(message: message)
@@ -8343,7 +8357,7 @@ public final class DJConnectAppModel: ObservableObject {
 
     private func applyPairingTransportRejection(_ error: DJConnectError) {
         switch error {
-        case let .network(message):
+        case let .network(message, _):
             pairingStatus = .unpaired
             pairingMessage = userFacingPairingNetworkMessage(from: message)
         case .routeMissing:
@@ -12262,7 +12276,7 @@ public final class DJConnectAppModel: ObservableObject {
             return true
         }
         guard let djConnectError = error as? DJConnectError,
-              case let .network(message) = djConnectError else {
+              case let .network(message, _) = djConnectError else {
             return false
         }
         let normalized = message.lowercased()
@@ -18628,7 +18642,7 @@ public final class DJConnectAppModel: ObservableObject {
             return true
         }
         if let djConnectError = error as? DJConnectError,
-           case let .network(message) = djConnectError {
+           case let .network(message, _) = djConnectError {
             let lowercasedMessage = message.lowercased()
             return lowercasedMessage.contains("cancelled")
                 || lowercasedMessage.contains("canceled")

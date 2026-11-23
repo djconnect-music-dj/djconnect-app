@@ -810,7 +810,7 @@ public actor DJConnectHomeAssistantWebSocketFastPath: DJConnectWebSocketFastPath
 
     private static func describeSetupFailure(_ error: DJConnectError) -> String {
         switch error {
-        case let .network(message):
+        case let .network(message, _):
             message
         case let .invalidConfiguration(message):
             message

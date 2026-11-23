@@ -717,6 +717,20 @@ final class DJConnectIOSUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["screen-pairing"].waitForExistence(timeout: 5))
     }
 
+    func testPlaybackEqualizerOpensCurrentTrackInsight() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--runtime-fixture=review_demo_active_session", "--screenshot-screen=dj-session", "-AppleLanguages", "(nl)", "-AppleLocale", "nl_NL"]
+        app.launch()
+        let equalizer = app.buttons["session-equalizer-open-insight"]
+        XCTAssertTrue(equalizer.waitForExistence(timeout: 12))
+        XCTAssertFalse(app.descendants(matching: .any)["ask-dj-accuracy-notice"].exists)
+        equalizer.tap()
+        XCTAssertTrue(app.staticTexts["Track Insight (demo)"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["Midnight City"].firstMatch.exists)
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Playback-equalizer-current-TrackInsight"; screenshot.lifetime = .keepAlways; add(screenshot)
+    }
+
     func testMalformedGuestDeepLinkNeverShowsAdmissionConfirmation() throws {
         let app = launchApp()
         app.open(try XCTUnwrap(URL(string: "djconnect://join#v=1&ha_url=https%3A%2F%2Fha.example.com&invitation_secret=invalid")))

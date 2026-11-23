@@ -17,7 +17,7 @@ public protocol DJConnectGuestTransporting: Sendable {
 public final class DJConnectGuestTransport: DJConnectGuestTransporting, @unchecked Sendable {
     public enum Action: String, Sendable {
         case redeem, renew, leave, context, ask, request
-        case emotion
+        case emotion, artwork
         case requestStatus = "request/status"
     }
     public enum Failure: Error, Sendable { case invalidResponse, unavailable, withdrawn }
@@ -54,11 +54,14 @@ public final class DJConnectGuestTransport: DJConnectGuestTransporting, @uncheck
         guard let http = response as? HTTPURLResponse,
               response.url?.scheme == "https", response.url?.host == origin.host,
               response.url?.port == origin.port,
-              http.value(forHTTPHeaderField: "Content-Type")?.lowercased().hasPrefix("application/json") == true,
-              response.expectedContentLength <= 65536 else { throw Failure.invalidResponse }
+              response.expectedContentLength <= (action == .artwork ? 256000 : 65536) else { throw Failure.invalidResponse }
+        let media = http.value(forHTTPHeaderField: "Content-Type")?.lowercased().split(separator: ";").first.map(String.init)
+        let expectedImage = action == .artwork && http.statusCode == 200
+        guard expectedImage ? ["image/jpeg", "image/png", "image/webp"].contains(media ?? "") : media == "application/json" else { throw Failure.invalidResponse }
+        let limit = expectedImage ? 256000 : 65536
         var data = Data()
         for try await byte in bytes {
-            guard data.count < 65536 else { throw Failure.invalidResponse }
+            guard data.count < limit else { throw Failure.invalidResponse }
             data.append(byte)
         }
         if [401, 403, 410].contains(http.statusCode) { throw Failure.withdrawn }

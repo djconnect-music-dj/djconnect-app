@@ -215,3 +215,61 @@ func forecastInitialPresentationWaitsForCurrentContextRead() {
             "Re-entering Horizon starts fresh even after an earlier unavailable result")
 }
 #endif
+
+@Test func forecastTransportRetentionNeverUsesOpaqueTextOrTLSAuthenticationErrors() {
+    for code: URLError.Code in [.timedOut, .networkConnectionLost, .notConnectedToInternet, .cannotFindHost, .dnsLookupFailed] {
+        #expect(DJConnectError.network(message: "typed fixture", code: code).isTransientConnectivityFailure)
+    }
+    for code: URLError.Code in [.userAuthenticationRequired, .userCancelledAuthentication, .serverCertificateUntrusted,
+                                .serverCertificateHasBadDate, .secureConnectionFailed, .cancelled, .unknown] {
+        #expect(!DJConnectError.network(message: "timed out", code: code).isTransientConnectivityFailure)
+    }
+    #expect(!DJConnectError.network(message: "The connection timed out").isTransientConnectivityFailure)
+    #expect(!DJConnectError.authStale(statusCode: 401, message: nil).isTransientConnectivityFailure)
+}
+
+#if os(macOS)
+@MainActor private final class ContributionLayoutFrames {
+    var artwork: NSView?
+    var detail: NSView?
+}
+private struct ContributionLayoutProbe: NSViewRepresentable {
+    let frames: ContributionLayoutFrames
+    let artwork: Bool
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        if artwork { frames.artwork = view } else { frames.detail = view }
+        return view
+    }
+    func updateNSView(_ view: NSView, context: Context) {}
+}
+@Test(.isolatedClientResources, arguments: [320.0, 768, 1024])
+@MainActor func contributionArtworkAndTextUseSeparateColumns(_ width: Double) async throws {
+    for type in ["music_announcement", "album", "artist", "music_origin"] {
+        let frames = ContributionLayoutFrames()
+        let content = SessionContributionColumns(horizontal: true) {
+            Color.indigo.frame(width: 72, height: 72)
+                .background(ContributionLayoutProbe(frames: frames, artwork: true))
+        } detail: {
+            Text(type + ": " + String(repeating: "Long contribution wraps naturally. ", count: 8))
+                .font(.title3).fixedSize(horizontal: false, vertical: true)
+                .background(ContributionLayoutProbe(frames: frames, artwork: false))
+        }.frame(width: width).environment(\.dynamicTypeSize, .accessibility2)
+        let host = NSHostingView(rootView: content)
+        let height = max(100, ceil(host.fittingSize.height))
+        let window = NSWindow(contentRect: .init(x: -20000, y: -20000, width: width, height: height),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false; window.contentView = host; window.orderBack(nil)
+        defer { window.close() }
+        try await Task.sleep(for: .milliseconds(30))
+        host.layoutSubtreeIfNeeded()
+        let art = try #require(frames.artwork), detail = try #require(frames.detail)
+        let artRect = art.convert(art.bounds, to: host), textRect = detail.convert(detail.bounds, to: host)
+        #expect(textRect.minX >= artRect.maxX + 15)
+        #expect(textRect.width > 0 && textRect.maxX <= width + 1)
+        let textTop = host.isFlipped ? textRect.minY : textRect.maxY
+        let artTop = host.isFlipped ? artRect.minY : artRect.maxY
+        #expect(abs(textTop - artTop) < 1)
+    }
+}
+#endif

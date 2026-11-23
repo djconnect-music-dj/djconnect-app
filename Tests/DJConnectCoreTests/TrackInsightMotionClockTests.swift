@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import DJConnectCore
 @testable import DJConnectUI
 
 struct TrackInsightMotionClockTests {
@@ -31,6 +32,31 @@ struct TrackInsightMotionClockTests {
         clock.update(running: true, rate: 1, at: 1000)
         #expect(clock.frame(at: 1000) == frozen)
         #expect(clock.frame(at: 1001).travel == frozen.travel + 1)
+    }
+
+    @Test func wholeTrackProgressDoesNotStopAtReadLeaseBoundaries() {
+        let start = Date(timeIntervalSince1970: 1000)
+        var playback = DJConnectPlayback(uri: "spotify:track:first", isPlaying: true,
+            trackName: "Same title", artistName: "Artist", progressMS: 0, durationMS: 90_000)
+        var anchor = TrackVibePlaybackAnchor()
+        anchor.update(from: playback, at: start)
+        for second in [14.0, 16, 30, 60, 90, 100] {
+            let phase = TrackVibePlaybackPhase(playback: playback, anchor: anchor, date: start.addingTimeInterval(second))
+            #expect(abs(phase.positionSeconds - min(second, 90)) < 0.001)
+            #expect(abs(phase.progress - min(second / 90, 1)) < 0.001)
+        }
+        playback.progressMS = 40_000; playback.isPlaying = false
+        anchor.update(from: playback, at: start.addingTimeInterval(40))
+        #expect(TrackVibePlaybackPhase(playback: playback, anchor: anchor, date: start.addingTimeInterval(60)).positionSeconds == 40)
+        playback.isPlaying = true
+        anchor.update(from: playback, at: start.addingTimeInterval(60))
+        #expect(TrackVibePlaybackPhase(playback: playback, anchor: anchor, date: start.addingTimeInterval(70)).positionSeconds == 50)
+        playback.progressMS = 5_000
+        anchor.update(from: playback, at: start.addingTimeInterval(70))
+        #expect(TrackVibePlaybackPhase(playback: playback, anchor: anchor, date: start.addingTimeInterval(71)).positionSeconds == 6)
+        playback.uri = "spotify:track:second"; playback.progressMS = 0
+        anchor.update(from: playback, at: start.addingTimeInterval(71))
+        #expect(TrackVibePlaybackPhase(playback: playback, anchor: anchor, date: start.addingTimeInterval(72)).positionSeconds == 1)
     }
 
     @Test func wrappedParticleIsInvisibleOnBothSidesOfSeam() {

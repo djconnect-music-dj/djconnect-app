@@ -9,11 +9,19 @@ import DJConnectCore
         let moment_id: String; let title: String?; let summary: String?
         var id: String { moment_id }
     }
-    struct Playback: Decodable { let item_id: String?; let title: String?; let artist: String?; let state: String }
+    struct Artwork: Decodable, Equatable, Hashable {
+        let reference: String; let item_id: String; let expires_at: String
+        func isCurrent(at date: Date) -> Bool {
+            reference.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil &&
+                !item_id.isEmpty && DJConnectHistoryEntry.date(expires_at).map { $0 > date } == true
+        }
+    }
+    struct Playback: Decodable { let item_id: String?; let title: String?; let artist: String?; let state: String; let artwork: Artwork? }
     struct Session: Decodable { let session_id: String; let locale: String; let mood: String; let persona: String; let presence: String }
     struct ViewState: Decodable { let mode: String; let dynamics: Double; let mood: String; let persona: String }
     struct FlowItem: Decodable, Identifiable {
         let moment_id: String; let title: String?; let summary: String?; let content: String?
+        let artwork: Artwork?
         let flow_expires_at: String?; let display_expires_at: String?; let source_expires_at: String?
         var id: String { moment_id }
         func isCurrent(at now: Date) -> Bool {
@@ -76,6 +84,26 @@ import DJConnectCore
     private var renewSequence = 0
     private var pendingRequests: Set<String> = [], notifiedRequests: Set<String> = []
     private var choiceSetID: String?
+    private var artworkCache: [Artwork: Data] = [:]
+    private func admitsArtwork(_ art: Artwork) -> Bool {
+        guard current, art.isCurrent(at: Date()) else { return false }
+        return (playback?.artwork == art && playback?.item_id == art.item_id) ||
+            sharedFlow.contains { $0.artwork == art && $0.isCurrent(at: Date()) }
+    }
+    func loadArtwork(_ art: Artwork) async -> Data? {
+        guard admitsArtwork(art), let grant, let transport else { return nil }
+        if let data = artworkCache[art] { return data }
+        let original = generation
+        do {
+            let bytes = try await transport.send(.artwork, body: body(["reference": art.reference]), bearer: grant.guest_token)
+            guard generation == original, admitsArtwork(art), !bytes.isEmpty, bytes.count <= 256000 else { return nil }
+            if artworkCache.count >= 16 { artworkCache.removeAll() }
+            artworkCache[art] = bytes
+            return bytes
+        } catch { return nil } // An unavailable image cannot manufacture a replacement source.
+    }
+    func artworkIsCurrent(_ art: Artwork) -> Bool { admitsArtwork(art) }
+
 
     init(makeTransport: @escaping (DJConnectGuestInvitation) -> any DJConnectGuestTransporting = { DJConnectGuestTransport(invitation: $0) }) {
         self.makeTransport = makeTransport
@@ -169,6 +197,7 @@ import DJConnectCore
             sharedFlow = Array((value.shared_flow ?? []).prefix(64))
             horizon = value.horizon.flatMap { $0.isCurrent && $0.sections.count <= 3 ? $0 : nil }
             viewState = value.view.flatMap { ["flow", "vibescape"].contains($0.mode) && $0.dynamics.isFinite && (0...1).contains($0.dynamics) ? $0 : nil }
+            artworkCache = artworkCache.filter { admitsArtwork($0.key) }
             requestSongsAllowed = value.capabilities.request_song
             for identifier in pendingRequests {
                 let bytes = try await transport.send(.requestStatus, body: body(["request_id": identifier]), bearer: grant.guest_token)
@@ -248,6 +277,7 @@ import DJConnectCore
     func disconnect() {
         let previousTransport = transport, previousGrant = grant
         let leaveBody = try? body()
+        artworkCache.removeAll()
         generation = UUID(); loop?.cancel(); loop = nil
         leaseTask?.cancel(); leaseTask = nil
         grant = nil; transport = nil; invitation = nil; leaseDeadline = nil

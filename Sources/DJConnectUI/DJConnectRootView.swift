@@ -7487,6 +7487,9 @@ private struct TrackInsightHeroScene: View {
         .onChange(of: playbackSignature) {
             playbackAnchor.update(from: playback, at: Date())
         }
+        .onChange(of: playback?.progressMS) {
+            playbackAnchor.update(from: playback, at: Date())
+        }
         .onChange(of: playback?.isPlaying) {
             playbackAnchor.update(from: playback, at: Date())
         }
@@ -7944,34 +7947,13 @@ private struct TrackInsightHeroInfo: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
             }
-            if let progressLabel {
-                Text(progressLabel)
-                    .font(.caption.weight(.bold))
-                    .monospacedDigit()
-                    .foregroundStyle(.white.opacity(0.72))
-                    .padding(.vertical, 5)
-                    .padding(.horizontal, 10)
-                    .background(.white.opacity(0.12), in: Capsule())
-            }
+
         }
         .multilineTextAlignment(.center)
         .padding(.horizontal, 18)
     }
 
-    private var progressLabel: String? {
-        guard let duration = insight.duration, duration > 0 else {
-            return nil
-        }
-        let progress = min(max(insight.progress ?? 0, 0), duration)
-        return "\(formatTime(progress)) / \(formatTime(duration))"
-    }
 
-    private func formatTime(_ seconds: TimeInterval) -> String {
-        let totalSeconds = max(Int(seconds.rounded()), 0)
-        let minutes = totalSeconds / 60
-        let seconds = totalSeconds % 60
-        return "\(minutes):\(seconds < 10 ? "0" : "")\(seconds)"
-    }
 }
 
 #if canImport(MetalKit) && (os(iOS) || os(macOS))
@@ -8435,6 +8417,7 @@ struct TrackVibePlaybackAnchor: Equatable {
 
     static func signature(for playback: DJConnectPlayback?) -> String {
         [
+            playback?.uri,
             playback?.trackName,
             playback?.artistName,
             playback?.contextURI,
@@ -13876,10 +13859,6 @@ struct AskDJInputBar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             SessionComposerContext(model: model)
-            Text(DJConnectLocalization.localized(key: "ui.ask_dj.accuracy_notice", language: model.language))
-                .font(.caption).foregroundStyle(.white.opacity(0.8))
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("ask-dj-accuracy-notice")
         // AnyLayout keeps the same native editor mounted during focus changes,
         // preserving first responder, selection and the unsent draft.
         composerLayout {
@@ -17790,7 +17769,7 @@ struct SettingsView: View {
                  let .profile(_, _, message):
                 let trimmed = message?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 return trimmed.isEmpty ? localizedKey(model.language, "ui.music.dna.import.rejected") : trimmed
-            case let .network(message), let .invalidConfiguration(message):
+            case let .network(message, _), let .invalidConfiguration(message):
                 return message
             case .missingToken:
                 return localizedKey(model.language, "appModel.missing.djconnect.bearer.token.reset.pairing.to.set.up")
@@ -17819,7 +17798,7 @@ struct SettingsView: View {
                  let .profile(_, _, message):
                 let trimmed = message?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 return trimmed.isEmpty ? localizedKey(model.language, "ui.ask.dj.history.export.failed") : trimmed
-            case let .network(message), let .invalidConfiguration(message):
+            case let .network(message, _), let .invalidConfiguration(message):
                 return message
             case .missingToken:
                 return localizedKey(model.language, "appModel.missing.djconnect.bearer.token.reset.pairing.to.set.up")

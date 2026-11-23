@@ -2469,7 +2469,7 @@ public final class DJConnectClient: Sendable {
 
     public func classify(statusCode: Int, body: Data? = nil, networkError: Error? = nil) -> DJConnectError? {
         if let networkError {
-            return .network(message: networkError.localizedDescription)
+            return .network(message: networkError.localizedDescription, code: (networkError as? URLError)?.code)
         }
 
         let envelope = body.flatMap { try? decoder.decode(DJConnectErrorEnvelope.self, from: $0) }
@@ -2648,7 +2648,7 @@ public final class DJConnectClient: Sendable {
                 throw CancellationError()
             }
             if !DJConnectHybridTransport.canReplayLegacy(request) { throw DJConnectHybridTransportError.deliveryUnknown }
-            throw DJConnectError.network(message: error.localizedDescription)
+            throw DJConnectError.network(message: error.localizedDescription, code: (error as? URLError)?.code)
         }
 
         return (data, response)

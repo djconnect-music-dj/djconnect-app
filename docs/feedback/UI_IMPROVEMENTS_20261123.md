@@ -584,3 +584,53 @@ Registratie is geen bewijs van implementatie of herstel op een apparaat.
   eigen vastgelegde bronkopie; de uitgebreidere bron vereist opnieuw tests.
 - Volledige Swift-tests, iOS-build, echte simulatorbediening en onder meer
   host-remotecontrol, nieuwe Up-next-producer en Cast-SDK-aansluiting staan open.
+
+## 34. Voor jou: keuzes verdwijnen na ongeveer vijftien seconden
+
+- Gebruikersmelding: na circa vijftien seconden verdwijnt de inhoud van
+  **Voor jou** en verschijnt de melding dat de keuzes niet beschikbaar of
+  verlopen zijn. De kaart zelf blijft staan.
+- Gemeld bij **Children — Armin van Buuren**, album **Piano**. Root heeft
+  dezelfde melding ook in de werkelijk geïnstalleerde Mac-app waargenomen.
+- Onderzoek apart de korte projectie-/contextlease en de oorspronkelijke
+  geldigheid van het aanbod en zijn acties. De Apple-weergave gebruikt voor
+  hetzelfde aanbod momenteel steeds de kortste eerder ontvangen deadline.
+- Een verse bevoegde contextread moet een nog geldig aanbod bruikbaar kunnen
+  houden zonder nieuwe modelaanroep. Dat rechtvaardigt geen onbeperkte lokale
+  verlenging van oude keuzen of het verwijderen van vervalcontroles.
+- Controleer op tijdstippen 14, 16 en 40 seconden, plus echte wijzigingen van
+  onderwerp, eigenaar, sessie, bron of instellingen en verlopen acties.
+- Status: geregistreerd; Core en Apple onderzoeken parallel. Nog niet opgelost.
+
+## 35. iOS Horizon: hapert en wordt na enkele seconden onbeschikbaar
+
+- Gebruikersmelding met screenshot: de iOS-Horizonweergave hapert en toont
+  na enkele seconden **Horizon is nu niet beschikbaar / Ververs pagina**.
+  Rechtsboven zijn een oranje herstel-/verversingsicoon en spinner zichtbaar.
+- Onderzoek de Horizon-readlease, vernieuwing en netwerk-/sessieherstelroute,
+  ook naast punt 34. Een gezamenlijke oorzaak is nog niet bewezen.
+- Houd nog geldige inhoud zichtbaar tijdens een gewone verversing; ingetrokken,
+  verlopen of niet meer bij de sessie horende inhoud blijft onbeschikbaar.
+- Controleer herhaalde verversingen, korte verbindingsonderbreking, echte
+  vervaltijd en wisseling van sessie of eigenaar.
+- Status: geregistreerd met screenshot; Core en Apple onderzoeken parallel.
+
+
+36. **Help build432** — Suggesties blijft laden / uitgebreide Help kan muziekmogelijkheden niet bevestigen. Contextread en herstel onderzoeken, geen capabilities verzinnen. Open runtimeonderzoek.
+37. **iPad/Mac bijdrage-layout** — Alle DJ-bijdragen met trackthumbnail plaatsen tekst rechts naast art, top-aligned; iPhone compact behouden. Gedeelde kolomlayout geïmplementeerd, geometry/runtimecontrole volgt. Originele foto/Canvas-hero blijft onderscheiden.
+38. **Nauwkeurigheidszin** — Generieke “Je DJ kan zich vergissen” uit de gedeelde sessie/Ask DJ composer verwijderd en in volledige Help geplaatst, vijf bestaande vertalingen. Inhoudelijke onzekerheid/bronnen blijven.
+39. **Track Insight tijdtekst** — Numerieke voortgangstijd uit animatie verwijderd; animatie en reguliere playbacktijd elders behouden.
+40. **Track Insight continuïteit** — Equalizer moet hele nummer vloeiend blijven; gemarkeerde golf/balk volgt echte playbackprogress. Onderzoek observatielease versus immutable analyse, test15/30/60s en volledige korte track, pause/resume/seek/trackwissel/end clamp. Geen verzonnen audioanalyse of leaseverlenging.
+41. **Apple equalizer navigatie** — Tap/klik op playbackequalizer opent Track Insight voor huidige nummer, toegankelijk als knop. Alleen Apple; geen VibeCast-TVwijziging. Implementatie volgt.
+42. **Live Activity push** — Expliciet geautoriseerd iPhone-kanaal activeren, echte update en afmelden verifiëren. Geen afgeleid consent voor Widgets/Moments/Watch. Onderzoek bestaande ActivityKit enrollment/tokenrotatie/withdrawal; fysieke signing/providerkwalificatie apart.
+
+43. **Grote widget push** — Expliciete opdracht Widgets-kanaal naast Live Activities; laatste geldige DJ-bijdrage uit actuele sessie/profile, owner/source-fences en wissen bij afmelding/sessie-einde/profilewissel. Geen willekeurige cached Moment/private Ask DJ; echte WidgetKit wakebudgetten en fysieke pushreadback verifiëren.
+
+44. **Alle widgetformaten blijven actueel** — Push/backgroundflow na appsluiting moet nieuwe geautoriseerde updates blijven ontvangen, ook na vorige TTL; werkelijke afmelding/sessie-einde wist content. Geen onbeperkte cache of private-grant-bypass; WidgetKit scheduling werkelijk kwalificeren. Bestaande pushhandler aanwezig, originele credential/publicatieketen nog onderzoeken.
+
+45. **Watch Moments push** — Expliciet Moments-alertkanaal: voorgrondmelding, één tap opent exact originele Momentkaart, sluiten terug Watchhoofdscherm. Bestaande djc-watch-moment/1 parser/taprouter/by-ID renderer behouden; voorgrondbanner nu beperkt tot expliciete kanaalkeuze en actuele sessiebinding. Geen afgeleide Smart Stack-toestemming. Watchbuild en echte APNs/deviceacceptatie volgen.
+
+46. **Watch Smart Stack push** — Afzonderlijk expliciet geselecteerd kanaal watch_smart_stack. Canonieke Watch-widgettarget DJConnectComplication/dev.djconnect.ios.watch.complications, eigen WidgetPushHandler en lokale tokencustody; geen iPhone-clock/grant of Moments-alertconsent. Originele Watch enrollment/issuer/read/clockport moet nog werkelijk kwalificeren; geen activatieclaim op basis van bron alleen.
+
+
+Vervolgvalidatie: macOS build-for-testing geslaagd; echte native run met14tests geslaagd, inclusief Horizon19fencegevallen en bijdragegeometry3breedtes×4typen. De latere gast-art/Watch-pushbronwijzigingen vallen nog buiten deze build. Negen bestaande contract-/lokalisatie-/hygienechecks opnieuw geslaagd. Simulatorbaseline cfa55 demo TrackInsight toont na circa16s gewijzigde balken/deeltjes en voortgaande playhead; dit reproduceert live lease-probleem niet. GUI/XCUITestbediening ontbreekt op deze host; officiële CLI screenshots zijn echte rendererframes, geen interactieve UIacceptatie. Nieuwe iOS equalizer-navigatietest toegevoegd maar nog niet uitgevoerd.

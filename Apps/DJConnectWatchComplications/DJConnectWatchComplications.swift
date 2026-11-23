@@ -140,10 +140,21 @@ private struct WatchWidgetCover: View {
 }
 @MainActor
 private func configuration(_ kind: String) -> some WidgetConfiguration {
-    StaticConfiguration(kind: kind, provider: SessionProvider()) { SessionComplicationView(entry: $0) }
+    let configuration = StaticConfiguration(kind: kind, provider: SessionProvider()) { SessionComplicationView(entry: $0) }
         .configurationDisplayName("DJConnect")
         .description(DJConnectLocalization.localized(key: "surface.session.description"))
         .supportedFamilies([.accessoryCircular, .accessoryRectangular, .accessoryInline, .accessoryCorner])
+    return configuration.pushHandler(DJConnectWatchWidgetPushHandler.self)
+}
+struct DJConnectWatchWidgetPushHandler: WidgetPushHandler {
+    func pushTokenDidChange(_ pushInfo: WidgetPushInfo, widgets: [WidgetInfo]) {
+        guard !DJConnectLocalization.isQualificationProcess,
+              let bundle = Bundle.main.bundleIdentifier,
+              let shared = UserDefaults(suiteName: DJConnectLocalization.appGroupIdentifier) else { return }
+        let candidate = DJConnectWatchWidgetPushToken(token: pushInfo.token,
+            extensionBundleID: bundle, widgetKinds: widgets.map(\.kind))
+        try? DJConnectWatchWidgetPushToken.replace(candidate, in: shared)
+    }
 }
 // Legacy identifiers are migration aliases, all backed by one Session provider.
 struct DJConnectComplicationWidget: Widget {
