@@ -770,7 +770,9 @@ Native reauth / fysieke QA-kandidaat:
 - Watch-punt 2 blijft open. Een aanvullende statusverversing kan statusMessage
   wijzigen, maar de voicekaart geeft lastWatchVoiceReply voorrang. De bron
   vereist success plus ontvangen text/dj_text; het incidentantwoord ontbreekt.
-  Er is geen causaal bewezen Watch-reparatie of speakerpopup geclaimd.
+  De automatische outputkeuze is in de bron toegevoegd: uitsluitend actuele, toegelaten
+  LiveAnswerActions zonder actieve uitvoer openen eenmaal een popup. De
+  historische foutoorzaak en fysieke Watchcontrole blijven open.
 - Native reauthorization/SDK-fasejournal zijn bronmatig aangesloten en getest.
   Native clock/target/restoration blijven afzonderlijke ontbrekende toelatingen;
   geen van de vier fysieke pushkanalen wordt hierdoor als geactiveerd beschouwd.
