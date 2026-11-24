@@ -10004,11 +10004,7 @@ struct VibeCastDisplayConsentForm: View {
                 } else if model.displayConsentState == .uncertain || model.displayConsentState == .revokeUncertain {
                     Text(localizedKey(model.language, model.displayConsentState == .revokeUncertain
                         ? "ui.displayConsent.stop_uncertain" : "ui.displayConsent.uncertain"))
-                } else if model.vibeCastScreenSlot?.state == .available {
-                    Text(localizedKey(model.language, "ui.displayConsent.inactive"))
-                        .foregroundStyle(.secondary)
-                        .accessibilityIdentifier("display-status-inactive")
-                } else if model.canResolveDisplayConsent {
+                } else if model.canResolveDisplayConsent && model.vibeCastScreenSlot?.state != .available {
                     Text(localizedKey(model.language, "ui.displayConsent.status_unknown"))
                         .foregroundStyle(.secondary)
                         .accessibilityIdentifier("display-status-unknown")
