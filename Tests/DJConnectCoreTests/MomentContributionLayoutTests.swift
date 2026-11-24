@@ -37,6 +37,34 @@ import Testing
     #expect(bitmap.colorAt(x: 200, y: 30)?.alphaComponent == 0)
 }
 
+@Test(.isolatedAppKitResources, arguments: [CGFloat(820), 1_600])
+@MainActor func macDetailCentersBothGuttersOverOneContinuousCanvas(width: CGFloat) throws {
+    let height: CGFloat = 100
+    let screen = DJConnectMacDetailViewport(section: .askDJ, mood: nil) {
+        Rectangle().fill(.white).frame(height: 20)
+            .padding(.horizontal, 16)
+            .frame(maxHeight: .infinity, alignment: .top)
+            .background(DJConnectMainScreenBackground())
+    }
+    let renderer = ImageRenderer(content: screen.frame(width: width, height: height))
+    renderer.scale = 1
+    let actual = NSBitmapImageRep(cgImage: try #require(renderer.cgImage))
+    let reference = ImageRenderer(content: DJConnectMainScreenBackground().frame(width: width, height: height))
+    reference.scale = 1
+    let canvas = NSBitmapImageRep(cgImage: try #require(reference.cgImage))
+
+    let inset = Int((width - DJConnectSection.askDJ.detailWidth(in: width)) / 2) + 16
+    let rightEdge = Int(width) - inset
+    let white = try #require(actual.colorAt(x: inset, y: 10)?.usingColorSpace(.deviceRGB))
+    #expect(min(white.redComponent, white.greenComponent, white.blueComponent) > 0.99)
+    #expect(actual.colorAt(x: rightEdge - 1, y: 10) == actual.colorAt(x: inset, y: 10))
+    #expect(actual.colorAt(x: inset - 1, y: 10) == canvas.colorAt(x: inset - 1, y: 10))
+    #expect(actual.colorAt(x: rightEdge, y: 10) == canvas.colorAt(x: rightEdge, y: 10))
+    for x in [0, inset, Int(width) / 2, rightEdge - 1, Int(width) - 1] {
+        #expect(actual.colorAt(x: x, y: 70) == canvas.colorAt(x: x, y: 70))
+    }
+}
+
 /// Exercises the shipping MomentCard, not only the two-column helper. The
 /// thumbnail descriptor is a declared UI fixture; no private pixels are read.
 /// Its reserved100-point slot must keep every ordinary typed contribution's

@@ -1819,6 +1819,7 @@
 "ui.canvas.open" = "Muziek als kunst tonen";
 "ui.canvas.description" = "Artwork, kleur en sfeer die je sessie volgen.";
 "ui.canvas.enabled" = "Toon op schermen";
+"ui.canvas.choose_screens" = "Kies je schermen";
 "ui.canvas.screens" = "Schermen";
 "ui.canvas.no_screens" = "Er zijn nog geen geschikte schermen gevonden.";
 "ui.canvas.provider_required" = "Stel in Home Assistant een beeldgenerator in om kunst te maken.";

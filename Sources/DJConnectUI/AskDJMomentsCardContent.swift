@@ -7,6 +7,7 @@ import AppKit
 struct AskDJMomentsCardContent: View {
     @ObservedObject var controller: AskDJMomentsController
     let language: String
+    let mood: String?
     let result: () -> AnyView
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
@@ -33,7 +34,8 @@ struct AskDJMomentsCardContent: View {
             case .choosing:
                 if controller.loading { ProgressView(text("loading_inventory")) }
                 if let inventory = controller.inventory {
-                    AskDJMomentsCatalogue(inventory: inventory, language: language, unavailableLabel: text("unavailable"), select: controller.select)
+                    AskDJMomentsCatalogue(inventory: inventory, language: language, unavailableLabel: text("unavailable"),
+                                          mood: mood, select: controller.select)
                 }
             case .pending:
                 if !controller.outcomeUnknown {
@@ -107,7 +109,15 @@ struct AskDJMomentsCatalogue: View {
     let inventory: DJConnectAskDJMoments.Inventory
     let language: String
     let unavailableLabel: String
+    var mood: String? = nil
     let select: (DJConnectAskDJMoments.Item) -> Void
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    private var iconGradient: LinearGradient {
+        let colors = contrast == .increased ? [Color.white] : DJConnectSessionMoodTheme(sessionMood: mood).swiftUIColors
+        return LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
+
     var body: some View {
         ScrollView {
         VStack(alignment: .leading, spacing: 16) {
@@ -141,10 +151,10 @@ struct AskDJMomentsCatalogue: View {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), alignment: .leading)], alignment: .leading, spacing: 10) {
                 ForEach(inventory.visibleTypes) { item in
                     Button { select(item) } label: {
-                        HStack(alignment: .top, spacing: 12) {
+                        HStack(alignment: .center, spacing: 12) {
                             Image(systemName: symbol(for: item.typeID))
                                 .font(.title2.weight(.medium))
-                                .foregroundStyle(djConnectIconGradient)
+                                .foregroundStyle(iconGradient)
                                 .frame(width: 32, height: 32)
                                 .accessibilityHidden(true)
                             VStack(alignment: .leading, spacing: 4) {
@@ -157,7 +167,7 @@ struct AskDJMomentsCatalogue: View {
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                        }.frame(maxWidth: .infinity, minHeight: 68, alignment: .topLeading)
+                        }.frame(maxWidth: .infinity, minHeight: 68, alignment: .leading)
                             .padding(.vertical, 4)
                     }
                     .djConnectButtonStyle(DJConnectButtonStyle(shape: .segmented, expands: true))

@@ -666,20 +666,66 @@ enum DJConnectSection: Hashable {
     case privacy
 
     #if os(macOS)
-    func detailWidth(in availableWidth: CGFloat) -> CGFloat {
+    var usesConstrainedDetail: Bool {
         switch self {
         case .games, .musicDNA, .discovery:
-            availableWidth
-        case .djSession, .savedSessions, .trackInsight, .askDJ, .queue, .more,
-             .playlists, .settings, .logs, .about, .legal, .privacy:
-            // Keep both existing list gutters outside the shared content width.
-            min(availableWidth, djConnectListContentMaxWidth + 2 * djConnectScreenHorizontalPadding)
+            false
+        default:
+            true
         }
+    }
+
+    func detailWidth(in availableWidth: CGFloat) -> CGFloat {
+        // Keep both existing list gutters outside the shared content width.
+        usesConstrainedDetail
+            ? min(availableWidth, djConnectListContentMaxWidth + 2 * djConnectScreenHorizontalPadding)
+            : availableWidth
     }
     #endif
 }
 
+private extension EnvironmentValues {
+    @Entry var djConnectDetailOwnsBackground = false
+}
+
+/// The screen can also appear outside the Mac detail, for example in a sheet.
+struct DJConnectMainScreenBackground: View {
+    var mood: String? = nil
+    @Environment(\.djConnectDetailOwnsBackground) private var detailOwnsBackground
+
+    var body: some View {
+        if !detailOwnsBackground {
+            if let mood {
+                DJSessionPinnedMoodBackground(mood: mood).ignoresSafeArea(.container)
+            } else {
+                DJConnectCanvasBackground()
+            }
+        }
+    }
+}
+
 #if os(macOS)
+struct DJConnectMacDetailViewport<Content: View>: View {
+    let section: DJConnectSection
+    let mood: String?
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        GeometryReader { viewport in
+            content
+                .environment(\.djConnectDetailOwnsBackground, section.usesConstrainedDetail)
+                .frame(width: section.detailWidth(in: viewport.size.width),
+                       height: viewport.size.height, alignment: .top)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .background {
+                    if section.usesConstrainedDetail {
+                        DJConnectMainScreenBackground(mood: section == .djSession ? mood : nil)
+                    }
+                }
+        }
+    }
+}
+
 private enum DJConnectSidebarFocusTarget: Hashable {
     case section(DJConnectSection)
     case feedback
@@ -858,12 +904,10 @@ public struct DJConnectRootView: View {
                     .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 280)
                     .sessionIntroductionTarget("navigation")
                 } detail: {
-                    GeometryReader { viewport in
-                    ZStack(alignment: .bottom) {
-                        selectedView
-                            .id(selectedSection)
-                            .frame(width: selectedSection.detailWidth(in: viewport.size.width),
-                                   height: viewport.size.height, alignment: .top)
+                    DJConnectMacDetailViewport(section: selectedSection, mood: model.activeDJSession?.selectedMood) {
+                        selectedView.id(selectedSection)
+                    }
+                    .overlay(alignment: .bottom) {
                         if shouldShowOfflineNetworkBanner {
                             OfflineNetworkBanner(
                                 language: model.language,
@@ -875,7 +919,6 @@ public struct DJConnectRootView: View {
                         }
                     }
                     .animation(.snappy(duration: 0.22), value: shouldShowOfflineNetworkBanner)
-                    }
                     // Native chrome already occupies its own titlebar. Do not
                     // add macOS's scroll-edge veil over the top of detail content.
                     .scrollEdgeEffectHidden(true, for: .top)
@@ -4128,7 +4171,7 @@ struct TrackInsightView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                DJConnectCanvasBackground()
+                DJConnectMainScreenBackground()
                 GeometryReader { proxy in
                     let contentWidth = min(maxContentWidth(for: proxy.size), proxy.size.width)
                     ZStack(alignment: .top) {
@@ -8940,13 +8983,12 @@ private struct DJSessionView: View {
         NavigationStack {
             ZStack {
                 if let session = model.activeDJSession {
-                    DJSessionPinnedMoodBackground(mood: session.selectedMood)
-                        .ignoresSafeArea(.container)
+                    DJConnectMainScreenBackground(mood: session.selectedMood)
                     SessionTimelineScreen(model: model, sessionID: session.id, activeSession: session,
                                           openQueueAction: openQueueAction,
                                           refreshAction: { await refreshNowPlayingWithToast() })
                 } else {
-                    DJConnectCanvasBackground()
+                    DJConnectMainScreenBackground()
                     idleSessionContent(contentTop: contentTop)
                 }
             }
@@ -11415,6 +11457,9 @@ private struct AskDJView: View {
     }
 
     private func maxContentWidth(for size: CGSize) -> CGFloat {
+        #if os(macOS)
+        return size.width
+        #else
         #if os(iOS)
         if UIDevice.current.userInterfaceIdiom == .pad {
             // Match Queue: use the available pane with the shared 16-point
@@ -11423,6 +11468,7 @@ private struct AskDJView: View {
         }
         #endif
         return shouldUseWideLayout(for: size) ? djConnectMacDetailContentMaxWidth : djConnectContentMaxWidth
+        #endif
     }
 
     private var floatingControlTopPadding: CGFloat {
@@ -11660,9 +11706,9 @@ private struct AskDJView: View {
                                     closeAction: { dismissAskDJSearch() }
                                 )
                                 #if os(macOS)
-                                .padding(.horizontal, 20)
+                                .padding(.horizontal, djConnectScreenHorizontalPadding)
                                 .padding(.vertical, 10)
-                                .frame(maxWidth: .infinity, alignment: .top)
+                                .frame(width: contentWidth, alignment: .top)
                                 #else
                                 .padding(.horizontal, djConnectScreenHorizontalPadding)
                                 .padding(.top, floatingControlTopPadding + 10)
@@ -11675,9 +11721,16 @@ private struct AskDJView: View {
                         .overlay(alignment: .bottom) {
                             if usesFloatingComposer && !isSearchVisible {
                                 composer
-                                    .djFloatingAskDJWidth(maximum: min(contentWidth, 1000))
+                                    #if !os(macOS)
+                                    .djFloatingAskDJWidth(maximum: min(contentWidth, djConnectListContentMaxWidth))
+                                    #endif
                                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { floatingComposerHeight = $0 }
+                                    #if os(macOS)
+                                    .padding(.horizontal, djConnectScreenHorizontalPadding)
+                                    .frame(width: contentWidth)
+                                    #else
                                     .padding(.horizontal, 12)
+                                    #endif
                                     .padding(.bottom, composerBottomPadding)
                             }
                         }
@@ -11754,7 +11807,6 @@ private struct AskDJView: View {
                 #endif
                 }
             }
-            .background(DJConnectCanvasBackground())
             .djStatusToastOverlay(text: manualRefresh.notice?.text ?? toast, systemImage: "bubble.left.and.bubble.right")
             .navigationTitle(screenTitle(model.language, key: "Ask DJ", isDemoMode: model.isDemoMode))
             .accessibilityElement(children: .contain)
@@ -11841,7 +11893,7 @@ private struct AskDJView: View {
     var body: some View {
         navigationContent
         .djConnectFindShortcut(action: showAskDJSearch)
-        .background(DJConnectCanvasBackground())
+        .background(DJConnectMainScreenBackground())
         #if os(iOS)
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
             composerKeyboardVisible = true
@@ -14754,7 +14806,7 @@ struct QueueView: View {
             .accessibilityIdentifier("screen-queue")
             .djConnectFindShortcut(action: showQueueSearch)
             .scrollContentBackgroundIfAvailable(.hidden)
-            .background(DJConnectCanvasBackground())
+            .background(DJConnectMainScreenBackground())
             #if os(iOS)
             .contentMargins(.horizontal, 0, for: .scrollContent)
             #else
@@ -14796,7 +14848,7 @@ struct QueueView: View {
                 }
             }
         }
-        .background(DJConnectCanvasBackground())
+        .background(DJConnectMainScreenBackground())
     }
 
     private func queueScrollContent(maxWidth: CGFloat) -> some View {
@@ -15066,7 +15118,7 @@ struct PlaylistsView: View {
             .accessibilityIdentifier("screen-playlists")
             .djConnectFindShortcut(action: showPlaylistSearch)
             .scrollContentBackgroundIfAvailable(.hidden)
-            .background(DJConnectCanvasBackground())
+            .background(DJConnectMainScreenBackground())
             #if os(iOS)
             .contentMargins(.horizontal, 0, for: .scrollContent)
             #else
@@ -17068,7 +17120,7 @@ private struct MoreView: View {
                 .padding(.horizontal, djConnectScreenHorizontalPadding)
                 .padding(.vertical, djConnectScreenVerticalPadding)
             }
-            .background(DJConnectCanvasBackground())
+            .background(DJConnectMainScreenBackground())
             .navigationTitle(screenTitle(model.language, key: "More", isDemoMode: model.isDemoMode))
             .navigationDestination(item: $destinationSelection) { destination($0).djConnectMouseBackNavigation() }
         }
@@ -17959,7 +18011,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                DJConnectCanvasBackground()
+                DJConnectMainScreenBackground()
                 SettingsContentContainer {
                 SettingsGlassSection(title: localizedKey(model.language, "ui.app")) {
                     LabeledContent(localizedKey(model.language, "ui.app.language")) {
@@ -18274,7 +18326,7 @@ struct SettingsView: View {
                     }
                 }
                 .presentationBackground {
-                    DJConnectCanvasBackground()
+                    DJConnectMainScreenBackground()
                 }
             }
             .djConnectPopup(item: $musicDNAImportPreview) { preview in
@@ -18290,7 +18342,7 @@ struct SettingsView: View {
                     }
                 )
                 .presentationBackground {
-                    DJConnectCanvasBackground()
+                    DJConnectMainScreenBackground()
                 }
             }
             .fileExporter(
@@ -18323,7 +18375,7 @@ struct SettingsView: View {
         .djConnectButtonStyle(DJConnectButtonStyle(usesDestructiveGlass: true))
         .tint(.white)
         .accentColor(.white)
-        .background(DJConnectCanvasBackground())
+        .background(DJConnectMainScreenBackground())
     }
 
 }
@@ -18505,7 +18557,7 @@ private struct LogsView: View {
                 .hidden()
             }
         }
-        .background(DJConnectCanvasBackground())
+        .background(DJConnectMainScreenBackground())
         .onChange(of: showingWatchLogs) { _, enabled in
             dismissLogSearch()
             model.setWatchLogCollection(enabled)
@@ -18730,7 +18782,7 @@ private struct AboutView: View {
 
     var body: some View {
         ZStack {
-            DJConnectCanvasBackground()
+            DJConnectMainScreenBackground()
             ScrollView {
                 VStack(alignment: .leading, spacing: djConnectCardSpacing) {
                     AboutBanner()
@@ -18984,7 +19036,7 @@ private struct LegalNoticesView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                DJConnectCanvasBackground()
+                DJConnectMainScreenBackground()
                 ScrollView {
                     VStack(alignment: .leading, spacing: djConnectCardSpacing) {
                         AboutBanner()
@@ -19035,7 +19087,7 @@ private struct PrivacyView: View {
 
     var body: some View {
         ZStack {
-            DJConnectCanvasBackground()
+            DJConnectMainScreenBackground()
             ScrollView {
                 VStack(alignment: .leading, spacing: djConnectCardSpacing) {
                     AboutBanner()
