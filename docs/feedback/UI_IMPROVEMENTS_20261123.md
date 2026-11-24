@@ -5,6 +5,8 @@ Startpunt: Apple-main `2c26d5adf2a2c3164219b0a68237e9c0f472ca26`.
 
 Dit is de verzamellijst voor de door de gebruiker gemelde verbeteringen.
 Registratie is geen bewijs van implementatie of herstel op een apparaat.
+De oorspronkelijke registratie blijft hieronder bewaard; de actuele Apple-
+kwalificatie en resterende apparaatgrenzen staan in de checkpoints onderaan.
 
 ## 1. Gloedrand Start DJ-sessie
 
@@ -741,3 +743,37 @@ Native reauth / fysieke QA-kandidaat:
   geen fixtureargumenten, pairingreset, diagnostische upload of dataverwijdering.
 - De gebruiker selecteert nu expliciet de geregistreerde TheFrame43 voor Cast;
   registratie en tests van55 blijven geheel buiten deze ronde.
+
+
+## Actuele Apple-kwalificatie — 24 november, 09:00 CET
+
+- Productbron en ondertekende iPad-kandidaat: `60fd1157207dfb0f8cc7fe5fbf3acfd26fd3ef58`.
+  Mac: 1856 Swift-tests in 62 suites en 85 XCTest-cases, nul fouten; vijf
+  bestaande XCTest-skips. Alle negen lichte controles opnieuw groen.
+- Aanvullende volledige SwiftPM-hoofdsuite: 1856 Swift-tests groen. Twee
+  HTTP-testfixtures hadden gedeelde state tussen parallelle parametercases;
+  beide gebruiken nu unieke origins en per-host-state. Dezelfde zeven consent-
+  en elf Cast-cases blijven parallel met alle oorspronkelijke asserties.
+  De afzonderlijke VibeCast-kwalificatie selecteerde 28 XCTest-cases, exit 0.
+  Dit zijn uitsluitend testwijzigingen; de geïnstalleerde productcode blijft gelijk.
+- Fysieke iPad mini: exacte ondertekende versie 4.1.0/build 40533 geïnstalleerd
+  en onafhankelijk teruggelezen. De daadwerkelijke normale appstart werkt.
+  De eerste fysieke XCUITest kwam niet voorbij de OS-vraag om Touch ID voor
+  UI Automation; nul testcases uitgevoerd. Dit is geen live-acceptatieclaim.
+  De bestaande crashrapport-vraag stond ook op de 40531-baseline; er wordt
+  geen nieuwe crash uit afgeleid en er is niets verzonden of gereset.
+- Nieuwe eigen iOS-simulator: echte demo-renderframes op 16/40/70/200 seconden
+  en de einde-clamp na 520 seconden vastgelegd. Dit kwalificeert rendering,
+  niet actuele HA-audioanalyse, providerlevering of fysieke Cast. De officiële
+  Xcode-UItest kon de custom DeviceSet niet als bestemming vinden. Alleen het
+  eigen simulatorapparaat is na afronding verwijderd; bewijs blijft bewaard.
+- Watch-punt 2 blijft open. Een aanvullende statusverversing kan statusMessage
+  wijzigen, maar de voicekaart geeft lastWatchVoiceReply voorrang. De bron
+  vereist success plus ontvangen text/dj_text; het incidentantwoord ontbreekt.
+  Er is geen causaal bewezen Watch-reparatie of speakerpopup geclaimd.
+- Native reauthorization/SDK-fasejournal zijn bronmatig aangesloten en getest.
+  Native clock/target/restoration blijven afzonderlijke ontbrekende toelatingen;
+  geen van de vier fysieke pushkanalen wordt hierdoor als geactiveerd beschouwd.
+- Geregistreerde TheFrame43 is het vrijgegeven Cast-testdoel. Er is nog geen
+  fysieke handoff gekozen of als geslaagd geclaimd. Live/QR/vier uur blijven
+  gescheiden van de bestaande legacy Cast-token.

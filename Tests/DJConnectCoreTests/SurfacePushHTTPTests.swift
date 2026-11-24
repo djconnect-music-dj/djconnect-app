@@ -344,11 +344,14 @@ extension SurfacePushHTTPTests {
 // Synthetic paired HTTP only: these cases qualify consent sequencing, not
 // App Attest, an issuer/clock grant, native SDK enrollment or provider delivery.
 private final class OrdinaryWidgetConsentWire: URLProtocol, @unchecked Sendable {
-    nonisolated(unsafe) static var active: OrdinaryWidgetConsentFixture?
-    override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "ordinary-widget.test" }
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var fixtures: [String: OrdinaryWidgetConsentFixture] = [:]
+    static func install(_ fixture: OrdinaryWidgetConsentFixture) { lock.withLock { fixtures[fixture.host] = fixture } }
+    static func remove(_ fixture: OrdinaryWidgetConsentFixture) { _ = lock.withLock { fixtures.removeValue(forKey: fixture.host) } }
+    override class func canInit(with request: URLRequest) -> Bool { request.url?.host?.hasSuffix(".ordinary-widget.test") == true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
-        guard let fixture = Self.active else { return }
+        guard let host = request.url?.host, let fixture = Self.lock.withLock({ Self.fixtures[host] }) else { return }
         do {
             let reply = try fixture.reply(request)
             let headers = ["Content-Type": "application/json", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff"]
@@ -359,6 +362,7 @@ private final class OrdinaryWidgetConsentWire: URLProtocol, @unchecked Sendable 
     override func stopLoading() {}
 }
 private final class OrdinaryWidgetConsentFixture: @unchecked Sendable {
+    let host = UUID().uuidString.lowercased()+".ordinary-widget.test"
     let scenario: String
     let operation = UUID()
     private let lock = NSLock()
@@ -389,7 +393,7 @@ private final class OrdinaryWidgetConsentFixture: @unchecked Sendable {
     }
     func client() -> DJConnectClient {
         let configuration = URLSessionConfiguration.ephemeral; configuration.protocolClasses = [OrdinaryWidgetConsentWire.self]
-        return DJConnectClient(baseURL: URL(string: "https://ordinary-widget.test")!,
+        return DJConnectClient(baseURL: URL(string: "https://"+host)!,
             identity: .init(deviceID: "djconnect-ios-ABCDEF123456", deviceName: "Synthetic fixture", clientType: .ios, firmware: "4.1.0", platform: .ios),
             tokenStore: DJConnectInMemoryTokenStore(token: "synthetic-ordinary-device-token"), session: URLSession(configuration: configuration))
     }
@@ -397,7 +401,7 @@ private final class OrdinaryWidgetConsentFixture: @unchecked Sendable {
 @Test(.isolatedClientResources, arguments: ["committed", "withdrawn", "mismatch", "conflict", "auth", "owner", "lost"])
 @MainActor func ordinaryWidgetConsentRequiresIndependentCurrentReadback(_ scenario: String) async throws {
     let fixture = OrdinaryWidgetConsentFixture(scenario)
-    OrdinaryWidgetConsentWire.active = fixture; defer { OrdinaryWidgetConsentWire.active = nil }
+    OrdinaryWidgetConsentWire.install(fixture); defer { OrdinaryWidgetConsentWire.remove(fixture) }
     let client = fixture.client()
     let current: @MainActor @Sendable () -> Bool = { fixture.current }
     let initial = try await client.readWidgetPushConsent(isCurrent: current)

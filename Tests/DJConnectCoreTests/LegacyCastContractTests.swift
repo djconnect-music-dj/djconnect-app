@@ -206,15 +206,17 @@ private func status(_ sequence: UInt64 = 1, _ state: String = "presenting", id: 
 
 private final class CastOwnerWire: URLProtocol, @unchecked Sendable {
     private static let lock = NSLock()
-    nonisolated(unsafe) private static var responses: [String: Data] = [:]
-    nonisolated(unsafe) private static var requests: [URLRequest] = []
-    static func configure(_ value: [String: Data]) { lock.withLock { responses = value; requests = [] } }
-    static var calls: [URLRequest] { lock.withLock { requests } }
-    static func replace(_ path: String, _ data: Data) { lock.withLock { responses[path] = data } }
-    override class func canInit(with request: URLRequest) -> Bool { true }
+    nonisolated(unsafe) private static var responses: [String: [String: Data]] = [:]
+    nonisolated(unsafe) private static var requests: [String: [URLRequest]] = [:]
+    static func configure(host: String, _ value: [String: Data]) { lock.withLock { responses[host] = value; requests[host] = [] } }
+    static func remove(host: String) { lock.withLock { _ = responses.removeValue(forKey:host); _ = requests.removeValue(forKey:host) } }
+    static func calls(host: String) -> [URLRequest] { lock.withLock { requests[host] ?? [] } }
+    static func replace(host: String, _ path: String, _ data: Data) { lock.withLock { responses[host]?[path] = data } }
+    override class func canInit(with request: URLRequest) -> Bool { request.url?.host?.hasSuffix(".cast-owner.test") == true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
-        let data = Self.lock.withLock { Self.requests.append(request); return Self.responses[request.url!.path] }
+        guard let host = request.url?.host else { return }
+        let data = Self.lock.withLock { Self.requests[host, default: []].append(request); return Self.responses[host]?[request.url!.path] }
         if let data {
             client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: 200,
                 httpVersion: nil, headerFields: ["Content-Type":"application/json","Cache-Control":"no-store"])!, cacheStoragePolicy: .notAllowed)
@@ -263,7 +265,9 @@ private final class CastFixtureBundle: NSObject {}
         "capabilities":["view_broadcast":true,"owner_controls":false]]
     let caps: [String: Any] = ["capabilities":["session_conversation_history":true,"session_flow_text_search":true],
         "contract_versions":["session_conversation_history":1,"session_flow_text_search":1]]
-    CastOwnerWire.configure(try ["/api/djconnect/v1/session/active":JSONSerialization.data(withJSONObject:session),
+    let host = UUID().uuidString.lowercased()+".cast-owner.test"
+    let origin = "https://"+host
+    CastOwnerWire.configure(host:host,try ["/api/djconnect/v1/session/active":JSONSerialization.data(withJSONObject:session),
         "/api/djconnect/v1/ask_dj/history":JSONSerialization.data(withJSONObject:history),
         "/api/djconnect/v1/capabilities":JSONSerialization.data(withJSONObject:caps),
         "/api/djconnect/v1/transport/context":JSONSerialization.data(withJSONObject:[
@@ -272,10 +276,11 @@ private final class CastFixtureBundle: NSObject {}
             "operation_epoch":"synthetic-transport-epoch","server_time_ms":1000,
             "transport_security":["mode":"authenticated_tls"]]),
         "/api/djconnect/v1/session/broadcast/token":JSONSerialization.data(withJSONObject:cap)])
+    defer { CastOwnerWire.remove(host:host) }
     let suite = "cast-owner-" + UUID().uuidString
     let defaults = try #require(UserDefaults(suiteName:suite))
-    defaults.set("https://ha.example",forKey:"DJConnectHomeAssistantURL")
-    defaults.set("https://ha.example",forKey:"DJConnectHALocalURL")
+    defaults.set(origin,forKey:"DJConnectHomeAssistantURL")
+    defaults.set(origin,forKey:"DJConnectHALocalURL")
     let store = DJConnectInMemoryTokenStore(token:"synthetic-original-pair")
     let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [CastOwnerWire.self]
     let model = DJConnectAppModel(defaults:defaults,tokenStore:store,urlSession:URLSession(configuration:config),startBackgroundTasks:false)
@@ -297,7 +302,7 @@ private final class CastFixtureBundle: NSObject {}
     }
     let owner = try #require(sender.owner)
     if mode.hasPrefix("background") || mode == "history" || mode == "guest" {
-        let reads = CastOwnerWire.calls.filter { $0.url?.path.hasSuffix("/broadcast/token") == true }.count
+        let reads = CastOwnerWire.calls(host:host).filter { $0.url?.path.hasSuffix("/broadcast/token") == true }.count
         if mode == "history" { model.sessionHistory.suspend(preservingVoicePreference:true) }
         else if mode == "guest" { model.liveGuestPresentationDidChange(true);model.connectLegacyCast(deviceID:"actual-sdk-identifier");#expect(!model.canConnectLegacyCast) }
         else { model.markInactiveSession() }
@@ -305,15 +310,15 @@ private final class CastFixtureBundle: NSObject {}
         try await Task.sleep(for:.milliseconds(5))
         #expect(sender.suspends >= 1 && sender.stops == 0)
         #expect(model.legacyCastNeedsConfirmation)
-        #expect(CastOwnerWire.calls.filter { $0.url?.path.hasSuffix("/broadcast/token") == true }.count == reads)
+        #expect(CastOwnerWire.calls(host:host).filter { $0.url?.path.hasSuffix("/broadcast/token") == true }.count == reads)
         #expect(!owner.isCurrent())
     } else {
-        let calls = CastOwnerWire.calls.filter { $0.url?.path.hasSuffix("/broadcast/token") == true }
+        let calls = CastOwnerWire.calls(host:host).filter { $0.url?.path.hasSuffix("/broadcast/token") == true }
         #expect(calls.count == 1 && calls.first?.httpMethod == "POST")
         #expect(calls.first?.value(forHTTPHeaderField:"Authorization") == "Bearer synthetic-original-pair")
         // Reusing the same original owner closure cannot fetch a second token.
         do { _ = try await owner.capability(); Issue.record("original token read replayed") } catch {}
-        #expect(CastOwnerWire.calls.filter { $0.url?.path.hasSuffix("/broadcast/token") == true }.count == 1)
+        #expect(CastOwnerWire.calls(host:host).filter { $0.url?.path.hasSuffix("/broadcast/token") == true }.count == 1)
         switch mode {
         case "pairing": model.pairingStatus = .unpaired
         case "demo": model.isDemoMode = true
@@ -321,7 +326,7 @@ private final class CastFixtureBundle: NSObject {}
         case "token": try store.saveToken("different-actual-pair"); model.bindProfileDJSettings(active:true)
         case "authority": #expect(model.sessionHistory.withdrawAuthority(for:DJConnectError.authStale(statusCode:401,message:nil)))
         case "session":
-            CastOwnerWire.replace("/api/djconnect/v1/session/active",try JSONSerialization.data(withJSONObject:["success":true,"active_session":NSNull(),"session":NSNull()]))
+            CastOwnerWire.replace(host:host,"/api/djconnect/v1/session/active",try JSONSerialization.data(withJSONObject:["success":true,"active_session":NSNull(),"session":NSNull()]))
             #expect(!model.isLoadingDJSession)
             #expect(model.canRefreshSessionHistory)
             let accepted = await model.refreshActiveDJSession()
