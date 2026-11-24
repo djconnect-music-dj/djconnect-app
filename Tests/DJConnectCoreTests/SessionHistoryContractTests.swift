@@ -8231,6 +8231,12 @@ func forecastNativeOwnerReadRetainsDraftAndFencesLateBackgroundResponse(fence: S
     #expect(model.askDJDraft == "Keep this unsent question")
     #expect((model.visibleSessionForecast(at: Date()) == nil) == ["background", "owner-reset", "unsequenced-live-during-read"].contains(fence))
     try await verifyAcceptedForecastFences(model: model, fence: fence, id: id)
+    if ["auth-refresh", "malformed-refresh"].contains(fence) {
+        let reads = fixture.requests.count
+        #expect(!model.permitsAutomaticSessionForecastRead)
+        await model.refreshSessionForecast(automatic: true)
+        #expect(fixture.requests.count == reads, "Permanent denial must not become an automatic retry loop")
+    }
     try await verifyForecastContextReplacement(model: model, fixture: fixture, fence: fence, id: id,
         runtimeReplies: runtimeReplies, forecastReplies: forecastReplies, runtimeReply: runtimeReply,
         forecastReply: forecastReply, originalForecastReply: originalForecastReply, projection: &projection, response: &response)

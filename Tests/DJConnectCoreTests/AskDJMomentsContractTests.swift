@@ -225,3 +225,65 @@ func askDJMomentsActualRichFamilyAndSourceSpecificRetention(name: String) throws
     #expect(response.result == nil)
     #expect(response.message?.isEmpty == false)
 }
+
+@Test func askDJMomentsShowsTemporaryBulletinStatusWithoutOfferingARequest() throws {
+    let fixture = try momentFixture("producer-final")
+    var raw = try #require(fixture["inventory"] as? [String: Any])
+    var rows = try #require(raw["types"] as? [[String: Any]])
+    let bulletin = try #require(rows.firstIndex { $0["type_id"] as? String == "dj_bulletin" })
+    for reason in ["bulletin_sources_pending", "bulletin_sources_temporarily_unavailable",
+                   "bulletin_not_enough_fresh_sources", "bulletin_no_new_stories"] {
+        rows[bulletin]["reason"] = reason
+        raw["types"] = rows
+        let inventory: DJConnectAskDJMoments.Inventory = try decodeMomentValue(raw)
+        let visible = try #require(inventory.visibleTypes.first { $0.typeID == "dj_bulletin" })
+        #expect(!visible.available)
+        #expect(visible.reason == reason)
+        #expect(!inventory.visibleTypes.contains { $0.reason == "capability_unavailable" })
+        #expect(inventory.visibleTypes.filter(\.available) == inventory.orderedTypes.filter(\.available))
+    }
+}
+
+@Test func momentsSubjectHeaderUsesOnlyOriginalInventoryFacts() throws {
+    let fixture = try momentFixture("producer-final")
+    let capability: DJConnectAskDJMoments.Capability = try decodeMomentValue(try #require(fixture["capability"]))
+    var raw = try #require(fixture["inventory"] as? [String: Any])
+    let original: DJConnectAskDJMoments.Inventory = try decodeMomentValue(raw)
+    #expect(original.subjectContext == nil)
+    let reference = try #require(original.types.first?.subject.reference)
+    raw["subject_context"] = ["subject_ref": reference, "track_title": "Declared captured recording",
+                              "artist": "Declared, Unsplittable & Band", "album": "Declared captured album"]
+    let admitted: DJConnectAskDJMoments.Inventory = try decodeMomentValue(raw)
+    #expect(admitted.admits(session: original.sessionID, capability: capability))
+    #expect(admitted.subjectContext?.artist == "Declared, Unsplittable & Band")
+    #expect(admitted.subjectContext?.album == "Declared captured album")
+    #expect(admitted.types == original.types, "Header projection must not mutate availability or the original request subjects")
+    raw["subject_context"] = ["subject_ref": reference, "artist": "Declared artist"]
+    let unknown: DJConnectAskDJMoments.Inventory = try decodeMomentValue(raw)
+    #expect(unknown.subjectContext?.album == nil && unknown.subjectContext?.trackTitle == nil)
+    #expect(unknown.admits(session: original.sessionID, capability: capability))
+    // No fallback to the original album-story action label or any current playback.
+    #expect(unknown.types.contains { $0.subject.kind == "album" })
+    raw["subject_context"] = ["subject_ref": reference, "artist": String(repeating: "音", count: 300)]
+    let unicode: DJConnectAskDJMoments.Inventory = try decodeMomentValue(raw)
+    #expect(unicode.admits(session: original.sessionID, capability: capability),
+            "The512-character contract is not an accidental512-byte ASCII limit")
+}
+
+@Test(arguments: ["wrong_subject", "too_long", "control", "empty"])
+func momentsSubjectHeaderRejectsForeignOrMalformedFacts(caseName: String) throws {
+    let fixture = try momentFixture("producer-final")
+    let capability: DJConnectAskDJMoments.Capability = try decodeMomentValue(try #require(fixture["capability"]))
+    var raw = try #require(fixture["inventory"] as? [String: Any])
+    let inventory: DJConnectAskDJMoments.Inventory = try decodeMomentValue(raw)
+    var context = ["subject_ref": try #require(inventory.types.first?.subject.reference), "artist": "Declared artist"]
+    switch caseName {
+    case "wrong_subject": context["subject_ref"] = "a-different-original-capture"
+    case "too_long": context["artist"] = String(repeating: "a", count: 513)
+    case "control": context["artist"] = "invalid\nartist"
+    default: context["artist"] = ""
+    }
+    raw["subject_context"] = context
+    let decoded: DJConnectAskDJMoments.Inventory = try decodeMomentValue(raw)
+    #expect(!decoded.admits(session: inventory.sessionID, capability: capability))
+}

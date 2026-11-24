@@ -77,6 +77,11 @@ private final class ConsentWire: URLProtocol, @unchecked Sendable {
             prepareTransportContext(&value, mode: mode)
         } else if path.hasSuffix("/owner/context") {
             prepareOwnerContext(&value, mode: mode, count: count)
+        } else if path.hasSuffix("/cast/owner/launch") {
+            value["code"] = "123456"
+            value["claim_id"] = String(repeating: mode == "cast-mismatch" ? "E" : "B", count: 42) + "A"
+            value["browser_generation"] = String(repeating: "C", count: 42) + "A"
+            value["issuer_epoch"] = consentEpoch
         } else if path.hasSuffix("/owner/resolve") {
             prepareResolvedClaim(&value, mode: mode)
         } else if path.hasSuffix("/owner/approve") {
@@ -116,6 +121,10 @@ private final class ConsentWire: URLProtocol, @unchecked Sendable {
                 "peer_policy": "enabled_interface_subnet_or_loopback", "internal_origin_required": true,
                 "forwarded_plaintext": "forbidden", "mode": "qualified_direct_http"]]) { _, new in new }
         if mode == "wrong-install" { value["ha_install_id"] = "other" }
+        if request.url?.scheme == "https" {
+            value["requires_authenticated_tls"] = true
+            value["transport_security"] = ["mode": "authenticated_tls"]
+        }
     }
 
     private func prepareOwnerDisplayObservation(_ value: inout [String: Any], mode: String, count: Int) {
@@ -180,6 +189,38 @@ private final class ConsentWire: URLProtocol, @unchecked Sendable {
     override func stopLoading() {}
 }
 @Suite(.serialized) @MainActor struct DisplayConsentSessionTests {
+    @Test(.isolatedClientResources) func castLaunchMatchesThePairedClaimBeforeApproval() async throws {
+        for mode in ["normal", "cast-mismatch"] {
+            ConsentWire.reset(mode)
+            let config = URLSessionConfiguration.ephemeral
+            config.protocolClasses = [ConsentWire.self]
+            let origin = URL(string: "https://127.0.0.1:18801")!
+            let client = DJConnectClient(baseURL: origin,
+                identity: DJConnectIdentity(deviceID: "djconnect-macos-ABCDEF123456", deviceName: "Fixture",
+                                            clientType: .macos, firmware: "test", platform: .macos),
+                tokenStore: DJConnectInMemoryTokenStore(token: "synthetic-owner"), session: URLSession(configuration: config))
+            let flow = try DJConnectDisplayConsentSession(client: client, installationID: "fixture-install",
+                sessionID: "fixture-session", pairedLocalOrigin: origin, isCurrent: { true })
+            let receiverID = try #require(UUID(uuidString: "88f78d37-ee02-414f-a943-0a4dce6407f6"))
+            let claim = try await client.launchCastScreen(receiverID: receiverID, sessionID: "fixture-session",
+                expectedInstallationID: "fixture-install", isCurrent: { true })
+            let body = try ConsentWire.body(for: "/cast/owner/launch")
+            #expect(body["receiver_id"] as? String == "88f78d37ee02414fa9430a4dce6407f6")
+            #expect(body["session_id"] as? String == "fixture-session")
+            #expect(body["identity"] as? [String: String] == [
+                "device_id": "djconnect-macos-ABCDEF123456", "client_type": "macos",
+            ])
+            if mode == "normal" {
+                try await flow.resolve(code: claim.code, castClaim: claim)
+                #expect(flow.state == .ready)
+            } else {
+                await #expect(throws: DJConnectError.self) { try await flow.resolve(code: claim.code, castClaim: claim) }
+                #expect(flow.state != .ready)
+            }
+            #expect(!ConsentWire.requests.contains { $0.url?.path.hasSuffix("/owner/approve") == true })
+        }
+    }
+
     private func make(_ mode: String = "normal", clientType: DJConnectClientType = .ios) throws -> (DJConnectDisplayConsentSession, DJConnectInMemoryTokenStore, ConsentAuthority) {
         ConsentWire.reset(mode)
         let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [ConsentWire.self]

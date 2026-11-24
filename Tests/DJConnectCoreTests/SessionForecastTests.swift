@@ -359,3 +359,80 @@ func horizonPreviewProducerCases() throws -> [HorizonPreviewProducerFixture.Case
     }
 }
 #endif
+
+// Actual HA pure-GET response clocks/revisions; identity/text/link fields are
+// declared MODEL redactions. These clocks are test inputs, not Apple authority.
+@Test(.isolatedClientResources, arguments: ["redacted-core-read-receipts-v2-native-parser.json", "redacted-core-deadline-rollover-v3.json"])
+func forecastActualReadReceiptsKeepOriginalDeadlineAndAdmitOnlyLaterOriginalLease(file: String) throws {
+    let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("Fixtures/" + file)
+    let fixture = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+    let samples = try #require(fixture["samples"] as? [[String: Any]])
+    var cursor = DJConnectForecastCursor(sessionID: "fixture-session")
+    var previous: DJConnectSessionForecast?
+    var priorExpiry: Date?
+    var admittedMonotonicDeadline: TimeInterval?
+    var sawLateReceipt = false
+    var sawLaterLease = false
+    for sample in samples {
+        let response = try #require(sample["redacted_response"] as? [String: Any])
+        let forecast = try forecastDecode(try #require(response["forecast"]))
+        let now = try #require(DJConnectSessionForecast.timestamp(sample["response_wall_utc"] as? String))
+        let mono = try #require(sample["response_c1_monotonic_seconds"] as? Double)
+        let expiry = try #require(DJConnectSessionForecast.timestamp(forecast.valid_until))
+        let remaining = expiry.timeIntervalSince(now)
+        #expect(forecast.structurallyValid)
+        #expect(remaining > 0)
+        let delay = SessionForecastReadCadence.delay(originalRemaining: remaining)
+        #expect(delay >= 1 && delay <= 8)
+        if remaining > 1 { #expect(delay < remaining) }
+        if remaining < 6 { sawLateReceipt = true }
+
+        cursor.receive(forecast, at: now, uptime: mono)
+        func visible(at wall: Date, uptime: TimeInterval) -> DJConnectSessionForecast? {
+            cursor.visible(playbackItemID: forecast.current_anchor?.item_id,
+                playbackSource: forecast.current_anchor?.source_url, at: wall, uptime: uptime)
+        }
+        #expect(visible(at: now, uptime: mono) == forecast)
+        if let priorExpiry, let monotonicDeadline = admittedMonotonicDeadline {
+            if expiry == priorExpiry {
+                // Repeated receipts cannot extend a held lease, even with a frozen wall clock.
+                #expect(visible(at: now, uptime: monotonicDeadline + 0.001) == nil)
+            } else if expiry > priorExpiry {
+                // If the new receipt arrives after the old deadline, inspect at receipt time
+                // or later. Reading the new result before its admission is deliberately rejected.
+                let afterOldWall = max(now, priorExpiry.addingTimeInterval(0.001))
+                let afterOldUptime = max(mono, monotonicDeadline + 0.001)
+                #expect(visible(at: afterOldWall, uptime: afterOldUptime) == forecast)
+                sawLaterLease = true
+            }
+        }
+        if expiry != priorExpiry {
+            admittedMonotonicDeadline = mono + remaining
+        }
+        let originalDeadline = try #require(admittedMonotonicDeadline)
+        #expect(visible(at: now, uptime: originalDeadline + 0.001) == nil)
+        #expect(visible(at: expiry, uptime: mono) == nil)
+        if let previous, previous.revision < forecast.revision {
+            cursor.receive(previous, at: now, uptime: mono)
+            #expect(cursor.projection == forecast)
+        }
+        previous = forecast
+        priorExpiry = expiry
+        // A slow response never renders past its own ORIGINAL expiry.
+        var slow = DJConnectForecastCursor(sessionID: forecast.session_id)
+        slow.receive(forecast, at: expiry.addingTimeInterval(1), uptime: mono + remaining + 1)
+        #expect(slow.visible(playbackItemID: forecast.current_anchor?.item_id,
+            playbackSource: forecast.current_anchor?.source_url, at: expiry.addingTimeInterval(1),
+            uptime: mono + remaining + 1) == nil)
+    }
+    #expect(sawLateReceipt)
+    #expect(sawLaterLease == (fixture["observed_distinct_later_original_deadline"] as? Bool ?? false))
+}
+
+@Test func forecastVisibleReadCadenceIsBoundedWithoutRenewingAnObservation() {
+    #expect(SessionForecastReadCadence.delay(originalRemaining: 6) == 5)
+    #expect(SessionForecastReadCadence.delay(originalRemaining: 30) == 8)
+    #expect(SessionForecastReadCadence.delay(originalRemaining: 0) == 1)
+    #expect(SessionForecastReadCadence.delay(originalRemaining: .nan) == 8)
+}

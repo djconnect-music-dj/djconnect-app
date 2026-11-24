@@ -5,7 +5,7 @@ import Testing
 
 /// Deliberately suspended HTTP, exercising the production controller + operation journal.
 /// Source/model content is the declared Core fixture, not a live provider acceptance test.
-private actor MomentsControllerWire: DJConnectHybridWire {
+actor MomentsControllerWire: DJConnectHybridWire {
     private var fixture: [String: Any]
     private var originalID = ""
     private var ownerDenied = false

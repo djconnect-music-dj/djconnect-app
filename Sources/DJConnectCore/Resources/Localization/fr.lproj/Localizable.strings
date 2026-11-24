@@ -1926,3 +1926,7 @@
 "ui.vibecast.cast.waiting" = "En attente de confirmation de l’écran…";
 "ui.vibecast.cast.failed" = "Connexion impossible. Réessaie.";
 "ui.vibecast.cast.choose" = "Choisis ton écran Google Cast.";
+
+"ui.canvas.not_offered" = "Cette instance Home Assistant ne propose pas Music Canvas actuellement.";
+
+"ui.session.forecast.up_next" = "Ensuite";

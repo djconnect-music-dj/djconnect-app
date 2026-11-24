@@ -24,7 +24,10 @@ struct AskDJMomentsCardContent: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(text("title")).font(.headline).accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 8)
-                Button(text("close")) { controller.close() }.frame(minHeight: 44)
+                Button { controller.close() } label: { Image(systemName: "xmark") }
+                    .djConnectButtonStyle(DJConnectButtonStyle(shape: .icon))
+                    .accessibilityLabel(text("close"))
+                    .accessibilityIdentifier("ask-moments-close")
             }
             switch controller.presentation.phase {
             case .choosing:
@@ -61,7 +64,8 @@ struct AskDJMomentsCardContent: View {
             case .notice:
                 if controller.canChooseAgain {
                     Button(text("choose")) { controller.chooseAgain() }
-                        .frame(minHeight: 44).accessibilityIdentifier("ask-moments-choose-again")
+                        .djConnectButtonStyle(DJConnectButtonStyle())
+                        .accessibilityIdentifier("ask-moments-choose-again")
                 } else if controller.operationID != nil {
                     Button(text("check_status")) { controller.checkStatus() }.frame(minHeight: 44)
                 }
@@ -106,34 +110,73 @@ struct AskDJMomentsCatalogue: View {
     let select: (DJConnectAskDJMoments.Item) -> Void
     var body: some View {
         ScrollView {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), alignment: .leading)], alignment: .leading, spacing: 10) {
-                ForEach(inventory.orderedTypes) { item in
-                    Button { select(item) } label: {
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(item.title(language: language)).font(.headline)
-                            Text(item.subject.title).font(.body)
-                            if !item.subject.subtitle.isEmpty { Text(item.subject.subtitle).font(.caption) }
-                            if !item.available { Text(item.unavailableReason(language: language) ?? unavailableLabel).font(.caption).foregroundStyle(.white.opacity(0.8)) }
-                        }.lineLimit(nil).fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading).padding(10)
+        VStack(alignment: .leading, spacing: 16) {
+            if let context = inventory.subjectContext,
+               context.artist != nil || context.album != nil || context.trackTitle != nil {
+                VStack(alignment: .leading, spacing: 6) {
+                    if let artist = context.artist {
+                        Text(artist).font(.title3.weight(.semibold))
+                            .accessibilityLabel(DJConnectLocalization.localized(key: "ui.artist", language: language))
+                            .accessibilityValue(artist)
                     }
-                    .buttonStyle(AskDJMomentsRowStyle(available: item.available)).disabled(!item.available)
+                    if let album = context.album {
+                        Label(album, systemImage: "opticaldisc").font(.subheadline).foregroundStyle(.secondary)
+                            .accessibilityLabel(DJConnectLocalization.localized(key: "ui.album", language: language))
+                            .accessibilityValue(album)
+                    }
+                    if let track = context.trackTitle {
+                        Label(track, systemImage: "music.note").font(.subheadline).foregroundStyle(.secondary)
+                            .accessibilityLabel(DJConnectLocalization.localized(key: "ui.track", language: language))
+                            .accessibilityValue(track)
+                    }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("ask-moments-subject-context")
+            }
+            if inventory.visibleTypes.isEmpty {
+                Text(unavailableLabel).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("ask-moments-no-available-types")
+            }
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), alignment: .leading)], alignment: .leading, spacing: 10) {
+                ForEach(inventory.visibleTypes) { item in
+                    Button { select(item) } label: {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: symbol(for: item.typeID))
+                                .font(.title2.weight(.medium))
+                                .foregroundStyle(djConnectIconGradient)
+                                .frame(width: 32, height: 32)
+                                .accessibilityHidden(true)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(item.title(language: language)).font(.headline)
+                                if !item.available {
+                                    Text(item.unavailableReason(language: language) ?? unavailableLabel)
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }.frame(maxWidth: .infinity, minHeight: 68, alignment: .topLeading)
+                            .padding(.vertical, 4)
+                    }
+                    .djConnectButtonStyle(DJConnectButtonStyle(shape: .segmented, expands: true))
+                    .disabled(!item.available)
                     .accessibilityIdentifier("ask-moments-type-" + item.typeID)
                 }
             }
+        }
         }.frame(maxHeight: 480)
     }
-}
-
-/// Disabled choices remain readable/discoverable; native disabled semantics and
-/// the Core explanation carry availability instead of compounded opacity.
-private struct AskDJMomentsRowStyle: ButtonStyle {
-    let available: Bool
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .foregroundStyle(.white.opacity(available ? 1 : 0.85))
-            .background(RoundedRectangle(cornerRadius: 8).fill(.white.opacity(configuration.isPressed ? 0.22 : available ? 0.14 : 0.07)))
-            .contentShape(RoundedRectangle(cornerRadius: 8))
+    private func symbol(for type: String) -> String {
+        switch type {
+        case "artist_story", "artist_discovery": return "person.wave.2"
+        case "album_story", "album_continuity": return "opticaldisc"
+        case "shared_producer", "producer_recommendation", "recording_story": return "slider.horizontal.3"
+        case "music_origin": return "sparkle.magnifyingglass"
+        case "dj_bulletin": return "newspaper"
+        default: return "music.note"
+        }
     }
 }
 

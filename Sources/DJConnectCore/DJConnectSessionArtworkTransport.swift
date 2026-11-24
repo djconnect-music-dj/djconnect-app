@@ -81,10 +81,21 @@ final class DJConnectSessionArtworkTransport: Sendable {
         } catch { await budget.release(); throw error }
     }
 
-    func prepare(_ request: URLRequest, allowsVisualContextReadiness: Bool = false, isCurrent: (@MainActor @Sendable () -> Bool)? = nil) async throws -> Data {
+    func prepare(_ request: URLRequest, allowsVisualContextReadiness: Bool = false,
+                 forCastLaunch: Bool = false, isCurrent: (@MainActor @Sendable () -> Bool)? = nil) async throws -> Data {
         try await budget.acquire()
+        let transport: URLSession
+        if forCastLaunch {
+            let configuration = preparationSession.configuration
+            configuration.timeoutIntervalForRequest = 40
+            configuration.timeoutIntervalForResource = 40
+            transport = URLSession(configuration: configuration, delegate: SessionArtworkRedirectGuard(), delegateQueue: nil)
+        } else {
+            transport = preparationSession
+        }
+        defer { if forCastLaunch { transport.invalidateAndCancel() } }
         do {
-            let (data, _) = try await responseData(request, using: preparationSession,
+            let (data, _) = try await responseData(request, using: transport,
                 maximumBytes: 64 * 1024, allowedMIMEs: ["application/json"],
                 allowsVisualContextReadiness: allowsVisualContextReadiness,
                 isCurrent:isCurrent,taskCreated:preparationTaskCreated,taskResumed:preparationTaskResumed)

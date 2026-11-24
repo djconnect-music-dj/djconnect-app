@@ -1243,7 +1243,6 @@ struct SessionPlaybackCardButton: View {
     var requestPresentation: ((CGRect) -> Void)? = nil
     @State private var sourceRect: CGRect = .zero
     @State private var showsPlayback = false
-    @State private var showsInsight = false
     @Environment(\.scenePhase) private var scenePhase
     var canOpenPlayback: Bool { model.canToggleSessionFavorite(session) }
     private var context: [String?] {
@@ -1252,13 +1251,16 @@ struct SessionPlaybackCardButton: View {
     }
     var body: some View {
         HStack(spacing: 8) {
-            Button { showsInsight = true } label: {
+            Button {
+                model.navigateToCurrentTrackInsight(sessionID: session.id,
+                    playbackItemID: session.broadcast.playback?.itemID, sourceURL: session.broadcast.playback?.sourceURL)
+            } label: {
                 SessionPlaybackEqualizer(isPlaying: model.playback?.isPlaying == true)
                     .frame(width: 20, height: 20).frame(minWidth: 44, minHeight: 44)
                     .contentShape(Rectangle())
             }
             .djConnectPlainButtonStyle()
-            .disabled(model.visibleTrackInsightPlaybackID == nil)
+            .disabled(model.trackInsightPlaybackPresentationID == nil)
             .accessibilityLabel("Track Insight")
             .accessibilityIdentifier("session-equalizer-open-insight")
         Button {
@@ -1297,20 +1299,7 @@ struct SessionPlaybackCardButton: View {
             .presentationCompactAdaptation(.popover)
         }
         }
-        .sheet(isPresented: $showsInsight) {
-            VStack(spacing: 0) {
-                HStack {
-                    Spacer()
-                    Button(DJConnectLocalization.localized(key: "ui.close", language: model.language)) { showsInsight = false }
-                        .accessibilityIdentifier("session-track-insight-close")
-                }.padding()
-                TrackInsightView(model: model)
-            }
-            #if os(macOS)
-            .frame(minWidth: 640, minHeight: 600)
-            #endif
-        }
-        .onChange(of: context) { _, _ in showsPlayback = false; showsInsight = false }
+        .onChange(of: context) { _, _ in showsPlayback = false }
         .onChange(of: canOpenPlayback) { _, allowed in if !allowed { showsPlayback = false } }
         .onChange(of: scenePhase) { _, phase in if phase != .active { showsPlayback = false } }
     }
@@ -1339,7 +1328,29 @@ struct MomentCard: View {
             singleAction: { model.askDJMoments.open() },
             singleEnabled: model.askDJMomentsScope() != nil && !model.askDJMoments.hasPriority))
     }
+    private var usesThumbnailColumns: Bool {
+        guard artworkModel != nil, let media = artworkMedia,
+              ["cover", "playback_thumbnail", "contextual_artist"].contains(media.artwork.role) else { return false }
+        #if os(iOS)
+        return UIDevice.current.userInterfaceIdiom == .pad
+        #else
+        return true
+        #endif
+    }
+    @ViewBuilder private var thumbnail: some View {
+        if let media = artworkMedia, let model = artworkModel {
+            SessionArtworkView(media: media, target: .moment(moment.id), audience: .current,
+                language: language, model: model, showsAttribution: spotifyURLs.isEmpty)
+        }
+    }
     var body: some View {
+        SessionContributionColumns(horizontal: usesThumbnailColumns) {
+            if usesThumbnailColumns {
+                // Stable thumbnail column while its separately authorized pixels
+                // arrive. Original photo heroes never enter this role selection.
+                thumbnail.frame(width: 100, alignment: .topLeading)
+            }
+        } detail: {
         VStack(alignment: .leading, spacing: 14) {
             if moment.isMusicOriginV1, let origin = moment.musicOrigin {
                 MusicOriginContentView(origin: origin, title: moment.title, story: moment.content, language: language,
@@ -1358,10 +1369,7 @@ struct MomentCard: View {
                         .frame(minHeight: 44)
                 }
             } else {
-            if let media = artworkMedia, let model = artworkModel {
-                SessionArtworkView(media: media, target: .moment(moment.id), audience: .current, language: language, model: model,
-                    showsAttribution: spotifyURLs.isEmpty)
-            }
+            if !usesThumbnailColumns { thumbnail }
             if moment.isBulletinV1 {
                 Label(kind, systemImage: "newspaper").font(.caption.weight(.bold)).foregroundStyle(.secondary)
                     .accessibilityAddTraits(.isHeader)
@@ -1407,6 +1415,7 @@ struct MomentCard: View {
                     .accessibilityValue(url.absoluteString)
                     .accessibilityIdentifier("moment-source-" + url.absoluteString)
             }
+        }
         }
         .accessibilityElement(children: .contain)
     }

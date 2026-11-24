@@ -9,6 +9,7 @@ struct MusicCanvasView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var snapshot: DJConnectCanvasSnapshot?
     @State private var busy = false
+    @State private var refreshing = false
     @State private var readID = UUID()
     @State private var operationID: UUID?
     @State private var notice: String?
@@ -35,8 +36,8 @@ struct MusicCanvasView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
+        MusicCanvasPopupSurface(title: "Music Canvas", language: model.language, done: { dismiss() }) {
+            VStack(alignment: .leading, spacing: 18) {
                 Section {
                     Text(text("description")).foregroundStyle(.secondary)
                     if let snapshot {
@@ -95,17 +96,24 @@ struct MusicCanvasView: View {
                         }
                     }
                 }
-                if let notice { Text(notice).foregroundStyle(.secondary).accessibilityIdentifier("canvas-notice") }
-                if busy { ProgressView().accessibilityLabel(text("working")) }
+                if let notice {
+                    Text(notice).foregroundStyle(.secondary).accessibilityIdentifier("canvas-notice")
+                    Button(DJConnectLocalization.localized(key: "ui.retry", language: model.language)) {
+                        let captured = scope
+                        Task { await refresh(captured) }
+                    }
+                    .djConnectButtonStyle(DJConnectButtonStyle())
+                    .disabled(refreshing)
+                    .accessibilityIdentifier("music-canvas-retry")
+                }
+                if busy || (snapshot == nil && notice == nil) {
+                    ProgressView().accessibilityLabel(text("working"))
+                }
             }
             .disabled(busy)
-            .navigationTitle("Music Canvas")
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button(text("done")) { dismiss() } }
-            }
             .task(id: scope) {
                 snapshot = nil; selected = nil; preview = nil; notice = nil
-                readID = UUID(); operationID = nil; busy = false
+                readID = UUID(); operationID = nil; busy = false; refreshing = false
                 let captured = scope
                 guard current(captured) else { return }
                 while !Task.isCancelled && current(captured) {
@@ -113,19 +121,21 @@ struct MusicCanvasView: View {
                     try? await Task.sleep(for: .seconds(5))
                 }
             }
-            .sheet(item: $selected) { target in
+            .djConnectPopup(item: $selected) { target in
                 details(target)
             }
             .onChange(of: scenePhase) { _, value in
                 if value != .active { snapshot = nil; selected = nil; preview = nil }
             }
         }
-        .frame(idealWidth: 460, idealHeight: 620)
+        .accessibilityIdentifier("music-canvas-popup")
     }
 
     private func details(_ target: DJConnectCanvasTarget) -> some View {
-        NavigationStack {
-            Form {
+        MusicCanvasPopupSurface(title: target.name, language: model.language, done: {
+            selected = nil; preview = nil
+        }) {
+            VStack(alignment: .leading, spacing: 18) {
                 Section {
                     Text(status(target.state))
                     if target.preview_available, let preview {
@@ -178,14 +188,12 @@ struct MusicCanvasView: View {
                 if busy { ProgressView() }
             }
             .disabled(busy)
-            .navigationTitle(target.name)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(text("done")) { selected = nil; preview = nil } } }
             .confirmationDialog(text("forget") + " — " + target.name, isPresented: $confirmingForget, titleVisibility: .visible) {
                 Button(text(allowRemaining || target.forgetting == true ? "forget_anyway" : "forget"), role: .destructive) { forget(target) }
                 Button(text("cancel"), role: .cancel) {}
             } message: { Text(text("forget_detail")) }
         }
-        .frame(idealWidth: 440, idealHeight: 540)
+        .accessibilityIdentifier("music-canvas-target-popup")
     }
 
     private func status(_ state: String) -> String {
@@ -198,18 +206,21 @@ struct MusicCanvasView: View {
     }
 
     private func refresh(_ captured: String) async {
+        guard current(captured), !busy, !refreshing else { return }
         let requestID = UUID()
-        readID = requestID
+        readID = requestID; refreshing = true
+        defer { if readID == requestID { refreshing = false } }
         do {
             let value = try await model.withHomeAssistantClient { try await $0.musicCanvas() }
             guard current(captured), !Task.isCancelled, readID == requestID else { return }
-            snapshot = value
+            snapshot = value; notice = nil
             if let selected { self.selected = value.targets.first { $0.id == selected.id } }
         } catch {
             guard current(captured), !Task.isCancelled, readID == requestID else { return }
             // A failed refresh cannot retain an old management grant or private image.
             snapshot = nil; selected = nil; preview = nil
-            notice = text("unavailable")
+            notice = text((error as? DJConnectCanvasReadFailure) == .notOffered ? "not_offered" : "unavailable")
+            model.recordCanvasReadFailure(error)
         }
     }
 
@@ -277,5 +288,39 @@ struct MusicCanvasView: View {
                 notice = text("unavailable")
             }
         }
+    }
+}
+
+/// The same app canvas, hero, frosted content and explicit action used by
+/// ordinary DJConnect popups. It owns presentation only, never Canvas state.
+@MainActor struct MusicCanvasPopupSurface<Content: View>: View {
+    let title: String
+    let language: String
+    let done: () -> Void
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        ZStack {
+            DJConnectCanvasBackground()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    VStack(spacing: 12) {
+                        DJConnectHeroGlyph(systemImage: "photo.artframe")
+                        Text(title).font(.title2.bold()).multilineTextAlignment(.center)
+                            .accessibilityAddTraits(.isHeader)
+                    }.frame(maxWidth: .infinity)
+                    content().padding(20).frame(maxWidth: .infinity, alignment: .leading)
+                        .djSessionFrostedSurface()
+                    Button(DJConnectLocalization.localized(key: "ui.canvas.done", language: language), action: done)
+                        .djConnectButtonStyle(DJConnectButtonStyle(emphasis: .primary, expands: true))
+                        .accessibilityIdentifier("music-canvas-done")
+                }.padding(24)
+            }.scrollBounceBehavior(.basedOnSize)
+        }
+        .frame(minWidth: djConnectDialogMinimumWidth, idealWidth: 560, maxWidth: 680)
+        #if os(macOS)
+        .frame(minHeight: 420, idealHeight: 640)
+        #endif
+        .presentationBackground { DJConnectCanvasBackground() }
     }
 }

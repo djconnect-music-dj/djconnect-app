@@ -171,8 +171,8 @@ private struct DJConnectBreathingArtwork: ViewModifier {
     func body(content: Content) -> some View {
         let animates = enabled && isVisible && scenePhase == .active && !reduceMotion
         TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !animates)) { context in
-            let phase = (1 - cos(context.date.timeIntervalSinceReferenceDate * .pi / 3)) / 2
-            content.scaleEffect(animates ? 0.985 + 0.015 * phase : 1)
+            let phase = (1 - cos(context.date.timeIntervalSinceReferenceDate * 2 * .pi / 4.2)) / 2
+            content.scaleEffect(animates ? 0.97 + 0.03 * phase : 1)
         }
         .onAppear { isVisible = true }
         .onDisappear { isVisible = false }

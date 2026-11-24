@@ -877,7 +877,7 @@ struct SessionTimelineScreen: View {
                 }
             }
             #endif
-            .sheet(isPresented: $canvasPresented) { MusicCanvasView(model: model) }
+            .djConnectPopup(isPresented: $canvasPresented) { MusicCanvasView(model: model) }
             .background(sessionBackground)
             .coordinateSpace(name: AskDJHelpPanelLayout.coordinateSpace)
             .simultaneousGesture(SpatialTapGesture(coordinateSpace: .global).onEnded { tap in
@@ -947,13 +947,13 @@ struct SessionTimelineScreen: View {
                 ToolbarItemGroup(placement: .navigation) {
                     sessionSearchToolbarButton(proxy: proxy)
                     sessionToolbarActions(proxy: proxy)
-                    if activeSession != nil && !model.isDemoMode {
+                    if activeSession != nil && !model.isDemoMode && !model.isShowingVibeScape {
                         Button { canvasPresented = true } label: { Image(systemName: "photo.artframe") }
                             .accessibilityLabel(text("ui.canvas.open"))
                             .accessibilityIdentifier("session-music-canvas")
                             .help(text("ui.canvas.open"))
                     }
-                    if allowsHandoffPresentation {
+                    if allowsHandoffPresentation && !model.isShowingVibeScape {
                         Button { model.openVibeCastDestinationPicker() } label: {
                             Image(systemName: "tv.badge.wifi")
                                 .foregroundStyle(model.isVibeCastSharing ? djConnectAccent : .white)
@@ -1233,7 +1233,7 @@ struct SessionTimelineScreen: View {
             }
             #endif
             #if os(macOS)
-            if activeSession != nil {
+            if activeSession != nil && !model.isShowingVibeScape {
                 Button { showingDJVoice.toggle() } label: {
                     Label(text("ui.dj_settings.title"), systemImage: "speaker.wave.2")
                 }
@@ -1251,13 +1251,13 @@ struct SessionTimelineScreen: View {
             }
             #else
             if usesExpandedToolbar {
-                if activeSession != nil && !model.isDemoMode {
+                if activeSession != nil && !model.isDemoMode && !model.isShowingVibeScape {
                     Button { canvasPresented = true } label: { Image(systemName: "photo.artframe") }
                         .accessibilityLabel(text("ui.canvas.open"))
                         .accessibilityIdentifier("session-music-canvas")
                 }
 
-                if let activeSession {
+                if let activeSession, !model.isShowingVibeScape {
                     Button {
                         sessionControlIntent = SessionControlIntent(kind: .voice, sessionID: activeSession.id,
                             epoch: history.responseEpoch, sourceRect: menuFrames[.voice] ?? .zero)
@@ -1269,7 +1269,7 @@ struct SessionTimelineScreen: View {
                     .accessibilityIdentifier("session-voice-toggle")
                     .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { menuFrames[.voice] = $0 }
                 }
-                if allowsHandoffPresentation {
+                if allowsHandoffPresentation && !model.isShowingVibeScape {
                     Button { model.openVibeCastDestinationPicker() } label: {
                         Image(systemName: "tv.badge.wifi")
                             .foregroundStyle(model.isVibeCastSharing ? djConnectAccent : .white)
@@ -1352,7 +1352,6 @@ struct SessionTimelineScreen: View {
     private func currentHeader(_ session: DJConnectSessionRuntime) -> some View {
         VStack(alignment: .leading, spacing: djConnectSessionFlowSpacing) {
             SessionForYouCard(model: model)
-            SessionHorizonMomentCard(model: model, session: session)
             NativeSessionMomentsView(session: session, language: model.language,
             isRecovering: model.djSessionIsRecovering,
             isLiveUnavailable: model.djSessionLiveUnavailable,
@@ -2491,19 +2490,19 @@ struct SessionControlPopoverHost: View {
                                     .disabled(!(searchEnabled ?? history.searchAvailable))
                                     .accessibilityIdentifier("session-search-toggle")
                                 }
-                                if captured.sessionID == model.activeDJSession?.id {
+                                if captured.sessionID == model.activeDJSession?.id && !model.isShowingVibeScape {
                                     Button { queue(.voice, captured: captured) } label: {
                                         Label(text("ui.dj_settings.title"), systemImage: "speaker.wave.2")
                                             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                                     }.accessibilityIdentifier("session-voice-toggle")
                                 }
-                                if captured.sessionID == model.activeDJSession?.id && !model.isDemoMode && canvasAction != nil {
+                                if captured.sessionID == model.activeDJSession?.id && !model.isDemoMode && canvasAction != nil && !model.isShowingVibeScape {
                                     Button { queue(.canvas, captured: captured) } label: {
                                         Label(text("ui.canvas.open"), systemImage: "photo.artframe")
                                             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                                     }.accessibilityIdentifier("session-music-canvas")
                                 }
-                                if showsHandoff {
+                                if showsHandoff && !model.isShowingVibeScape {
                                     Button { queue(.handoff, captured: captured) } label: {
                                         Label {
                                             Text(text(model.isVibeCastSharing ? "ui.displayConsent.active_title" : "ui.vibecast.handoff.title"))
@@ -3676,30 +3675,53 @@ struct SessionHorizonMomentContent: View {
     let language: String
     let artworkURL: URL?
     var body: some View {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 10) {
-                        DJPersonaAvatarView(confirmedMood: mood, language: language)
-                            .frame(width: 32, height: 32).accessibilityHidden(true)
-                        Text("Horizon").font(.headline)
-                    }
-                    HStack(alignment: .top, spacing: 16) {
-                        if let url = artworkURL {
-                            CachedArtworkImage(url: url, mode: .fit) { Color.clear }
-                                .frame(width: 84, height: 84).clipShape(RoundedRectangle(cornerRadius: 10))
-                                .djConnectBreathingArtwork()
-                        }
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(preview.track.title).font(.title3.bold())
-                            Text(preview.track.artist).foregroundStyle(.secondary)
-                            Text(preview.text).font(.title3).fixedSize(horizontal: false, vertical: true)
-                        }.frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    if let source = URL(string: preview.track.source_url) {
-                        SessionSpotifyAttributionLinks(urls: [source])
-                    }
+        SessionHorizonTrackContent(
+            heading: DJConnectLocalization.localized(key: "ui.session.forecast.up_next", language: language),
+            mood: mood, language: language, title: preview.track.title, artist: preview.track.artist,
+            intro: preview.text, artworkURL: artworkURL, sourceURL: URL(string: preview.track.source_url),
+            showsDJAvatar: true)
+            .accessibilityIdentifier("session-horizon-up-next")
+    }
+}
+
+/// Shared presentation of already-qualified current/next track metadata. It
+/// owns no queue, read clock, artwork authority or preview lifetime.
+struct SessionHorizonTrackContent: View {
+    let heading: String
+    let mood: String
+    let language: String
+    let title: String
+    let artist: String
+    let intro: String?
+    let artworkURL: URL?
+    let sourceURL: URL?
+    let showsDJAvatar: Bool
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                if showsDJAvatar {
+                    DJPersonaAvatarView(confirmedMood: mood, language: language)
+                        .frame(width: 32, height: 32).accessibilityHidden(true)
+                } else {
+                    Image(systemName: "play.fill").accessibilityHidden(true)
                 }
-                .padding(20).frame(maxWidth: .infinity, alignment: .leading)
-                .djSessionFrostedSurface()
-                .accessibilityIdentifier("session-horizon-up-next")
+                Text(heading).font(.headline).accessibilityAddTraits(.isHeader)
+            }
+            HStack(alignment: .top, spacing: 16) {
+                if let url = artworkURL {
+                    CachedArtworkImage(url: url, mode: .fit) { Color.clear }
+                        .frame(width: 84, height: 84).clipShape(RoundedRectangle(cornerRadius: 10))
+                        .djConnectBreathingArtwork()
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(title).font(.title3.bold())
+                    Text(artist).foregroundStyle(.secondary)
+                    if let intro { Text(intro).font(.title3).fixedSize(horizontal: false, vertical: true) }
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if let sourceURL { SessionSpotifyAttributionLinks(urls: [sourceURL]) }
+        }
+        .padding(20).frame(maxWidth: .infinity, alignment: .leading)
+        .djSessionFrostedSurface()
     }
 }

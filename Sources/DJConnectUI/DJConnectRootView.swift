@@ -9347,6 +9347,7 @@ struct VibeCastSessionStartDialog: View {
     @State private var qrPhase: QRPhase
     @State private var qrSubmitted = false
     @State private var qrSubmissionFinished = false
+    @State private var castPrepared = false
 
     init(model: DJConnectAppModel, showsDestinations: Bool = false, showsScannedQR: Bool = false) {
         self.model = model
@@ -9357,7 +9358,8 @@ struct VibeCastSessionStartDialog: View {
     var body: some View {
         Group {
             if showsDestinations && model.canSelectVibeCastScreen && model.displayConsentState != .revoked {
-                VibeCastDestinationPicker(model: model, language: model.language, scansNetwork: !model.isDemoMode) {
+                VibeCastDestinationPicker(model: model, language: model.language, scansNetwork: !model.isDemoMode) { prepared in
+                    castPrepared = prepared
                     showsDestinations = false
                 }
                 #if os(iOS)
@@ -9442,7 +9444,7 @@ struct VibeCastSessionStartDialog: View {
                 }
                 #endif
                 if qrPhase == .entry || qrPrepared {
-                    VibeCastHandoffForm(model: model, qrPrepared: qrPrepared)
+                    VibeCastHandoffForm(model: model, qrPrepared: qrPrepared, castPrepared: castPrepared)
                 } else {
                     if qrPhase == .scanned && model.rendezvousHasQR && !qrSubmitted {
                         Button {
@@ -9523,11 +9525,13 @@ private struct VibeCastDestinationPicker: View {
     @ObservedObject var model: DJConnectAppModel
     let language: String
     let scansNetwork: Bool
-    let openScreen: () -> Void
+    let openScreen: (Bool) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var discovery = VibeCastDeviceDiscovery()
+    @State private var castTarget: UUID?
+    @State private var castFailed = false
 
     var body: some View {
         ViewThatFits(in: .vertical) {
@@ -9550,6 +9554,17 @@ private struct VibeCastDestinationPicker: View {
             }
         }
         .onDisappear { discovery.stop(); model.stopLegacyCastDiscovery() }
+        .task(id: castTarget) {
+            guard let castTarget else { return }
+            let ready = await model.resolveCastScreen(receiverID: castTarget)
+            guard !Task.isCancelled else { return }
+            if ready {
+                openScreen(true)
+            } else {
+                castFailed = true
+                self.castTarget = nil
+            }
+        }
     }
 
     private var card: some View {
@@ -9557,11 +9572,12 @@ private struct VibeCastDestinationPicker: View {
             VibeCastDialogHero(title: localizedKey(language, "ui.vibecast.destinations.title"))
                 .accessibilityIdentifier("vibecast-destination-hero")
             VStack(spacing: 4) {
-                Button(action: openScreen) {
+                Button { openScreen(false) } label: {
                     destinationRow(localizedKey(language, "ui.vibecast.destinations.screen"),
                                    symbol: "tv.badge.wifi", showsChevron: true)
                 }
                 .buttonStyle(.plain)
+                .disabled(castTarget != nil)
                 .accessibilityIdentifier("vibecast-destination-screen")
                 #if os(iOS)
                 ForEach(model.legacyCastDevices) { device in
@@ -9581,8 +9597,18 @@ private struct VibeCastDestinationPicker: View {
                 }
                 #else
                 ForEach(discovery.devices) { device in
-                    destinationRow(device.name, symbol: "tv.badge.wifi", showsChevron: false)
-                        .accessibilityHint(localizedKey(language, "ui.vibecast.destinations.unavailable"))
+                    Button {
+                        castFailed = false
+                        castTarget = device.receiverID
+                    } label: {
+                        HStack {
+                            destinationRow(device.name, symbol: "tv.badge.wifi", showsChevron: true)
+                            if let castTarget, castTarget == device.receiverID { ProgressView() }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(castTarget != nil || device.receiverID == nil || !model.canResolveDisplayConsent)
+                    .accessibilityIdentifier("vibecast-cast-device-" + device.id)
                 }
                 #endif
             }
@@ -9610,6 +9636,9 @@ private struct VibeCastDestinationPicker: View {
         if !model.legacyCastDevices.isEmpty { return "ui.vibecast.cast.choose" }
         return "ui.vibecast.destinations.scanning"
         #else
+        if castTarget != nil { return "ui.vibecast.cast.connecting" }
+        if castFailed { return "ui.vibecast.cast.failed" }
+        if discovery.devices.contains(where: { $0.receiverID != nil }) { return "ui.vibecast.cast.choose" }
         if !discovery.devices.isEmpty { return "ui.vibecast.destinations.unavailable" }
         if discovery.failed { return "ui.vibecast.destinations.network" }
         if discovery.searching { return "ui.vibecast.destinations.scanning" }
@@ -9634,6 +9663,7 @@ private struct VibeCastDestinationPicker: View {
     struct Device: Identifiable, Sendable {
         let id: String
         let name: String
+        let receiverID: UUID?
     }
 
     @Published private(set) var devices: [Device] = []
@@ -9699,7 +9729,14 @@ private struct VibeCastDestinationPicker: View {
             if case let .bonjour(txt) = result.metadata { record = txt.dictionary } else { record = [:] }
             let id = record["id"].flatMap { $0.isEmpty ? nil : $0 } ?? "\(name).\(type).\(domain)"
             let friendlyName = record["fn"].flatMap { $0.isEmpty ? nil : $0 } ?? name
-            devices[id] = Device(id: id, name: friendlyName)
+            let receiverID = record["id"].flatMap { raw in
+                if let uuid = UUID(uuidString: raw) { return uuid }
+                guard raw.utf8.count == 32 else { return nil }
+                let parts = [raw.prefix(8), raw.dropFirst(8).prefix(4), raw.dropFirst(12).prefix(4),
+                             raw.dropFirst(16).prefix(4), raw.suffix(12)]
+                return UUID(uuidString: parts.joined(separator: "-"))
+            }
+            devices[id] = Device(id: id, name: friendlyName, receiverID: receiverID)
         }
         return devices.values.sorted {
             let order = $0.name.localizedStandardCompare($1.name)
@@ -9711,8 +9748,9 @@ private struct VibeCastDestinationPicker: View {
 struct VibeCastHandoffForm: View {
     @ObservedObject var model: DJConnectAppModel
     var qrPrepared = false
+    var castPrepared = false
     var body: some View {
-        VibeCastDisplayConsentForm(model: model, embedded: true, qrPrepared: qrPrepared)
+        VibeCastDisplayConsentForm(model: model, embedded: true, qrPrepared: qrPrepared, castPrepared: castPrepared)
     }
 }
 
@@ -9721,8 +9759,9 @@ struct VibeCastDisplayConsentForm: View {
     @ObservedObject private var history: DJConnectSessionHistoryModel
     var embedded = false
     let qrPrepared: Bool
-    init(model: DJConnectAppModel, embedded: Bool = false, qrPrepared: Bool = false) {
-        self.model = model; self.history = model.sessionHistory; self.embedded = embedded
+    let castPrepared: Bool
+    init(model: DJConnectAppModel, embedded: Bool = false, qrPrepared: Bool = false, castPrepared: Bool = false) {
+        self.model = model; self.history = model.sessionHistory; self.embedded = embedded; self.castPrepared = castPrepared
         self.qrPrepared = qrPrepared
     }
     @Environment(\.dismiss) private var dismiss
@@ -9759,7 +9798,7 @@ struct VibeCastDisplayConsentForm: View {
         }
         .onAppear {
             didSubmitLookup = false
-            model.prepareDisplayConsentPresentation()
+            if !castPrepared { model.prepareDisplayConsentPresentation() }
         }
         .onDisappear { model.dismissDisplayConsentPresentation() }
         .task {
@@ -9787,7 +9826,8 @@ struct VibeCastDisplayConsentForm: View {
                     .frame(maxWidth: .infinity)
                 }
                 if model.canSelectVibeCastScreen && model.displayConsentState != .revoked &&
-                    model.displayConsentState != .revokeUncertain {
+                    model.displayConsentState != .revokeUncertain &&
+                    !(castPrepared && model.displayConsentState == .ready) {
                     #if os(iOS)
                     Text(localizedKey(model.language, embedded && !qrPrepared ? "ui.displayConsent.instructions_after_scan" : "ui.displayConsent.instructions"))
                     #else
@@ -9885,7 +9925,7 @@ struct VibeCastDisplayConsentForm: View {
                                 Task { await model.refreshVibeCastRemote(mode: value) }
                             })) {
                                 Text(localizedKey(model.language, "ui.session.flow")).tag("flow")
-                                Text("Vibescape").tag("vibescape")
+                                Text("VibeScape").tag("vibescape")
                             }
                             .pickerStyle(.segmented)
                             .accessibilityIdentifier("vibecast-remote-tv-mode")
@@ -9933,6 +9973,12 @@ struct VibeCastDisplayConsentForm: View {
             }
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("display-consent-form")
+            .task(id: model.isVibeCastSharing) {
+                while model.isVibeCastSharing && !Task.isCancelled {
+                    do { try await Task.sleep(for: .seconds(3)) } catch { return }
+                    await model.refreshVibeCastRemote()
+                }
+            }
     }
 }
 
