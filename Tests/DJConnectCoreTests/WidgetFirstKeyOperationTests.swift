@@ -38,6 +38,7 @@ import Testing
     var events: [String] = []
     var key = Data(repeating: 7, count: 32).base64EncodedString()
     var proof = Data("explicit-model-sdk-proof-not-Apple-evidence".utf8)
+    let receipt = Data("modeled-original-receipt-DATA-not-authority".utf8)
     var records: [WidgetFirstKeyOperation.Phase] = []
     var calls: [Stage: Int] = [:]
     private func called(_ stage: Stage) async throws {
@@ -76,10 +77,10 @@ import Testing
             try await self.called(.attest); return self.proof
         }, register: { challenge, key, proof in
             #expect(challenge.operationID == "12345678-1234-4234-8234-123456789abc" && key == self.key && proof == self.proof)
-            try await self.called(.register)
+            try await self.called(.register); return self.receipt
         }, status: { challenge in
             #expect(challenge.operationID == "12345678-1234-4234-8234-123456789abc")
-            try await self.called(.status)
+            try await self.called(.status); return self.receipt
         })
     }
 }
@@ -121,7 +122,10 @@ import Testing
         #expect(record.phase == .proofReady && record.proof == fixture.proof)
         #expect(fixture.calls[.register] == nil)
     }
-    if stage == .register { #expect(try fixture.record()?.phase == .registrationStarted) }
+    if stage == .register {
+        #expect(try fixture.record()?.phase == .registered)
+        #expect(try fixture.record()?.receipt == fixture.receipt)
+    }
 }
 @Test(.isolatedClientResources, arguments: [WidgetFirstKeyFixture.Stage.generate, .attest])
 @MainActor func widgetFirstKeyUnknownSDKOutcomeNeverGeneratesOrAttestsAgain(_ stage: WidgetFirstKeyFixture.Stage) async throws {
@@ -184,4 +188,99 @@ import Testing
     do { try challenge.validateReceipt(JSONSerialization.data(withJSONObject:value)); accepted = true } catch {}
     #expect(accepted == (mutation == "actual-shape"))
     #expect(!challenge.isCurrent(nowMS:challenge.expiresAtMS,uptime:200))
+}
+
+
+@MainActor private func reauthorizationProducer() throws -> (data:Data,receipt:Data,operation:String,expiry:Int64) {
+    let path = URL(fileURLWithPath:#filePath).deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("Fixtures/native-widget-reauthorization-core.json")
+    let bytes = try Data(contentsOf:path)
+    #expect(SHA256.hash(data:bytes).map { String(format:"%02x",$0) }.joined() == "cc405107cc66786b3ba0de21143f6a7f9fbc58fe6f8f5bfa9e235316c9777886")
+    let fixture = try #require(JSONSerialization.jsonObject(with:bytes) as? [String:Any])
+    let response = try #require(fixture["challenge_response"] as? [String:Any])
+    let challenge = try #require(response["challenge"] as? [String:Any])
+    return (try WidgetReauthorizationOperation.canonical(response),
+        try WidgetReauthorizationOperation.canonical(#require(response["first_key_receipt"] as? [String:Any])),
+        try #require(response["operation_id"] as? String),try #require(challenge["expires_at_ms"] as? Int64))
+}
+@Test(.isolatedClientResources, arguments:["producer","hash","receipt","nonce","duplicate","unsafe","late","policy","extra"])
+@MainActor func widgetReauthorizationBindsActualCoreProducerAndOriginalDeadlines(_ mode:String) throws {
+    let fixture = try reauthorizationProducer()
+    var response = try #require(JSONSerialization.jsonObject(with:fixture.data) as? [String:Any])
+    var challenge = try #require(response["challenge"] as? [String:Any])
+    if mode == "hash" { response["client_data_hash_b64"] = Data(repeating:0,count:32).base64EncodedString() }
+    if mode == "receipt" { var r = try #require(response["first_key_receipt"] as? [String:Any]);r["key_revision"] = 2;response["first_key_receipt"] = r }
+    if mode == "nonce" { challenge["challenge_nonce"] = "noncanonical";response["challenge"] = challenge }
+    if mode == "unsafe" { challenge["expires_at_ms"] = 9_007_199_254_740_992 as Int64;response["challenge"] = challenge }
+    if mode == "policy" { var d = try #require(response["delegation"] as? [String:Any]);var p = try #require(d["policy"] as? [String:Any]);p["original_grant_expires_at_ms"] = 1;d["policy"] = p;response["delegation"] = d }
+    if mode == "extra" { response["native_clock_permission"] = true }
+    var bytes = try WidgetReauthorizationOperation.canonical(response)
+    if mode == "duplicate" { bytes = Data(("{\"contract_version\":1," + String(decoding:bytes.dropFirst(),as:UTF8.self)).utf8) }
+    var value:WidgetReauthorizationOperation.Challenge?
+    do { value = try .parse(bytes,operationID:fixture.operation,receipt:fixture.receipt,
+        nowMS:fixture.expiry-(mode == "late" ? 0 : 60_000),requestedUptime:100,uptime:101) } catch {}
+    #expect((value != nil) == (mode == "producer"))
+    if let value {
+        #expect(value.isCurrent(nowMS:fixture.expiry-1,uptime:159))
+        #expect(!value.isCurrent(nowMS:fixture.expiry,uptime:160))
+        #expect(!value.isCurrent(nowMS:fixture.expiry-59_000,uptime:221))
+    }
+}
+@MainActor final class WidgetReauthorizationFixture {
+    enum Stage:String { case challenge,assertion,register,status }
+    enum Failure:Error { case modeled }
+    let producer:(data:Data,receipt:Data,operation:String,expiry:Int64)
+    let key = Data(repeating:7,count:32).base64EncodedString()
+    var bytes:Data?, owner = true, expired = false
+    var hold:Stage?, fail:Stage?
+    let latch = WidgetFirstKeyLatch()
+    var events:[String] = []
+    var calls:[Stage:Int] = [:]
+    init() throws { producer = try reauthorizationProducer() }
+    func record() throws -> WidgetReauthorizationOperation.Record? { try bytes.map { try JSONDecoder().decode(WidgetReauthorizationOperation.Record.self,from:$0) } }
+    private func called(_ stage:Stage) async throws {
+        calls[stage,default:0] += 1;events.append("effect."+stage.rawValue)
+        if hold == stage { await latch.wait() }
+        if fail == stage { throw Failure.modeled }
+    }
+    func ports() -> WidgetReauthorizationOperation.Ports {
+        .init(load:{try self.record()},save:{self.bytes = try JSONEncoder().encode($0);self.events.append("store."+$0.phase.rawValue)},
+            ownerCurrent:{self.owner},current:{self.owner && $0.isCurrent(nowMS:self.producer.expiry-(self.expired ? 0 : 60_000),uptime:101)},
+            challenge:{try await self.called(.challenge);return try .parse(self.producer.data,operationID:self.producer.operation,receipt:self.producer.receipt,nowMS:self.producer.expiry-60_000,requestedUptime:100,uptime:101)},
+            assertion:{key,hash in #expect(key == self.key && hash.count == 32);try await self.called(.assertion);return Data("MODEL assertion NOT Apple proof".utf8)},
+            register:{_,_,_ in try await self.called(.register)},status:{_ in try await self.called(.status)})
+    }
+    func run() async throws { try await WidgetReauthorizationOperation.run(operationID:producer.operation,key:key,receipt:producer.receipt,ports:ports()) }
+}
+@Test(.isolatedClientResources) @MainActor func widgetReauthorizationOwnsEachPhaseWithoutGeneratingAnotherKey() async throws {
+    let f = try WidgetReauthorizationFixture();try await f.run()
+    #expect(f.events == ["store.challengeStarted","effect.challenge","store.challengeReceived","store.assertionStarted","effect.assertion","store.assertionReady","store.registrationStarted","effect.register","store.ready"])
+    #expect(f.calls[.challenge] == 1 && f.calls[.assertion] == 1 && f.calls[.register] == 1)
+    let restarted = try WidgetReauthorizationFixture();restarted.bytes = f.bytes;try await restarted.run()
+    #expect(restarted.calls == [.status:1])
+    restarted.expired = true
+    do { try await restarted.run();Issue.record("Expired original status must close") } catch {}
+    #expect(restarted.calls == [.status:1])
+}
+@Test(.isolatedClientResources,arguments:[WidgetReauthorizationFixture.Stage.challenge,.assertion,.register])
+@MainActor func widgetReauthorizationWithdrawalDuringAwaitCannotStartTheNextEffect(_ stage:WidgetReauthorizationFixture.Stage) async throws {
+    let f = try WidgetReauthorizationFixture();f.hold = stage
+    let task = Task { try await f.run() };await f.latch.awaitEntry();f.owner = false;f.latch.release()
+    do { try await task.value;Issue.record("Withdrawn owner must close") } catch {}
+    if stage == .challenge { #expect(f.calls[.assertion] == nil) }
+    if stage == .assertion { #expect(f.calls[.register] == nil);#expect(try f.record()?.phase == .assertionReady) }
+    let restarted = try WidgetReauthorizationFixture();restarted.bytes = f.bytes
+    if stage != .register {
+        do { try await restarted.run();Issue.record("Cold SDK phase must not resume") } catch {}
+        #expect(restarted.calls.isEmpty)
+    }
+}
+@Test(.isolatedClientResources,arguments:[WidgetReauthorizationFixture.Stage.challenge,.assertion,.register])
+@MainActor func widgetReauthorizationUnknownOutcomeNeverRepeatsNonceAssertionOrSubmit(_ stage:WidgetReauthorizationFixture.Stage) async throws {
+    let f = try WidgetReauthorizationFixture();f.fail = stage
+    do { try await f.run();Issue.record("Expected modeled unknown") } catch {}
+    let restarted = try WidgetReauthorizationFixture();restarted.bytes = f.bytes
+    do { try await restarted.run() } catch {}
+    #expect(restarted.calls[.challenge] == nil && restarted.calls[.assertion] == nil && restarted.calls[.register] == nil)
+    #expect(restarted.calls[.status] == (stage == .register ? 1 : nil))
 }

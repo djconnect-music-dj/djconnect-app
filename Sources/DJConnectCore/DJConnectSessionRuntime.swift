@@ -243,6 +243,7 @@ public struct DJConnectSessionRuntime: Codable, Equatable, Sendable, Identifiabl
     public var startedAt: String
     public var planner: DJConnectPlannerRuntime
     public var broadcast: DJConnectBroadcastState
+    public var ownerProfileID: String? = nil
 
     public var id: String { sessionID }
 
@@ -257,6 +258,7 @@ public struct DJConnectSessionRuntime: Codable, Equatable, Sendable, Identifiabl
         case runtimeState = "runtime_state"
         case startedAt = "started_at"
         case planner, broadcast
+        case ownerProfileID = "owner_profile_id"
     }
 }
 

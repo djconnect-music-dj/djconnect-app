@@ -244,7 +244,7 @@ private final class CastFixtureBundle: NSObject {}
     func invalidate() { stopView() }
 }
 
-@Test(.isolatedClientResources, arguments: ["background-before-read", "background-after-read", "history", "authority", "session", "demo", "stop", "pairing", "origin", "token"])
+@Test(.isolatedClientResources, arguments: ["background-before-read", "background-after-read", "history", "guest", "authority", "session", "demo", "stop", "pairing", "origin", "token"])
 @MainActor func legacyCastActualModelIngressSeparatesSuspensionFromOriginalWithdrawal(_ mode: String) async throws {
     func fixture(_ name: String) throws -> [String: Any] {
         let url = Bundle(for: CastFixtureBundle.self).url(forResource: name, withExtension: "json") ??
@@ -296,9 +296,10 @@ private final class CastFixtureBundle: NSObject {}
         try await Task.sleep(for:.milliseconds(1))
     }
     let owner = try #require(sender.owner)
-    if mode.hasPrefix("background") || mode == "history" {
+    if mode.hasPrefix("background") || mode == "history" || mode == "guest" {
         let reads = CastOwnerWire.calls.filter { $0.url?.path.hasSuffix("/broadcast/token") == true }.count
         if mode == "history" { model.sessionHistory.suspend(preservingVoicePreference:true) }
+        else if mode == "guest" { model.liveGuestPresentationDidChange(true);model.connectLegacyCast(deviceID:"actual-sdk-identifier");#expect(!model.canConnectLegacyCast) }
         else { model.markInactiveSession() }
         sender.hold = false
         try await Task.sleep(for:.milliseconds(5))

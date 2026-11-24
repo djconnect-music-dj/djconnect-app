@@ -859,6 +859,16 @@ struct DJConnectLocalAudioRoute: Equatable, Sendable {
 @MainActor
 public final class DJConnectAppModel: ObservableObject {
     @Published var isShowingGuestJoin = false
+    @Published private(set) var isPresentingLiveGuest = false
+    func liveGuestPresentationDidChange(_ presented: Bool) {
+        guard isPresentingLiveGuest != presented else { return }
+        isPresentingLiveGuest = presented
+        if presented {
+            retireWidgetFirstKeyTask()
+            suspendLegacyCastObservation()
+            nativeWidgetPushOwner.withdrawLocally(); nativeActivityPushOwner.withdrawLocally()
+        }
+    }
     // View-lifetime presentation only. Never a Profile/defaults/cache field.
     @Published var isShowingVibeScape = false {
         didSet {
@@ -947,7 +957,7 @@ public final class DJConnectAppModel: ObservableObject {
         }
     }
     public func connectLegacyCast(deviceID: String) {
-        guard legacyCastTask == nil, let sender = legacyCastSender,
+        guard canConnectLegacyCast, legacyCastTask == nil, let sender = legacyCastSender,
               sender.devices.contains(where: { $0.id == deviceID }),
               let destination = captureDisplayConsentDestination() else { return }
         let client: DJConnectClient
@@ -963,7 +973,7 @@ public final class DJConnectAppModel: ObservableObject {
         legacyCastConnectingDeviceID = deviceID; legacyCastNeedsConfirmation = false
         let current: @MainActor () -> Bool = { [weak self] in
             guard let self else { return false }
-            return self.legacyCastOperation == operation && !self.isDemoMode && self.isAppInForeground &&
+            return self.legacyCastOperation == operation && !self.isDemoMode && !self.isPresentingLiveGuest && self.isAppInForeground &&
                 self.pairingStatus == .paired && self.legacyCastPairing == pairing &&
                 self.activeDJSession?.id == scope.session && self.activeDJSession?.runtimeState == "active" &&
                 self.sessionHistory.responseEpoch == epoch && self.sessionHistory.authorizedProfileID == scope.profile
@@ -1163,7 +1173,7 @@ public final class DJConnectAppModel: ObservableObject {
     }
 
     var canResolveDisplayConsent: Bool {
-        !isDemoMode && [.ios, .macos].contains(identity.clientType) && pairingStatus == .paired && isAppInForeground &&
+        !isDemoMode && !isPresentingLiveGuest && [.ios, .macos].contains(identity.clientType) && pairingStatus == .paired && isAppInForeground &&
             activeDJSession?.runtimeState == "active" && sessionHistory.authorizedProfileID != nil
     }
     var isVibeCastSharing: Bool {
@@ -1672,11 +1682,12 @@ public final class DJConnectAppModel: ObservableObject {
     @Published private var widgetConsentIntent: WidgetConsentIntent?
     private var widgetConsentTask: Task<Void, Never>?
     private var widgetFirstKeyTask: Task<Void, Never>?
-    private var widgetFirstKeyTaskOperation: UUID?
+    private var widgetFirstKeyTaskOperation: String?
     private var widgetFirstKeyTaskGeneration = UUID()
     private var widgetConsentRetryAfter: Date?
     private var confirmedWidgetConsent: UUID?
-    private var completedWidgetFirstKeyOperation: UUID? // Actual current-process ACK only; never an admission.
+    private var completedWidgetFirstKeyOperation: String? // Actual current-process ACK only; never an admission.
+    private var widgetLastAcceptedServerSessionScope: String?
     private var queuedWidgetEnableIntent: WidgetConsentIntent?
     private static let widgetReenableIntentKey = "DJConnectWidgetConsentReenable.v1"
     private let nativeWidgetRegistrationInstance = UUID().uuidString
@@ -2013,6 +2024,7 @@ public final class DJConnectAppModel: ObservableObject {
             sessionStartup.reconcile()
             sessionForYou.reconcile()
             reconcileLegacyCastScope()
+            if activeDJSession == nil { widgetLastAcceptedServerSessionScope = nil }
             reconcileDirectSessionRuntimes()
             let helpNow = Date()
             reconcileSessionHelpTransition(from: oldValue, at: helpNow)
@@ -8616,6 +8628,7 @@ public final class DJConnectAppModel: ObservableObject {
         }
         if !Task.isCancelled, request == sessionRequestGeneration {
             acceptSessionSurfaceObservation(sessionID: response.resolvedSession?.id)
+            acceptWidgetTrustSessionObservation(response.resolvedSession)
         }
         sessionForYou.observe(response.forYou, session: response.resolvedSession)
         djSessionErrorMessage = nil
@@ -9663,6 +9676,7 @@ public final class DJConnectAppModel: ObservableObject {
             sessionForYou.observe(response.forYou, session: response.resolvedSession)
             if !Task.isCancelled, request == sessionRequestGeneration {
                 acceptSessionSurfaceObservation(sessionID: incoming.id)
+                acceptWidgetTrustSessionObservation(incoming)
             }
             djSessionErrorMessage = response.resolvedSession == nil ? localized(key: "ui.session.unavailable") : nil
             startSessionBroadcastIfNeeded()
@@ -13108,13 +13122,40 @@ public final class DJConnectAppModel: ObservableObject {
         widgetFirstKeyTaskGeneration = UUID()
         widgetFirstKeyTask?.cancel(); widgetFirstKeyTask = nil; widgetFirstKeyTaskOperation = nil
     }
+    /// Opaque once-journal namespace, not an owner/clock/surface permission.
+    private func widgetTrustSourceReference(_ intent: WidgetConsentIntent) -> String {
+        let fields = [intent.pairing, sessionHistory.authorizedProfileID ?? "", activeDJSession?.id ?? "",
+                      String(intent.expectedRevision ?? -1), intent.operationID.uuidString.lowercased()]
+        return SHA256.hash(data:Data(fields.map { "\($0.utf8.count):\($0)" }.joined().utf8))
+            .map { String(format:"%02x",$0) }.joined()
+    }
+    private func acceptWidgetTrustSessionObservation(_ session: DJConnectSessionRuntime?) {
+        guard !isDemoMode, !isPresentingLiveGuest, isAppInForeground, pairingStatus == .paired,
+              let session, session.runtimeState == "active",
+              let profile = sessionHistory.authorizedProfileID, session.ownerProfileID == profile,
+              let pairing = nativePushConsentPairing else { return }
+        let scope = [pairing,profile,session.id].map { "\($0.utf8.count):\($0)" }.joined()
+        guard widgetLastAcceptedServerSessionScope != scope else { return }
+        widgetLastAcceptedServerSessionScope = scope
+        // Only a newly accepted owner Session triggers this reconciliation.
+        // Cached DTO/render/timer/foreground alone cannot create a new original.
+        if widgetConsentIntent?.pairing == pairing, widgetConsentIntent?.enabled == true {
+            refreshWidgetConsent(force:true)
+        }
+    }
     private func beginWidgetFirstKeyEnrollment(_ intent: WidgetConsentIntent, client: DJConnectClient,
         isCurrent: @escaping @MainActor @Sendable () -> Bool) {
-        guard completedWidgetFirstKeyOperation != intent.operationID,
-              widgetFirstKeyTaskOperation != intent.operationID, isCurrent() else { return }
+        let sourceReference = widgetTrustSourceReference(intent)
+        guard !isDemoMode, !isPresentingLiveGuest, completedWidgetFirstKeyOperation != sourceReference,
+              widgetFirstKeyTaskOperation != sourceReference, isCurrent() else { return }
+        let originalCurrent = isCurrent, session = activeDJSession?.id
+        let isCurrent: @MainActor @Sendable () -> Bool = { [weak self] in
+            guard let self else { return false }
+            return originalCurrent() && !self.isDemoMode && !self.isPresentingLiveGuest && self.activeDJSession?.id == session && self.widgetTrustSourceReference(intent) == sourceReference
+        }
         retireWidgetFirstKeyTask()
         let generation = widgetFirstKeyTaskGeneration
-        widgetFirstKeyTaskOperation = intent.operationID
+        widgetFirstKeyTaskOperation = sourceReference
         widgetFirstKeyTask = Task { [weak self] in
             guard let self else { return }
             defer {
@@ -13123,7 +13164,7 @@ public final class DJConnectAppModel: ObservableObject {
                 }
             }
             do {
-                try await client.enrollWidgetFirstKey(isCurrent: isCurrent)
+                try await client.enrollWidgetFirstKey(sourceReference:sourceReference,isCurrent:isCurrent)
                 guard isCurrent(), self.widgetFirstKeyTaskGeneration == generation else { return }
                 let observed = try await client.readWidgetPushConsent(isCurrent: isCurrent)
                 guard isCurrent(), self.widgetFirstKeyTaskGeneration == generation else { return }
@@ -13132,7 +13173,7 @@ public final class DJConnectAppModel: ObservableObject {
                     self.nativeWidgetPushOwner.bind(nil); self.saveWidgetConsentIntent(nil)
                     return
                 }
-                self.completedWidgetFirstKeyOperation = intent.operationID
+                self.completedWidgetFirstKeyOperation = sourceReference
             } catch {
                 // SDK completion must never hold the pure opt-out writer. Its
                 // original durable phase owns any late key/proof callback.

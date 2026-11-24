@@ -707,6 +707,9 @@ public struct DJConnectRootView: View {
             if !model.handleAppNavigationDeepLink(url) { model.handlePairingDeepLink(url) }
             #endif
         }
+        .onChange(of: liveGuest.isPresented, initial:true) { _, shown in
+            model.liveGuestPresentationDidChange(shown)
+        }
         .onChange(of: model.isShowingGuestJoin) { _, shown in
             if shown { model.isShowingGuestJoin = false; liveGuest.showJoin() }
         }

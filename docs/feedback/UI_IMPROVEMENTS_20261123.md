@@ -719,3 +719,25 @@ Cast/production-ACK checkpoint 24 november:
   herstelde officiële inventarisatie. Nieuwe eigen DeviceSet/device aangemaakt;
   geen globale runtime-/daemon-/Devices-permissiewijziging. Nieuwe runtime-QA
   volgt op de iOS-build. Live/4h/QR blijft onafhankelijk van de legacy Cast-token.
+
+
+Native reauth / fysieke QA-kandidaat:
+- Oorspronkelijke first-key-ACK13 blijft bij de echte sleutel als vergelijking-
+  DATA bewaard. Opnieuw autoriseren gebruikt uitsluitend generateAssertion op
+  die sleutel, een echte nieuwe Core-challenge en duurzaam once-fasejournal.
+  Cold/unknown herhaalt geen nonce/assertion/register; status blijft origineel
+  begrensd. Geen nieuw key/attestation-effect om opnieuw aan te melden.
+- Werkelijke nieuwe eigen Session-response/commit kan onder huidige consent
+  één eigen intent krijgen; gewone renders, foreground, demo of guest niet.
+  De bestaande owner_profile_id wordt hiervoor uit de owner-DTO behouden.
+- Finale controllerfixture0e6543c (SHA cc405107cc66786b3ba0de21143f6a7f9fbc58fe6f8f5bfa9e235316c9777886)
+  door echte Coreproducer gemaakt, API/Apple-proof expliciet MODEL. Mac-build en
+  147 gerichte regressies/zeven suites PASS. Dit is GEEN volledige unitclaim;
+  brede bestaande suites en huidige negen lichte controles volgen apart.
+- Native clock/target/restoration en de vier fysieke pushkanalen blijven open;
+  geen pushactivering of daadwerkelijke provideracceptatie geclaimd.
+- iPad mini is fysiek bereikbaar, bestaande versie40531/4.1.0 en landscape-
+  baseline vastgelegd. Nieuwe signed40533 en normale live-XCUITest zijn voorbereid;
+  geen fixtureargumenten, pairingreset, diagnostische upload of dataverwijdering.
+- De gebruiker selecteert nu expliciet de geregistreerde TheFrame43 voor Cast;
+  registratie en tests van55 blijven geheel buiten deze ronde.

@@ -11,6 +11,7 @@ import Foundation
         var phase: Phase
         var keyIdentifier: String?
         var proof: Data?
+        var receipt: Data? = nil // Comparison DATA only, never restored admission.
     }
     enum Failure: Error { case closed, sdkOutcomeUnknown, invalidRecord }
     struct Ports {
@@ -21,8 +22,8 @@ import Foundation
         let current: @MainActor (DJConnectClient.WidgetFirstKeyChallenge) -> Bool
         let generateKey: @MainActor () async throws -> String
         let attestKey: @MainActor (String, Data) async throws -> Data
-        let register: @MainActor (DJConnectClient.WidgetFirstKeyChallenge, String, Data) async throws -> Void
-        let status: @MainActor (DJConnectClient.WidgetFirstKeyChallenge) async throws -> Void
+        let register: @MainActor (DJConnectClient.WidgetFirstKeyChallenge, String, Data) async throws -> Data
+        let status: @MainActor (DJConnectClient.WidgetFirstKeyChallenge) async throws -> Data
     }
     private static func check(_ record: Record, ports: Ports) throws {
         try Task.checkCancellation()
@@ -39,6 +40,13 @@ import Foundation
             guard let proof = record.proof, (1...16_384).contains(proof.count) else { throw Failure.invalidRecord }
         } else { guard record.proof == nil else { throw Failure.invalidRecord }; return }
     }
+    private static func retainReceipt(_ data: Data, record: inout Record, ports: Ports) throws {
+        guard (1...4096).contains(data.count) else { throw Failure.invalidRecord }
+        record.phase = .registered; record.proof = nil; record.receipt = data
+        // A late actual ACK is retained as comparison DATA even if its UI owner
+        // was withdrawn during await. It cannot restore the old role/admission.
+        try ports.save(record)
+    }
     static func run(_ ports: Ports) async throws {
         try Task.checkCancellation()
         guard ports.ownerCurrent() else { throw Failure.closed }
@@ -52,10 +60,9 @@ import Foundation
             guard [.registrationStarted, .registered].contains(record.phase) else {
                 throw Failure.sdkOutcomeUnknown
             }
-            try await ports.status(record.challenge)
+            let data = try await ports.status(record.challenge)
+            try retainReceipt(data, record: &record, ports: ports)
             try check(record, ports: ports)
-            record.phase = .registered; record.proof = nil
-            try ports.save(record)
             return
         } else {
             let challenge = try await ports.challenge()
@@ -89,15 +96,15 @@ import Foundation
         if record.phase == .proofReady {
             try check(record, ports: ports)
             record.phase = .registrationStarted; try ports.save(record)
-            try await ports.register(record.challenge, record.keyIdentifier!, record.proof!)
+            let data = try await ports.register(record.challenge, record.keyIdentifier!, record.proof!)
+            try retainReceipt(data, record: &record, ports: ports)
         } else if [.registrationStarted, .registered].contains(record.phase) {
             // A persisted registered marker is metadata only. Recovery still
             // needs a genuine ACK for this exact still-current original flow.
             try check(record, ports: ports)
-            try await ports.status(record.challenge)
+            let data = try await ports.status(record.challenge)
+            try retainReceipt(data, record: &record, ports: ports)
         } else { throw Failure.invalidRecord }
         try check(record, ports: ports)
-        record.phase = .registered; record.proof = nil
-        try ports.save(record)
     }
 }

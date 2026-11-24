@@ -509,20 +509,20 @@ public final class DJConnectClient: Sendable {
     public func registerWidgetFirstKey(
         _ challenge: WidgetFirstKeyChallenge, keyIdentifier: String, attestation: Data,
         isCurrent: @escaping @MainActor @Sendable () -> Bool
-    ) async throws {
+    ) async throws -> Data {
         guard let key = Data(base64Encoded: keyIdentifier), key.count == 32,
               key.base64EncodedString() == keyIdentifier, (1...16_384).contains(attestation.count) else {
             throw DJConnectError.invalidResponse
         }
-        try await widgetFirstKeyReceipt("register", challenge: challenge, proof: [
+        return try await widgetFirstKeyReceipt("register", challenge: challenge, proof: [
             "kind": "attestation", "key_id_b64": keyIdentifier, "proof_b64": attestation.base64EncodedString()
         ], isCurrent: isCurrent)
     }
 
     public func recoverWidgetFirstKey(
         _ challenge: WidgetFirstKeyChallenge, isCurrent: @escaping @MainActor @Sendable () -> Bool
-    ) async throws {
-        try await widgetFirstKeyReceipt("status", challenge: challenge, proof: nil, isCurrent: isCurrent)
+    ) async throws -> Data {
+        return try await widgetFirstKeyReceipt("status", challenge: challenge, proof: nil, isCurrent: isCurrent)
     }
 
     @MainActor private static var widgetFirstKeyInFlight = false
@@ -531,7 +531,7 @@ public final class DJConnectClient: Sendable {
     /// supplies neither a new SDK original nor a surface/clock admission.
     @MainActor
     public func enrollWidgetFirstKey(
-        isCurrent: @escaping @MainActor @Sendable () -> Bool
+        sourceReference: String? = nil, isCurrent: @escaping @MainActor @Sendable () -> Bool
     ) async throws {
         #if os(iOS) && !targetEnvironment(simulator) && canImport(DeviceCheck)
         let service = DCAppAttestService.shared
@@ -557,6 +557,14 @@ public final class DJConnectClient: Sendable {
         let ownerCurrent: @MainActor () -> Bool = {
             isCurrent() && (try? self.widgetPairingBinding(token: self.loadedToken())) == binding
         }
+        let hadOriginalJournal = FileManager.default.fileExists(atPath:journal.path)
+        let loadOriginal: () throws -> WidgetFirstKeyOperation.Record? = {
+            let bytes: Data
+            do { bytes = try Data(contentsOf:journal) }
+            catch let error as CocoaError where error.code == .fileReadNoSuchFile { return nil }
+            guard bytes.count <= 65536 else { throw DJConnectError.invalidResponse }
+            return try JSONDecoder().decode(WidgetFirstKeyOperation.Record.self,from:bytes)
+        }
         let ports = WidgetFirstKeyOperation.Ports(load: {
             let bytes: Data
             do { bytes = try Data(contentsOf: journal) }
@@ -581,16 +589,85 @@ public final class DJConnectClient: Sendable {
         }, status: { challenge in
             try await self.recoverWidgetFirstKey(challenge, isCurrent: isCurrent)
         })
-        try await WidgetFirstKeyOperation.run(ports)
+        // A previous genuine first-key receipt is only comparison DATA for a
+        // genuinely new assertion flow. Never replay first trust to re-enable.
+        if hadOriginalJournal, let original = try loadOriginal(), original.phase == .registered,
+           original.receipt != nil {
+            // The original 120s first-key challenge is deliberately NOT renewed
+            // or status-aliased here. The server owns the new role challenge.
+        } else { try await WidgetFirstKeyOperation.run(ports) }
+        if hadOriginalJournal {
+            guard let original = try loadOriginal(), original.phase == .registered,
+                  original.challenge.pairingBinding == binding, let receipt = original.receipt,
+                  let key = original.keyIdentifier, let sourceReference,
+                  sourceReference.range(of:#"\A[0-9a-f]{64}\z"#,options:.regularExpression) != nil else {
+                throw DJConnectError.invalidResponse
+            }
+            try original.challenge.validateReceipt(receipt)
+            let destination = directory.appendingPathComponent("reauthorization-" + sourceReference)
+            let load: () throws -> WidgetReauthorizationOperation.Record? = {
+                let bytes: Data
+                do { bytes = try Data(contentsOf:destination) }
+                catch let error as CocoaError where error.code == .fileReadNoSuchFile { return nil }
+                guard bytes.count <= 65536 else { throw DJConnectError.invalidResponse }
+                return try JSONDecoder().decode(WidgetReauthorizationOperation.Record.self,from:bytes)
+            }
+            let operation = try load()?.operationID ?? DJConnectOperationIdentity.uuidV7(milliseconds:Int(Date().timeIntervalSince1970*1000))
+            let reauth = WidgetReauthorizationOperation.Ports(load:load,save:{ record in
+                let bytes = try JSONEncoder().encode(record)
+                guard bytes.count <= 65536 else { throw DJConnectError.invalidResponse }
+                try bytes.write(to:destination,options:[.atomic,.completeFileProtection])
+            },ownerCurrent:ownerCurrent,current:{ ownerCurrent() && $0.isCurrent() },challenge:{
+                try await self.requestWidgetReauthorizationChallenge(operationID:operation,receipt:receipt,isCurrent:isCurrent)
+            },assertion:{ key,hash in
+                // Existing real key only: no generateKey or attestKey path.
+                try await service.generateAssertion(key,clientDataHash:hash)
+            },register:{ challenge,key,proof in
+                try await self.completeWidgetReauthorization("register",challenge:challenge,
+                    proof:["kind":"assertion","key_id_b64":key,"proof_b64":proof.base64EncodedString()],isCurrent:isCurrent)
+            },status:{ challenge in
+                try await self.completeWidgetReauthorization("status",challenge:challenge,proof:nil,isCurrent:isCurrent)
+            })
+            try await WidgetReauthorizationOperation.run(operationID:operation,key:key,receipt:receipt,ports:reauth)
+        }
         #else
         throw DJConnectError.invalidResponse
         #endif
     }
 
+    @MainActor func requestWidgetReauthorizationChallenge(operationID: String, receipt: Data,
+        isCurrent: @escaping @MainActor @Sendable () -> Bool) async throws -> WidgetReauthorizationOperation.Challenge {
+        guard WidgetReauthorizationOperation.uuidV7(operationID), receipt.count <= 4096 else { throw DJConnectError.invalidResponse }
+        try DJConnectSurfacePushJSON.validate(receipt)
+        let object = try JSONSerialization.jsonObject(with:receipt)
+        let body = try WidgetReauthorizationOperation.canonical(["contract_version":1,"device_id":identity.deviceID,
+            "client_type":identity.clientType.rawValue,"operation_id":operationID,"first_key_receipt":object])
+        let started = ProcessInfo.processInfo.systemUptime
+        let data = try await widgetPairExchange(route:"challenge",body:body,reauthorization:true,isCurrent:isCurrent)
+        return try WidgetReauthorizationOperation.Challenge.parse(data,operationID:operationID,receipt:receipt,
+            nowMS:Int64(Date().timeIntervalSince1970*1000),requestedUptime:started,uptime:ProcessInfo.processInfo.systemUptime)
+    }
+    @MainActor private func completeWidgetReauthorization(_ action: String, challenge: WidgetReauthorizationOperation.Challenge,
+        proof: [String:String]?, isCurrent: @escaping @MainActor @Sendable () -> Bool) async throws {
+        guard ["register","status"].contains(action) else { throw DJConnectError.invalidResponse }
+        var object: [String:Any] = ["contract_version":1,"device_id":identity.deviceID,
+            "client_type":identity.clientType.rawValue,"operation_id":challenge.operationID]
+        if let proof {
+            guard action == "register", Set(proof.keys) == ["kind","key_id_b64","proof_b64"],proof["kind"] == "assertion",
+                  let encodedKey = proof["key_id_b64"], let key = Data(base64Encoded:encodedKey),key.count == 32,key.base64EncodedString() == encodedKey,
+                  let encodedProof = proof["proof_b64"],let bytes = Data(base64Encoded:encodedProof),(1...16384).contains(bytes.count),bytes.base64EncodedString() == encodedProof else { throw DJConnectError.invalidResponse }
+            object["apple_proof"] = proof
+        } else if action == "register" { throw DJConnectError.invalidResponse }
+        let current: @MainActor @Sendable () -> Bool = { isCurrent() && challenge.isCurrent() }
+        let data = try await widgetPairExchange(route:action,body:WidgetReauthorizationOperation.canonical(object),reauthorization:true,isCurrent:current)
+        let fields = try RendezvousFlatJSON.parse(data,maximumBytes:1024)
+        guard fields == ["contract_version":.integer(1),"operation_id":.string(challenge.operationID),"state":.string("ready")] else { throw DJConnectError.invalidResponse }
+    }
+
     private func widgetFirstKeyReceipt(
         _ action: String, challenge: WidgetFirstKeyChallenge, proof: [String: String]?,
         isCurrent: @escaping @MainActor @Sendable () -> Bool
-    ) async throws {
+    ) async throws -> Data {
         var payload: [String: Any] = ["contract_version": 1, "device_id": identity.deviceID,
                                       "client_type": identity.clientType.rawValue, "operation_id": challenge.operationID]
         if let proof { payload["apple_proof"] = proof }
@@ -601,6 +678,7 @@ public final class DJConnectClient: Sendable {
         let data = try await widgetPairExchange(route: "pair-witness/" + action, body: body,
                                                expectedPairing: challenge.pairingBinding, isCurrent: current)
         try challenge.validateReceipt(data)
+        return data
     }
 
     private func widgetFirstKeyIdentity() throws -> Data {
@@ -615,7 +693,7 @@ public final class DJConnectClient: Sendable {
     }
 
     private func widgetPairExchange(
-        route: String, body: Data?, expectedPairing: Data? = nil,
+        route: String, body: Data?, expectedPairing: Data? = nil, reauthorization: Bool = false,
         isCurrent: @escaping @MainActor @Sendable () -> Bool
     ) async throws -> Data {
         guard identity.clientType == .ios else { throw DJConnectError.invalidResponse }
@@ -623,7 +701,8 @@ public final class DJConnectClient: Sendable {
         if let expectedPairing, widgetPairingBinding(token: originalToken) != expectedPairing {
             throw DJConnectError.invalidResponse
         }
-        let url = try endpoint(path: Self.apiV1Path("push/native/" + route))
+        if reauthorization, !["challenge","register","status"].contains(route) { throw DJConnectError.invalidResponse }
+        let url = try endpoint(path: Self.apiV1Path((reauthorization ? "native/widget/reauthorize/" : "push/native/") + route))
         _ = try makeDJConnectIdentity(deviceToken: originalToken)
         var request = makeAuthenticatedRequest(url: url, token: originalToken)
         request.cachePolicy = .reloadIgnoringLocalCacheData

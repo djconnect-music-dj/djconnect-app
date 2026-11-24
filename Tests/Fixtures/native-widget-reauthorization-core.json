@@ -1,0 +1,83 @@
+{
+  "boundary": "MODEL API/Apple proof; actual Core P256 and SQLite producer",
+  "challenge_response": {
+    "api_audience": "djc-native-push/1",
+    "challenge": {
+      "api_audience": "djc-native-push/1",
+      "challenge_id": "MODEL-challenge",
+      "challenge_nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "contract_version": 1,
+      "delegation_sha256": "9759fe883316d5cc221976ac0913dd3d7ac06a2627c955bd060037ed34c3ba4e",
+      "expires_at_ms": 1795478460000,
+      "first_key_receipt_sha256": "a04addad4938001db176e672f52104f3fea10758d8fa822bda0b22e3b2f6c953",
+      "publication_operation_id": "01a20ada-2c00-7546-b3cc-3665f6d18f41"
+    },
+    "client_data_hash_b64": "FxEIYkj3e8A1w+qDXMjShc5YlOek6N6BVf9/Tb7Obh0=",
+    "contract_version": 1,
+    "delegation": {
+      "action": "enrol",
+      "approval_reference": "synthetic-fixture-ACK",
+      "binding_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "contract_version": 1,
+      "delegation_id": "a53aa233-c1e8-4f79-b1c3-6f4427296a4f",
+      "device_binding": "bff61f23dd41fbcf514b2527b498584ef360dc0b23b3d1167b66f8b2dd77f298",
+      "expected_revision": 0,
+      "grant_binding": "71d751b8178e0dad61805cf40687e5cc38f2c2143445bbdb41fa043e4e820d3e",
+      "install_id": "synthetic-api-installation",
+      "operation_id": "01a20ada-2c00-7ebc-ab15-d6405a66eb99",
+      "owner_binding": "90f9d7c2dc3a74b071652feddec532207e1aad02a37030875aa70b9266e8a4e8",
+      "policy": {
+        "activity_profile": null,
+        "apns_environment": "sandbox",
+        "external_content_allowed": false,
+        "max_challenges": 100,
+        "max_events": 1000,
+        "max_operations": 10000,
+        "original_grant_expires_at_ms": 1795492800000,
+        "platform": "ios",
+        "target": {
+          "app_bundle_id": "dev.djconnect.ios",
+          "extension_bundle_id": "dev.djconnect.ios.track-insight-widget",
+          "widget_kind": "DJConnectSessionWidget"
+        },
+        "token_role": "widget"
+      },
+      "public_key": {
+        "crv": "P-256",
+        "kty": "EC",
+        "x": "lhvRWkmkzuDVV1wmQBKCoWVENs_M2pyzjaOltKgxwHM",
+        "y": "N_YMM4J9HpXBnVjL88tZacnI5Oqn9gbZnkS5FwAg38M"
+      },
+      "purpose": "surface_push",
+      "source_binding": "a46b1d77f0347139a8016450b4d45d10e67f9ac5173b72a10d0398d9f59a187e"
+    },
+    "first_key_receipt": {
+      "api_installation_id": "synthetic-api-installation",
+      "apple_evidence_expires_at_ms": 1795500000000,
+      "apple_status_expires_at_ms": 1795492800000,
+      "contract_version": 1,
+      "core_key_thumbprint": "cb2ff8d30bdd5b501643657c860da943e07a30a59165157ca507c455d071e5e5",
+      "expires_at_ms": 1795478460000,
+      "install_credential_id": "ordinary-credential",
+      "key_revision": 1,
+      "operation_id": "58ce8f71-f88d-4953-ade0-a760b9888539",
+      "pairing_generation": "059ba8bafe275d4bb2ddb6cc70d7dac66315e6b5994f678d6ad311282bb41c4d",
+      "registry_generation": "synthetic-fixture-ACK",
+      "state": "registered",
+      "transcript_sha256": "b146b34b1695c062a8583940a78d64966144dc9d60349755d8a6a90d7f0c9bb7"
+    },
+    "operation_id": "01a20ada-2c00-7546-b3cc-3665f6d18f41"
+  },
+  "canonical_client_data_utf8": "[\"djc-installation-widget-reauthorization/1\",\"POST\",\"/v1/push/native/installation/issuer/reauthorize/register\",{\"api_audience\":\"djc-native-push/1\",\"challenge_id\":\"MODEL-challenge\",\"challenge_nonce\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"contract_version\":1,\"delegation_sha256\":\"9759fe883316d5cc221976ac0913dd3d7ac06a2627c955bd060037ed34c3ba4e\",\"expires_at_ms\":1795478460000,\"first_key_receipt_sha256\":\"a04addad4938001db176e672f52104f3fea10758d8fa822bda0b22e3b2f6c953\",\"publication_operation_id\":\"01a20ada-2c00-7546-b3cc-3665f6d18f41\"},{\"api_installation_id\":\"synthetic-api-installation\",\"apple_evidence_expires_at_ms\":1795500000000,\"apple_status_expires_at_ms\":1795492800000,\"contract_version\":1,\"core_key_thumbprint\":\"cb2ff8d30bdd5b501643657c860da943e07a30a59165157ca507c455d071e5e5\",\"expires_at_ms\":1795478460000,\"install_credential_id\":\"ordinary-credential\",\"key_revision\":1,\"operation_id\":\"58ce8f71-f88d-4953-ade0-a760b9888539\",\"pairing_generation\":\"059ba8bafe275d4bb2ddb6cc70d7dac66315e6b5994f678d6ad311282bb41c4d\",\"registry_generation\":\"synthetic-fixture-ACK\",\"state\":\"registered\",\"transcript_sha256\":\"b146b34b1695c062a8583940a78d64966144dc9d60349755d8a6a90d7f0c9bb7\"},{\"action\":\"enrol\",\"approval_reference\":\"synthetic-fixture-ACK\",\"binding_id\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"contract_version\":1,\"delegation_id\":\"a53aa233-c1e8-4f79-b1c3-6f4427296a4f\",\"device_binding\":\"bff61f23dd41fbcf514b2527b498584ef360dc0b23b3d1167b66f8b2dd77f298\",\"expected_revision\":0,\"grant_binding\":\"71d751b8178e0dad61805cf40687e5cc38f2c2143445bbdb41fa043e4e820d3e\",\"install_id\":\"synthetic-api-installation\",\"operation_id\":\"01a20ada-2c00-7ebc-ab15-d6405a66eb99\",\"owner_binding\":\"90f9d7c2dc3a74b071652feddec532207e1aad02a37030875aa70b9266e8a4e8\",\"policy\":{\"activity_profile\":null,\"apns_environment\":\"sandbox\",\"external_content_allowed\":false,\"max_challenges\":100,\"max_events\":1000,\"max_operations\":10000,\"original_grant_expires_at_ms\":1795492800000,\"platform\":\"ios\",\"target\":{\"app_bundle_id\":\"dev.djconnect.ios\",\"extension_bundle_id\":\"dev.djconnect.ios.track-insight-widget\",\"widget_kind\":\"DJConnectSessionWidget\"},\"token_role\":\"widget\"},\"public_key\":{\"crv\":\"P-256\",\"kty\":\"EC\",\"x\":\"lhvRWkmkzuDVV1wmQBKCoWVENs_M2pyzjaOltKgxwHM\",\"y\":\"N_YMM4J9HpXBnVjL88tZacnI5Oqn9gbZnkS5FwAg38M\"},\"purpose\":\"surface_push\",\"source_binding\":\"a46b1d77f0347139a8016450b4d45d10e67f9ac5173b72a10d0398d9f59a187e\"}]",
+  "client_data_sha256_hex": "1711086248f77bc035c3ea835cc8d285ce5894e7a4e8de8155ff7f4dbece6e1d",
+  "register_ready_response": {
+    "contract_version": 1,
+    "operation_id": "01a20ada-2c00-7546-b3cc-3665f6d18f41",
+    "state": "ready"
+  },
+  "status_ready_response": {
+    "contract_version": 1,
+    "operation_id": "01a20ada-2c00-7546-b3cc-3665f6d18f41",
+    "state": "ready"
+  }
+}
