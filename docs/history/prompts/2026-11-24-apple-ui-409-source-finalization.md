@@ -10,7 +10,7 @@ The Apple source delivers the reviewed session presentation improvements, tempor
 
 #### Roadmap Position
 
-This records-only closeout concerns PR409 source delivery. The separate new Cast B consumer increment is excluded and remains on its isolated branch. It does not alter the installed40533 candidate. Existing Music Canvas, Music Origin and Ask DJ Moments acceptance obligations remain open; the owner requested their actual TheFrame43 TV qualification together with this delivery.
+This records-only closeout concerns PR409 source delivery. The separate new Cast B consumer increment is excluded and remains on its isolated branch. It does not alter the installed40533 candidate. Existing Music Canvas (Apple407/c61a4c6), Music Origin (Apple405/e0fa68b8) and Ask DJ Moments (Apple400/83e2f038) acceptance obligations remain open; the owner requested their actual TheFrame43 TV qualification together with this delivery.
 
 #### Rolling Horizon (Execution Horizon — Next 5 Planned)
 
@@ -22,7 +22,7 @@ This records-only closeout concerns PR409 source delivery. The separate new Cast
 
 #### Validation and Acceptance
 
-Reviewed shipping product bytes have1856 Swift Testing functions in62 suites passing;85 XCTest executed with5 existing skips and zero failures. Separate VibeCast qualification executed28 XCTest. All nine repository checks passed on exact76e85ce. PR409 CI passed; post-merge main CI/publication are recorded separately in the companion receipt when complete. Exact-head independent reviews found no remaining P1/P2 in the selected source delta. Earlier failed test runs remain preserved and are not relabeled as passes.
+Reviewed shipping product bytes have1856 Swift Testing functions in62 suites passing;85 XCTest executed with5 existing skips and zero failures. Separate VibeCast qualification executed28 XCTest. All nine repository checks passed on exact76e85ce. PR409 CI passed. Independent own-main [CI45365649433](https://github.com/djconnect-music-dj/djconnect-app/actions/runs/45365649433) and [publication45368139115](https://github.com/djconnect-music-dj/djconnect-app/actions/runs/45368139115) passed. Downloaded durable evidence SHA256 `721b244f27595e441f0b4e1f5d749a956df496055f3eb80491658c30e02f96cc` independently passes all12 canonical checks under the Apple workflow's separately pinned policy identity and original validator SHA256 `3fba299f26c75e47804e66218cabea8fd50627bd2a84a1dd294d59009714466f`. See `docs/feedback/APPLE_UI_409_SOURCE_RECEIPT_20261124.json`. No evidence is inherited across changed source. Exact-head independent reviews found no remaining P1/P2 in the selected source delta. Earlier failed test runs remain preserved and are not relabeled as passes.
 
 Signed40533 iOS and macOS candidates passed real codesign checks. The Mac mini installation used the ordinary installer, preserved app data and renamed the previous app for rollback. Independent installed readback matches the signed artifact. The explicitly authorized iPad mini reports installed40533. After actual user Touch ID approval, one normal physical UI test passed without fixture/reset arguments: Session navigation,18-second observation, equalizer-to-Track-Insight navigation and20-second observation. Its actual playback/output context differs from the Mac baseline; no Session/playback command or analysis request was sent. This proves navigation, not real Track Insight measurements or complete animation acceptance.
 
@@ -30,7 +30,7 @@ Normal Mac40533 UI observations verified Help, accuracy-note placement, VibeScap
 
 #### Blocked Items
 
-Exact-main publication and this Finalization's separate review/merge/publication must qualify before reconciliation. Physical TheFrame43 admission and previous-delivery acceptance remain unproven. New Cast B SDK/UI mounting is excluded. Push provider activation remains open: actual native clock, target and cold-extension restoration authority must come from genuine original producers. The Watch incident and complete live Track Insight behavior are not accepted from source tests alone.
+Source own-main publication qualifies all12 checks; this Finalization's separate review/merge/publication must still qualify before reconciliation. Physical TheFrame43 admission and previous-delivery acceptance remain unproven. The new Music Canvas feedback requires standard app popup styling and actual operation; current native Form presentation and blanket refresh-error mapping are confirmed, but the real connection/capability/error cause is not established. No product change is hidden in this Finalization. New Cast B SDK/UI mounting is excluded. Push provider activation remains open: actual native clock, target and cold-extension restoration authority must come from genuine original producers. The Watch incident and complete live Track Insight behavior are not accepted from source tests alone.
 
 #### Deferred Items
 
