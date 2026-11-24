@@ -5,6 +5,38 @@ import Testing
 @testable import DJConnectCore
 @testable import DJConnectUI
 
+@Test func macMainScreensShareTheListWidthAndKeepWideExceptions() {
+    let capped: [DJConnectSection] = [.djSession, .savedSessions, .trackInsight, .askDJ, .queue, .more,
+                                     .playlists, .settings, .logs, .about, .legal, .privacy]
+    let wide: [DJConnectSection] = [.games, .musicDNA, .discovery]
+    for section in capped {
+        #expect(section.detailWidth(in: 1_920) == 1_032)
+        #expect(section.detailWidth(in: 820) == 820)
+    }
+    for section in wide {
+        #expect(section.detailWidth(in: 1_920) == 1_920)
+    }
+}
+
+@Test(.isolatedAppKitResources) @MainActor func macDetailWidthPreservesAnExistingNarrowPanel() throws {
+    let width: CGFloat = 1_600
+    let detailWidth = DJConnectSection.djSession.detailWidth(in: width)
+    let content = VStack(spacing: 0) {
+        Rectangle().fill(.white).frame(maxWidth: 728).frame(height: 20)
+        Rectangle().fill(.white).frame(height: 20)
+    }
+    .padding(.horizontal, 16)
+    .frame(width: detailWidth)
+    .frame(width: width)
+    let renderer = ImageRenderer(content: content)
+    renderer.scale = 1
+    let bitmap = NSBitmapImageRep(cgImage: try #require(renderer.cgImage))
+    #expect(bitmap.colorAt(x: 400, y: 10)?.alphaComponent == 0)
+    #expect(bitmap.colorAt(x: 800, y: 10)?.alphaComponent == 1)
+    #expect(bitmap.colorAt(x: 400, y: 30)?.alphaComponent == 1)
+    #expect(bitmap.colorAt(x: 200, y: 30)?.alphaComponent == 0)
+}
+
 /// Exercises the shipping MomentCard, not only the two-column helper. The
 /// thumbnail descriptor is a declared UI fixture; no private pixels are read.
 /// Its reserved100-point slot must keep every ordinary typed contribution's

@@ -136,7 +136,6 @@ struct SavedSessionsView: View {
         selectedSearchIndex = (selectedSearchIndex + offset + filteredSessions.count) % filteredSessions.count
         withAnimation { proxy.scrollTo(filteredSessions[selectedSearchIndex].id, anchor: .center) }
     }
-    private let rowMaxWidth: CGFloat = 1000
     @ViewBuilder var body: some View {
         if embedsNavigationStack { NavigationStack { content } }
         else { content }
@@ -167,7 +166,7 @@ struct SavedSessionsView: View {
                     #endif
 
                 }
-                .frame(maxWidth: rowMaxWidth, alignment: .leading).frame(maxWidth: .infinity).padding(.horizontal, 20)
+                .frame(maxWidth: djConnectListContentMaxWidth, alignment: .leading).frame(maxWidth: .infinity).padding(.horizontal, 20)
                 #if os(iOS)
                 .background(SessionRefreshIndicatorBridge(
                     isRefreshing: !initialLoadFinished || refreshing || history.listLoading || history.preparing))
@@ -210,7 +209,7 @@ struct SavedSessionsView: View {
                         .accessibilityAddTraits(isSelectedMatch ? [.isSelected] : [])
                         .accessibilityIdentifier("saved-session-" + session.id)
                         .id(session.id)
-                        .frame(maxWidth: rowMaxWidth, alignment: .leading).frame(maxWidth: .infinity)
+                        .frame(maxWidth: djConnectListContentMaxWidth, alignment: .leading).frame(maxWidth: .infinity)
                         .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)

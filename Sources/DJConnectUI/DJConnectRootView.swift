@@ -211,6 +211,7 @@ private struct DJConnectCardOutline: ViewModifier {
     }
 }
 let djConnectCardSpacing: CGFloat = 16
+let djConnectListContentMaxWidth: CGFloat = 1_000
 private let djConnectScreenHorizontalPadding = djConnectCardSpacing
 let djConnectScreenVerticalPadding = djConnectCardSpacing
 private let djConnectContentMaxWidth: CGFloat = 760
@@ -647,7 +648,7 @@ struct DJConnectCanvasBackground: View {
     }
 }
 
-private enum DJConnectSection: Hashable {
+enum DJConnectSection: Hashable {
     case djSession
     case savedSessions
     case trackInsight
@@ -663,6 +664,19 @@ private enum DJConnectSection: Hashable {
     case about
     case legal
     case privacy
+
+    #if os(macOS)
+    func detailWidth(in availableWidth: CGFloat) -> CGFloat {
+        switch self {
+        case .games, .musicDNA, .discovery:
+            availableWidth
+        case .djSession, .savedSessions, .trackInsight, .askDJ, .queue, .more,
+             .playlists, .settings, .logs, .about, .legal, .privacy:
+            // Keep both existing list gutters outside the shared content width.
+            min(availableWidth, djConnectListContentMaxWidth + 2 * djConnectScreenHorizontalPadding)
+        }
+    }
+    #endif
 }
 
 #if os(macOS)
@@ -848,7 +862,8 @@ public struct DJConnectRootView: View {
                     ZStack(alignment: .bottom) {
                         selectedView
                             .id(selectedSection)
-                            .frame(width: viewport.size.width, height: viewport.size.height, alignment: .top)
+                            .frame(width: selectedSection.detailWidth(in: viewport.size.width),
+                                   height: viewport.size.height, alignment: .top)
                         if shouldShowOfflineNetworkBanner {
                             OfflineNetworkBanner(
                                 language: model.language,
@@ -14678,10 +14693,10 @@ struct QueueView: View {
                     }
 
                     #if os(macOS)
-                    queueScrollContent(maxWidth: 1000)
+                    queueScrollContent(maxWidth: djConnectListContentMaxWidth)
                     #else
                     if usesWideList {
-                        queueScrollContent(maxWidth: 1000)
+                        queueScrollContent(maxWidth: djConnectListContentMaxWidth)
                     } else {
                         List {
                             if shouldShowEmptyQueueState || shouldShowFilteredEmptyQueueState {
@@ -14992,10 +15007,10 @@ struct PlaylistsView: View {
                     }
 
                     #if os(macOS)
-                    playlistsScrollContent(maxWidth: 1000)
+                    playlistsScrollContent(maxWidth: djConnectListContentMaxWidth)
                     #else
                     if usesWideList {
-                        playlistsScrollContent(maxWidth: 1000)
+                        playlistsScrollContent(maxWidth: djConnectListContentMaxWidth)
                     } else {
                         List {
                             if model.playlistItems.isEmpty || shouldShowFilteredEmptyPlaylistState {
@@ -17048,7 +17063,7 @@ private struct MoreView: View {
                     MoreNavigationRow(title: localizedKey(model.language, "ui.privacy"), systemImage: "hand.raised") { destinationSelection = .privacy }
                     MoreNavigationRow(title: localizedKey(model.language, "ui.share.feedback"), systemImage: "bubble.left.and.bubble.right") { showingFeedback = true }
                 }
-                .frame(maxWidth: 1000)
+                .frame(maxWidth: djConnectListContentMaxWidth)
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, djConnectScreenHorizontalPadding)
                 .padding(.vertical, djConnectScreenVerticalPadding)
