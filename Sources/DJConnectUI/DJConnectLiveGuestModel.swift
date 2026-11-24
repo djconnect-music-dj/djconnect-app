@@ -146,7 +146,12 @@ import DJConnectCore
             if artworkCache.count >= 16 { artworkCache.removeAll() }
             artworkCache[art] = bytes
             return bytes
-        } catch { return nil } // An unavailable image cannot manufacture a replacement source.
+        } catch DJConnectGuestTransport.Failure.withdrawn {
+            // A real guest grant withdrawal applies to the joined scope, even
+            // when its first observed response happens to be an artwork read.
+            if generation == original { disconnect() }
+            return nil
+        } catch { return nil } // Image/transport failure alone is not guest withdrawal.
     }
     func artworkIsCurrent(_ art: Artwork) -> Bool { admitsArtwork(art) }
 

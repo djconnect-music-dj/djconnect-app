@@ -11,6 +11,8 @@ private final class GuestFixtureTransport: DJConnectGuestTransporting, @unchecke
     private var wrongGuest = false
     private var hasArtwork = false
     private var hasObserved = false
+    private var artworkFailure: DJConnectGuestTransport.Failure?
+    func failArtwork(_ value: DJConnectGuestTransport.Failure?) { lock.withLock { artworkFailure = value } }
     func setObserved(_ value: Bool) { lock.withLock { hasObserved = value } }
     func setArtwork(_ value: Bool) { lock.withLock { hasArtwork = value } }
     var recorded: [Call] { lock.withLock { calls } }
@@ -43,6 +45,7 @@ private final class GuestFixtureTransport: DJConnectGuestTransporting, @unchecke
             value = ["success": true, "guest_id": "guest-one", "text": "Je verzoek is ontvangen.", "guest_request": request]
         case .requestStatus: value = ["request": request]
         case .artwork:
+            if let failure = lock.withLock({ artworkFailure }) { throw failure }
             try await Task.sleep(for: .milliseconds(30))
             return Data([1, 2, 3])
         case .leave, .emotion: value = ["success": true]
@@ -158,4 +161,18 @@ private final class GuestFixtureTransport: DJConnectGuestTransporting, @unchecke
     #expect(body["selected_moment"] == nil && body["selected_entry"] == nil)
     model.disconnect()
     #expect(model.observedPlayback.isEmpty && model.publicRows.isEmpty)
+}
+
+
+@Test @MainActor func guestArtworkWithdrawalClearsJoinedScopeButImageFailureDoesNot() async throws {
+    let wire = GuestFixtureTransport()
+    wire.setArtwork(true)
+    let model = try await joinedGuest(wire)
+    let art = try #require(model.playback?.artwork)
+    wire.failArtwork(.unavailable)
+    #expect(await model.loadArtwork(art) == nil)
+    #expect(model.isJoined && model.playback != nil)
+    wire.failArtwork(.withdrawn)
+    #expect(await model.loadArtwork(art) == nil)
+    #expect(!model.isJoined && model.playback == nil && model.sharedFlow.isEmpty && model.messages.isEmpty)
 }
