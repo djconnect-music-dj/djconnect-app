@@ -9354,7 +9354,7 @@ struct VibeCastSessionStartDialog: View {
     var body: some View {
         Group {
             if showsDestinations && model.canSelectVibeCastScreen && model.displayConsentState != .revoked {
-                VibeCastDestinationPicker(language: model.language, scansNetwork: !model.isDemoMode) {
+                VibeCastDestinationPicker(model: model, language: model.language, scansNetwork: !model.isDemoMode) {
                     showsDestinations = false
                 }
                 #if os(iOS)
@@ -9517,6 +9517,7 @@ private struct VibeCastDialogHero: View {
 }
 
 private struct VibeCastDestinationPicker: View {
+    @ObservedObject var model: DJConnectAppModel
     let language: String
     let scansNetwork: Bool
     let openScreen: () -> Void
@@ -9536,12 +9537,16 @@ private struct VibeCastDestinationPicker: View {
         .accessibilityIdentifier("vibecast-destination-picker")
         .onChange(of: scenePhase, initial: true) {
             if scansNetwork && scenePhase == .active {
+                #if os(iOS)
+                model.startLegacyCastDiscovery()
+                #else
                 discovery.start()
+                #endif
             } else {
-                discovery.stop()
+                discovery.stop(); model.stopLegacyCastDiscovery()
             }
         }
-        .onDisappear { discovery.stop() }
+        .onDisappear { discovery.stop(); model.stopLegacyCastDiscovery() }
     }
 
     private var card: some View {
@@ -9555,10 +9560,28 @@ private struct VibeCastDestinationPicker: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("vibecast-destination-screen")
+                #if os(iOS)
+                ForEach(model.legacyCastDevices) { device in
+                    Button { model.connectLegacyCast(deviceID: device.id) } label: {
+                        HStack {
+                            destinationRow(device.name, symbol: "tv.badge.wifi", showsChevron: true)
+                            if model.legacyCastConnectingDeviceID == device.id { ProgressView() }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!model.canConnectLegacyCast || model.legacyCastConnectingDeviceID != nil)
+                    .accessibilityIdentifier("vibecast-cast-device-" + device.id)
+                }
+                if model.legacyCastState != .idle && model.legacyCastState != .stopped {
+                    Button(localizedKey(language, "ui.vibecast.cast.stop")) { model.stopLegacyCast() }
+                        .accessibilityIdentifier("vibecast-cast-stop")
+                }
+                #else
                 ForEach(discovery.devices) { device in
                     destinationRow(device.name, symbol: "tv.badge.wifi", showsChevron: false)
                         .accessibilityHint(localizedKey(language, "ui.vibecast.destinations.unavailable"))
                 }
+                #endif
             }
             Text(localizedKey(language, statusKey))
                 .font(.footnote)
@@ -9571,10 +9594,24 @@ private struct VibeCastDestinationPicker: View {
     }
 
     private var statusKey: String {
+        #if os(iOS)
+        if model.legacyCastNeedsConfirmation { return "ui.vibecast.cast.confirm_again" }
+        switch model.legacyCastState {
+        case .connecting: return "ui.vibecast.cast.connecting"
+        case .presentingMoment, .presentingSilence: return "ui.vibecast.cast.presenting"
+        case .receiverReady, .snapshotAccepted: return "ui.vibecast.cast.waiting"
+        case .failed: return "ui.vibecast.cast.failed"
+        case .recovering: return "ui.vibecast.cast.waiting"
+        default: break
+        }
+        if !model.legacyCastDevices.isEmpty { return "ui.vibecast.cast.choose" }
+        return "ui.vibecast.destinations.scanning"
+        #else
         if !discovery.devices.isEmpty { return "ui.vibecast.destinations.unavailable" }
         if discovery.failed { return "ui.vibecast.destinations.network" }
         if discovery.searching { return "ui.vibecast.destinations.scanning" }
         return "ui.vibecast.destinations.empty"
+        #endif
     }
 
     private func destinationRow(_ title: String, symbol: String, showsChevron: Bool) -> some View {

@@ -95,6 +95,8 @@ public enum DJConnectLegacyCastState: String, Equatable, Sendable {
     func stopDiscovery()
     func connect(to deviceID: String, owner: DJConnectLegacyCastOwner) async throws
     func stopView()
+    /// Withdraw local observation without sending a stop or acquiring a new token.
+    func suspendObservation()
     func invalidate()
 }
 

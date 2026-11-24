@@ -467,6 +467,12 @@ public final class DJConnectClient: Sendable {
                   generation.range(of: #"\A[A-Za-z0-9_-]{1,128}\z"#, options: .regularExpression) != nil else {
                 throw DJConnectError.invalidResponse
             }
+            // Production verifier evidence bounds are DATA, not the original
+            // challenge lifetime or native clock/read permission.
+            for key in ["apple_evidence_expires_at_ms", "apple_status_expires_at_ms"] {
+                guard case let .integer(value)? = fields.removeValue(forKey: key),
+                      (1...9_007_199_254_740_991).contains(value) else { throw DJConnectError.invalidResponse }
+            }
             var expected = receiptBindings.mapValues(RendezvousFlatJSON.Value.string)
             expected["contract_version"] = .integer(1)
             expected["operation_id"] = .string(operationID)
@@ -881,6 +887,20 @@ public final class DJConnectClient: Sendable {
         }
         let request = try vibeCastRequest(payload)
         return try await decodedResponse(for: request)
+    }
+
+    /// Existing paired owner read, transported by the platform's POST route.
+    /// This returns only the existing read-only legacy CAF capability.
+    public func legacyCastCapability(sessionID: String, isCurrent: @escaping @MainActor () -> Bool) async throws -> DJConnectLegacyCastContract.Capability {
+        guard await isCurrent(), !Task.isCancelled, !sessionID.isEmpty, sessionID.count <= 128,
+              DJConnectLegacyCastContract.origin(baseURL.absoluteString) != nil else { throw DJConnectLegacyCastContract.Error.scopeChanged }
+        let request = try jsonRequest(path: Self.apiV1Path("session/broadcast/token"),
+                                      payload: DJConnectSessionEndRequest(sessionID: sessionID))
+        let value: DJConnectLegacyCastContract.Capability = try await decodedResponse(for: request)
+        guard await isCurrent(), !Task.isCancelled, value.sessionID == sessionID else {
+            throw DJConnectLegacyCastContract.Error.scopeChanged
+        }
+        return value
     }
 
     public func startSession(_ payload: DJConnectSessionStartRequest) async throws -> DJConnectSessionResponse {

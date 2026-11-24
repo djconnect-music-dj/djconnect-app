@@ -1918,3 +1918,11 @@
 "ui.live.remote_control" = "VibeCast remote control";
 
 "ui.live.tv_view" = "TV view";
+
+"ui.vibecast.cast.stop" = "Stop VibeCast on this screen";
+"ui.vibecast.cast.confirm_again" = "Select your screen again to confirm the connection.";
+"ui.vibecast.cast.connecting" = "Connecting to your screen…";
+"ui.vibecast.cast.presenting" = "The screen reports that VibeCast is displaying.";
+"ui.vibecast.cast.waiting" = "Waiting for confirmation from the screen…";
+"ui.vibecast.cast.failed" = "Could not connect. Try again.";
+"ui.vibecast.cast.choose" = "Choose your Google Cast screen.";

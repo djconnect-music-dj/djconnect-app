@@ -158,3 +158,30 @@ import Testing
     do { try await WidgetFirstKeyOperation.run(restarted.ports()); Issue.record("Stored registered is metadata, not a new ACK") } catch { }
     #expect(restarted.calls[.status] == 1 && restarted.calls[.generate] == nil && restarted.calls[.attest] == nil && restarted.calls[.register] == nil)
 }
+
+@Test(.isolatedClientResources, arguments: ["actual-shape", "missing-evidence", "missing-status", "bool", "unsafe", "zero", "extra", "original-expiry"])
+@MainActor func widgetProductionReceiptRequiresBothOriginalAppleEvidenceDataBounds(_ mutation: String) throws {
+    let fixture = WidgetFirstKeyFixture()
+    let challenge = try fixture.challenge()
+    var value: [String: Any] = ["contract_version":1,"operation_id":challenge.operationID,
+        "api_installation_id":"model-install","install_credential_id":"model-credential",
+        "pairing_generation":"model-pair","core_key_thumbprint":String(repeating:"4",count:64),
+        "registry_generation":"model-registry","expires_at_ms":challenge.expiresAtMS,"key_revision":1,
+        "state":"registered","transcript_sha256":challenge.clientDataHash.map { String(format:"%02x",$0) }.joined(),
+        "apple_evidence_expires_at_ms":1_900_000_000_000 as Int64,
+        "apple_status_expires_at_ms":1_850_000_000_000 as Int64]
+    switch mutation {
+    case "missing-evidence": value.removeValue(forKey:"apple_evidence_expires_at_ms")
+    case "missing-status": value.removeValue(forKey:"apple_status_expires_at_ms")
+    case "bool": value["apple_evidence_expires_at_ms"] = true
+    case "unsafe": value["apple_status_expires_at_ms"] = 9_007_199_254_740_992 as Int64
+    case "zero": value["apple_status_expires_at_ms"] = 0
+    case "extra": value["native_clock_permission"] = true
+    case "original-expiry": value["expires_at_ms"] = challenge.expiresAtMS + 1
+    default: break
+    }
+    var accepted = false
+    do { try challenge.validateReceipt(JSONSerialization.data(withJSONObject:value)); accepted = true } catch {}
+    #expect(accepted == (mutation == "actual-shape"))
+    #expect(!challenge.isCurrent(nowMS:challenge.expiresAtMS,uptime:200))
+}

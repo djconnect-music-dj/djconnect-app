@@ -889,6 +889,107 @@ public final class DJConnectAppModel: ObservableObject {
 
     @Published private(set) var displayConsentState: DJConnectDisplayConsentSession.State = .idle
     @Published private(set) var displayConsentExistingShare: DJConnectDisplayConsentSession.ExistingShare?
+    @Published public private(set) var legacyCastDevices: [DJConnectLegacyCastDevice] = []
+    @Published public private(set) var legacyCastState: DJConnectLegacyCastState = .idle
+    @Published public private(set) var legacyCastNeedsConfirmation = false
+    @Published public private(set) var legacyCastConnectingDeviceID: String?
+    private var legacyCastSender: (any DJConnectLegacyCastSending)?
+    private var legacyCastTask: Task<Void, Never>?
+    private var legacyCastOperation = UUID()
+    private struct LegacyCastScope {
+        let installation: String
+        let pairing: [String]
+        let session: String
+        let profile: String
+    }
+    private var legacyCastScope: LegacyCastScope?
+
+    public func attachLegacyCastSender(_ sender: any DJConnectLegacyCastSending) {
+        guard legacyCastSender == nil else { return }
+        legacyCastSender = sender
+        sender.onChange = { [weak self, weak sender] in
+            guard let self, let sender else { return }
+            self.legacyCastDevices = sender.devices
+            self.legacyCastState = sender.state
+        }
+    }
+    private var legacyCastPairing: [String] {
+        [haLocalURL, haRemoteURL, defaults.string(forKey: haInstallIDKey) ?? "",
+         (try? tokenStore.loadToken()) ?? "", identity.deviceID, identity.clientType.rawValue]
+    }
+    public var canConnectLegacyCast: Bool { legacyCastSender != nil && canResolveDisplayConsent }
+    public func startLegacyCastDiscovery() {
+        guard canConnectLegacyCast else { return }
+        legacyCastSender?.startDiscovery()
+    }
+    public func stopLegacyCastDiscovery() { legacyCastSender?.stopDiscovery() }
+    private func suspendLegacyCastObservation() {
+        guard legacyCastScope != nil || legacyCastTask != nil else { return }
+        legacyCastOperation = UUID(); legacyCastTask?.cancel(); legacyCastTask = nil
+        legacyCastConnectingDeviceID = nil
+        legacyCastNeedsConfirmation = true
+        legacyCastSender?.suspendObservation()
+    }
+    public func stopLegacyCast() {
+        legacyCastOperation = UUID(); legacyCastTask?.cancel(); legacyCastTask = nil
+        legacyCastScope = nil; legacyCastConnectingDeviceID = nil; legacyCastNeedsConfirmation = false
+        legacyCastSender?.stopView()
+    }
+    private func reconcileLegacyCastScope() {
+        guard let scope = legacyCastScope else { return }
+        // A suspended history is unknown, not a new owner. It may keep the old
+        // withdrawal handle, but can never authorize a new token or status.
+        if pairingStatus != .paired || legacyCastPairing != scope.pairing ||
+            defaults.string(forKey: haInstallIDKey) != scope.installation ||
+            activeDJSession?.id != scope.session || activeDJSession?.runtimeState != "active" ||
+            sessionHistory.authorizedProfileID.map({ $0 != scope.profile }) == true {
+            stopLegacyCast()
+        }
+    }
+    public func connectLegacyCast(deviceID: String) {
+        guard legacyCastTask == nil, let sender = legacyCastSender,
+              sender.devices.contains(where: { $0.id == deviceID }),
+              let destination = captureDisplayConsentDestination() else { return }
+        let client: DJConnectClient
+        do { client = try displayOwnerClient() } catch { legacyCastState = .failed; return }
+        guard DJConnectLegacyCastContract.origin(client.baseURL.absoluteString) != nil else {
+            legacyCastState = .failed; return
+        }
+        let operation = UUID(), epoch = sessionHistory.responseEpoch
+        let pairing = legacyCastPairing
+        let scope = LegacyCastScope(installation: destination.installation, pairing: pairing,
+                                    session: destination.session.id, profile: destination.profile)
+        legacyCastOperation = operation; legacyCastScope = scope
+        legacyCastConnectingDeviceID = deviceID; legacyCastNeedsConfirmation = false
+        let current: @MainActor () -> Bool = { [weak self] in
+            guard let self else { return false }
+            return self.legacyCastOperation == operation && !self.isDemoMode && self.isAppInForeground &&
+                self.pairingStatus == .paired && self.legacyCastPairing == pairing &&
+                self.activeDJSession?.id == scope.session && self.activeDJSession?.runtimeState == "active" &&
+                self.sessionHistory.responseEpoch == epoch && self.sessionHistory.authorizedProfileID == scope.profile
+        }
+        var capabilityReadStarted = false
+        legacyCastTask = Task { [weak self] in
+            guard let self else { return }
+            defer { if self.legacyCastOperation == operation { self.legacyCastTask = nil; self.legacyCastConnectingDeviceID = nil } }
+            do {
+                let owner = try DJConnectLegacyCastOwner(sessionID: scope.session, haOrigin: client.baseURL.absoluteString,
+                    isCurrent: current, capability: {
+                        // One existing owner-authorized token read per explicit
+                        // connect; no ambient route fallback or application retry.
+                        guard !capabilityReadStarted, current() else { throw DJConnectLegacyCastContract.Error.scopeChanged }
+                        capabilityReadStarted = true
+                        return try await client.legacyCastCapability(sessionID: scope.session, isCurrent: current)
+                    })
+                try await sender.connect(to: deviceID, owner: owner)
+                guard current() else { return }
+                self.legacyCastState = sender.state
+            } catch {
+                if self.legacyCastOperation == operation { self.legacyCastState = .failed }
+            }
+        }
+    }
+
     @Published var vibeCastLiveEnabled = false
     @Published private var storedVibeCastRemoteState: DJConnectClient.VibeCastOwnerState?
     @Published private(set) var isUpdatingVibeCastRemote = false
@@ -1811,7 +1912,7 @@ public final class DJConnectAppModel: ObservableObject {
     }
     @Published public var pairingStatus: DJConnectPairingStatus = .unpaired {
         didSet {
-            if pairingStatus != .paired { retireDirectSessionRuntimes() }
+            if pairingStatus != .paired { retireDirectSessionRuntimes(); stopLegacyCast() }
             if oldValue != pairingStatus { askDJHelpRuntimeGeneration = UUID(); cancelRendezvous() }
             if startBackgroundTasks, oldValue != .paired, pairingStatus == .paired {
                 schedulePairedRefresh(reason: "Pairing became online")
@@ -1911,6 +2012,7 @@ public final class DJConnectAppModel: ObservableObject {
         didSet {
             sessionStartup.reconcile()
             sessionForYou.reconcile()
+            reconcileLegacyCastScope()
             reconcileDirectSessionRuntimes()
             let helpNow = Date()
             reconcileSessionHelpTransition(from: oldValue, at: helpNow)
@@ -2427,7 +2529,7 @@ public final class DJConnectAppModel: ObservableObject {
     /// Visible game palette for the native iPad container safe-area background only.
     @Published var visibleGameMood: String?
     @Published public var isDemoMode = false {
-        didSet { if oldValue != isDemoMode { retireDirectSessionRuntimes(); syncSessionSurfaces() } }
+        didSet { if oldValue != isDemoMode { stopLegacyCast(); retireDirectSessionRuntimes(); syncSessionSurfaces() } }
     }
     @Published public private(set) var isMonkeyTestingMode = false
     @Published public private(set) var isUITestRuntimeFixtureActive = false
@@ -4032,6 +4134,7 @@ public final class DJConnectAppModel: ObservableObject {
     }
 
     private func withdrawForegroundPrivateViews(enteringBackground: Bool) {
+        suspendLegacyCastObservation()
         if currentInsightProof != nil { clearCurrentInsightProof(); currentTrackInsight = nil }
         // The camera permission prompt can make the scene briefly inactive.
         // Only an idle QR selection may survive that transition.
@@ -5922,6 +6025,7 @@ public final class DJConnectAppModel: ObservableObject {
     }
     func clearProfileConversationDisplay() { clearAskDJHistoryLocally() }
     func revokeProfileConversationAuthority() {
+        stopLegacyCast()
         profileDJSettings.withdrawAuthority()
         stopResponsePlayback(clearText: false)
         cancelVoiceRecording()
@@ -8727,6 +8831,7 @@ public final class DJConnectAppModel: ObservableObject {
     }
 
     func bindProfileDJSettings(active: Bool) {
+        reconcileLegacyCastScope()
         let owner = profileSettingsOwnerFence.owner(context: profileDJSettingsContext,
             confirmedProfile: sessionHistory.authorizedProfileID)
         if owner != profileDJSettingsBoundOwner { retireDirectSessionRuntimes() }
@@ -9340,6 +9445,7 @@ public final class DJConnectAppModel: ObservableObject {
     }
 
     func activeVoiceOwnerDidChange() {
+        if sessionHistory.authorizedProfileID == nil { suspendLegacyCastObservation() }
         invalidateAskDJHelpObservationContext()
         // This callback is owned by the actual conversation ownerScope change.
         sessionHistory.cancelTextSubmissions()
@@ -13097,6 +13203,7 @@ public final class DJConnectAppModel: ObservableObject {
     /// cached Session at the new origin. Fence queued native uses synchronously,
     /// before any subsequent connection/settings/network work can await.
     private func retireSessionSurfacesForOriginChange(interruptSessionSource: Bool) {
+        stopLegacyCast()
         retireDirectSessionRuntimes()
         sessionSurfaceNativeCustody.withdraw()
         sessionSurfaceActivityTask?.cancel() // Keep serialization behind any in-flight SDK call.
@@ -15189,6 +15296,7 @@ public final class DJConnectAppModel: ObservableObject {
     }
 
     private func clearAskDJHistoryLocally() {
+        suspendLegacyCastObservation()
         personaReplyScope = nil
         invalidateConversationResultLeases()
         liveConversationPresentations = [:]

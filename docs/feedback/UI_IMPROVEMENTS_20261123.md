@@ -694,3 +694,28 @@ Aanvullend checkpoint 24 november:
 - Echte reauthorization met bestaande AppAttest-sleutel, originele role-ACK en
   native clock-/signed-environmentproducer blijven afzonderlijke integratiegates.
   Een oud journal of statusantwoord vervangt die bevoegdheden niet.
+
+
+Cast/production-ACK checkpoint 24 november:
+- iOS-compositie initialiseert de echte Google Cast SDK één keer, met SDK-
+  payloadlogging uit. De iPhone-schermkiezer toont echte SDK-device-ID's en
+  verbindt via de bestaande eigenaarroute `POST /session/broadcast/token`.
+  Eén expliciete connect gebruikt één oorspronkelijke tokenread/handoff.
+- Achtergrond en geschiedenis-suspend stoppen lokale observatie zonder TV-stop.
+  De oude statuslease herleeft niet; opnieuw verbinden vraagt expliciete intent
+  en verse ownercontext. Echte pairing/origin/token/Profile/Session-intrekking,
+  Demo-overgang en Stop trekken uitsluitend de oorspronkelijke owned view in.
+- Verloren lokale SDK/statusobservatie detacht zonder TV-stop. Eigen gestarte
+  SDK-sessies en hergebruikte sessies houden hun afzonderlijke exacte custody;
+  onopgeloste startcallbacks kunnen een onmiddellijke herconnect tijdelijk
+  blokkeren. Geen friendly-name/Bonjour- of DefaultMediaReceiverfallback.
+- Mac-build en 143 regressies in zeven suites geslaagd. Tien causale Cast-
+  AppModelcases gebruiken echte HTTP-ingress met expliciet synthetische
+  HTTPS-/ownerresponses en gemodelleerde SDK; geen fysieke CAF-acceptatie.
+- De production first-key-ACK vereist exact de twee extra Apple-evidence/status-
+  expiraties als safe-int DATA; oorspronkelijke challenge-expiry blijft gelijk.
+  De oorspronkelijke 120s-challenge wordt daarmee niet verlengd.
+- Eén gerichte herstart van uitsluitend de eigen simulatorgebruikersdiensten
+  herstelde officiële inventarisatie. Nieuwe eigen DeviceSet/device aangemaakt;
+  geen globale runtime-/daemon-/Devices-permissiewijziging. Nieuwe runtime-QA
+  volgt op de iOS-build. Live/4h/QR blijft onafhankelijk van de legacy Cast-token.

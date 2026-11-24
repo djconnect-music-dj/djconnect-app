@@ -1918,3 +1918,11 @@
 "ui.live.remote_control" = "VibeCast-afstandsbediening";
 
 "ui.live.tv_view" = "Tv-weergave";
+
+"ui.vibecast.cast.stop" = "Stop VibeCast op dit scherm";
+"ui.vibecast.cast.confirm_again" = "Kies opnieuw je scherm om de verbinding te bevestigen.";
+"ui.vibecast.cast.connecting" = "Verbinden met je scherm…";
+"ui.vibecast.cast.presenting" = "VibeCast wordt door het scherm weergegeven.";
+"ui.vibecast.cast.waiting" = "Wachten op bevestiging van het scherm…";
+"ui.vibecast.cast.failed" = "Verbinden is niet gelukt. Probeer het opnieuw.";
+"ui.vibecast.cast.choose" = "Kies je Google Cast-scherm.";

@@ -151,7 +151,10 @@ import Foundation
                       self.matchingSession(session.device.uniqueID) === session,
                       self.channel === next, next.isConnected, var lease = self.lease,
                       lease.tick(now: self.now) else {
-                    self.invalidate(); self.state = .failed; self.onChange?(); return
+                    // Losing a local status/SDK observation is not proof that
+                    // Core withdrew the TV's readonly view. Actual owner loss
+                    // and explicit Stop are handled by the AppModel boundary.
+                    self.suspendObservation(); self.state = .failed; self.onChange?(); return
                 }
                 self.lease = lease
                 // Lost receiver readiness is retried with the SAME ID and the
@@ -173,6 +176,19 @@ import Foundation
             let terminal = state; invalidate(); state = terminal
         }
         onChange?()
+    }
+    func suspendObservation() {
+        operation = UUID()
+        statusTask?.cancel(); statusTask = nil
+        stopDiscovery()
+        pendingHandoff = nil
+        // Retain only the exact original session/channel/lease as a withdrawal
+        // handle. The old callback closure is fenced by operation, and no new
+        // status, token request, retry or positive presentation is admitted.
+        if ownedSession == nil {
+            launchFence.cancel(); endCancelledLaunchIfCurrent()
+        }
+        state = .recovering; onChange?()
     }
     func stopView() { invalidate() }
     func invalidate() {
