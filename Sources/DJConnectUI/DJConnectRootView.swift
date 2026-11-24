@@ -8418,14 +8418,16 @@ struct TrackVibePlaybackAnchor: Equatable {
     var isPlaying: Bool = false
 
     static func signature(for playback: DJConnectPlayback?) -> String {
+        // Provider item/context identifiers are opaque and case-sensitive.
+        // Only descriptive labels may be normalized for presentation identity.
         [
             playback?.uri,
-            playback?.trackName,
-            playback?.artistName,
+            playback?.trackName?.lowercased(),
+            playback?.artistName?.lowercased(),
             playback?.contextURI,
             playback?.durationMS.map(String.init)
         ]
-        .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+        .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
         .filter { !$0.isEmpty }
         .joined(separator: "|")
     }

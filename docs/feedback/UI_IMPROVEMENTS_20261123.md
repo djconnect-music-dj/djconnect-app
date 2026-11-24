@@ -677,3 +677,20 @@ Checkpoint 24 november — Voor jou, Widgets en Cast:
   producten en testresultaten zijn behouden.
 - Fysieke pushactivering/afmelding, Live Activity en afzonderlijke Watchkanalen
   zijn nog niet end-to-end gekwalificeerd. Er is geen nieuwe installatieclaim.
+
+
+Aanvullend checkpoint 24 november:
+- Echte iOS simulator-build en Google Cast-frameworklink op 958f390 geslaagd.
+  Watch-app plus Smart Stack-extensie op 9824642 bouwen eveneens succesvol.
+- Gast-artwork: werkelijke grant-intrekking wist onmiddellijk de eigen joined
+  scope; een gewone afbeeldingsfout doet dit niet. Causale regressie geslaagd.
+- Track Insight behandelt opaque provider-ID's nu casegevoelig, zodat een ander
+  nummer met vergelijkbare metadata zijn eigen progress-anchor krijgt.
+  Mac-build en 141 regressies in zeven suites geslaagd, inclusief gehele
+  trackduur, pause/resume/seek en de nieuwe casegevoelige trackwissel.
+- Onafhankelijke bronreview van exact 958f390: GO zonder P1/P2 voor oorspronkelijke
+  SDK-fasen, ON/OFF/ON-consentqueue en definitieve Voor-jou-intrekking.
+  De reviewer heeft de tests niet onafhankelijk herhaald.
+- Echte reauthorization met bestaande AppAttest-sleutel, originele role-ACK en
+  native clock-/signed-environmentproducer blijven afzonderlijke integratiegates.
+  Een oud journal of statusantwoord vervangt die bevoegdheden niet.

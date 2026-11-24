@@ -59,6 +59,19 @@ struct TrackInsightMotionClockTests {
         #expect(TrackVibePlaybackPhase(playback: playback, anchor: anchor, date: start.addingTimeInterval(72)).positionSeconds == 1)
     }
 
+    @Test func opaqueCaseSensitiveTrackChangeStartsItsOwnPlaybackAnchor() {
+        let start = Date(timeIntervalSince1970: 1000)
+        var playback = DJConnectPlayback(uri: "spotify:track:AAAAAAAAAAAAAAAAAAAAAA", isPlaying: true,
+            trackName: "Same title", artistName: "Artist", progressMS: 20_000, durationMS: 90_000)
+        var anchor = TrackVibePlaybackAnchor()
+        anchor.update(from: playback, at: start, uptime: 100)
+        playback.uri = "spotify:track:aAAAAAAAAAAAAAAAAAAAAA"
+        anchor.update(from: playback, at: start.addingTimeInterval(1), uptime: 101)
+        let phase = TrackVibePlaybackPhase(playback: playback, anchor: anchor,
+            date: start.addingTimeInterval(2), uptime: 102)
+        #expect(phase.positionSeconds == 21)
+    }
+
     @Test func observedPlaybackProgressUsesMonotonicTimeDespiteWallClockCorrections() {
         let start = Date(timeIntervalSince1970: 1000)
         let playback = DJConnectPlayback(uri: "spotify:track:first", isPlaying: true,
