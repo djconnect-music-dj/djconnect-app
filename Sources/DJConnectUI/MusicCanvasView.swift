@@ -7,6 +7,7 @@ struct MusicCanvasView: View {
     @ObservedObject var model: DJConnectAppModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
+    @State private var showingSettings = false
     @State private var snapshot: DJConnectCanvasSnapshot?
     @State private var busy = false
     @State private var refreshing = false
@@ -36,65 +37,17 @@ struct MusicCanvasView: View {
     }
 
     var body: some View {
-        MusicCanvasPopupSurface(title: "Music Canvas", language: model.language, done: { dismiss() }) {
-            VStack(alignment: .leading, spacing: 18) {
-                Section {
+        let settingsTitle = DJConnectLocalization.localized(key: "ui.settings", language: model.language)
+        MusicCanvasPopupSurface(title: showingSettings ? settingsTitle : "Music Canvas") {
+            VStack(alignment: .leading, spacing: 16) {
+                if showingSettings {
+                    if let snapshot { settings(snapshot) }
+                } else {
                     Text(text("description")).foregroundStyle(.secondary)
-                    if let snapshot {
-                        Toggle(text("enabled"), isOn: Binding(get: { snapshot.preferences.enabled }, set: { enabled in
-                            change { $0.enabled = enabled }
-                        }))
-                        if !snapshot.image_generation_available {
-                            Text(text("provider_required")).foregroundStyle(.secondary)
-                        }
-                    }
+                    if let snapshot { screenChooser(snapshot) }
                 }
-                if let snapshot {
-                    Section(text("screens")) {
-                        if snapshot.targets.isEmpty { Text(text("no_screens")).foregroundStyle(.secondary) }
-                        ForEach(snapshot.targets) { target in
-                            HStack {
-                                Toggle(isOn: Binding(get: { snapshot.preferences.selected_targets.contains(target.id) }, set: { enabled in
-                                    change {
-                                        if enabled { $0.selected_targets.append(target.id) }
-                                        else {
-                                            $0.selected_targets.removeAll { $0 == target.id }
-                                            $0.cadence_overrides.removeValue(forKey: target.id)
-                                        }
-                                    }
-                                })) {
-                                    VStack(alignment: .leading) {
-                                        Text(target.name)
-                                        Text(status(target.state)).font(.caption).foregroundStyle(.secondary)
-                                    }
-                                }
-                                Button {
-                                    selected = target; cleanupRemote = false; allowRemaining = false
-                                    width = ""; height = ""; orientation = "portrait"; preview = nil
-                                    if target.preview_available { loadPreview(target.id) }
-                                } label: { Image(systemName: "info.circle") }
-                                .buttonStyle(.borderless)
-                                .accessibilityLabel(target.name + " — " + text("details"))
-                            }
-                        }
-                    }
-                    Section(text("presentation")) {
-                        Picker(text("composition"), selection: Binding(get: { snapshot.preferences.composition }, set: { value in
-                            change { $0.composition = value }
-                        })) {
-                            ForEach(["central", "free", "full"], id: \.self) { Text(text($0)).tag($0) }
-                        }
-                        Picker(text("matte"), selection: Binding(get: { snapshot.preferences.matte }, set: { value in
-                            change { $0.matte = value }
-                        })) {
-                            ForEach(["off", "matching", "contrast"], id: \.self) { Text(text($0)).tag($0) }
-                        }
-                        Picker(text("cadence"), selection: Binding(get: { snapshot.preferences.cadence }, set: { value in
-                            change { $0.cadence = value }
-                        })) {
-                            ForEach(DJConnectCanvasPreferences.cadences, id: \.self) { Text(text("cadence." + $0)).tag($0) }
-                        }
-                    }
+                if let snapshot, !snapshot.image_generation_available {
+                    Text(text("provider_required")).foregroundStyle(.secondary)
                 }
                 if let notice {
                     Text(notice).foregroundStyle(.secondary).accessibilityIdentifier("canvas-notice")
@@ -103,97 +56,232 @@ struct MusicCanvasView: View {
                         Task { await refresh(captured) }
                     }
                     .djConnectButtonStyle(DJConnectButtonStyle())
-                    .disabled(refreshing)
+                    .disabled(refreshing || busy)
                     .accessibilityIdentifier("music-canvas-retry")
                 }
                 if busy || (snapshot == nil && notice == nil) {
                     ProgressView().accessibilityLabel(text("working"))
                 }
             }
-            .disabled(busy)
-            .task(id: scope) {
-                snapshot = nil; selected = nil; preview = nil; notice = nil
-                readID = UUID(); operationID = nil; busy = false; refreshing = false
-                let captured = scope
-                guard current(captured) else { return }
-                while !Task.isCancelled && current(captured) {
-                    if !busy { await refresh(captured) }
-                    try? await Task.sleep(for: .seconds(5))
+            VStack(spacing: 12) {
+                if showingSettings {
+                    Button(DJConnectLocalization.localized(key: "ui.session.intro.back", language: model.language)) {
+                        showingSettings = false
+                        selected = nil
+                        preview = nil
+                    }
+                    .djConnectButtonStyle(DJConnectButtonStyle(expands: true))
+                    .controlSize(.large)
+                    .accessibilityIdentifier("music-canvas-back")
+                } else {
+                    Button(settingsTitle) { showingSettings = true }
+                        .djConnectButtonStyle(DJConnectButtonStyle(expands: true))
+                        .controlSize(.large)
+                        .disabled(snapshot == nil || busy)
+                        .accessibilityIdentifier("music-canvas-settings")
                 }
-            }
-            .djConnectPopup(item: $selected) { target in
-                details(target)
-            }
-            .onChange(of: scenePhase) { _, value in
-                if value != .active { snapshot = nil; selected = nil; preview = nil }
+                Button(text("done")) { dismiss() }
+                    .djConnectButtonStyle(DJConnectButtonStyle(emphasis: .primary, expands: true))
+                    .controlSize(.large)
+                    .accessibilityIdentifier("music-canvas-done")
             }
         }
-        .accessibilityIdentifier("music-canvas-popup")
+        .accessibilityIdentifier(showingSettings ? "music-canvas-settings-page" : "music-canvas-popup")
+        .task(id: scope) {
+            snapshot = nil; selected = nil; preview = nil; notice = nil; showingSettings = false
+            readID = UUID(); operationID = nil; busy = false; refreshing = false
+            let captured = scope
+            guard current(captured) else { return }
+            while !Task.isCancelled && current(captured) {
+                if !busy { await refresh(captured) }
+                try? await Task.sleep(for: .seconds(5))
+            }
+        }
+        .onChange(of: scenePhase) { _, value in
+            if value != .active { snapshot = nil; selected = nil; preview = nil }
+        }
     }
 
-    private func details(_ target: DJConnectCanvasTarget) -> some View {
-        MusicCanvasPopupSurface(title: target.name, language: model.language, done: {
-            selected = nil; preview = nil
-        }) {
-            VStack(alignment: .leading, spacing: 18) {
-                Section {
-                    Text(status(target.state))
-                    if target.preview_available, let preview {
-                        Image(decorative: preview.image, scale: 1).resizable().scaledToFit()
-                    }
-                }
-                if let snapshot, snapshot.can_manage_devices, (target.state == "canvas_manual_takeover" || target.state != "ready" && !target.preview_available) {
-                    Section(text("setup")) {
-                        if target.screen.width == nil { TextField(text("width"), text: $width) }
-                        if target.screen.height == nil { TextField(text("height"), text: $height) }
-                        if target.screen.orientation == nil {
-                            Picker(text("orientation"), selection: $orientation) {
-                                Text(text("portrait")).tag("portrait")
-                                Text(text("landscape")).tag("landscape")
-                            }
-                        }
-                        Text(text(target.adapter == "samsung" ? "tv_permission" : "screen_setup"))
-                            .font(.caption).foregroundStyle(.secondary)
-                        Button(text("connect")) { setup(target) }
-                    }
-                }
-                if let snapshot, snapshot.preferences.selected_targets.contains(target.id) {
-                    Section(text("cadence")) {
-                        Picker(text("override"), selection: Binding(get: {
-                            snapshot.preferences.cadence_overrides[target.id] ?? "inherit"
-                        }, set: { value in
-                            change {
-                                if value == "inherit" { $0.cadence_overrides.removeValue(forKey: target.id) }
-                                else { $0.cadence_overrides[target.id] = value }
-                            }
-                        })) {
-                            Text(text("inherit")).tag("inherit")
-                            ForEach(DJConnectCanvasPreferences.cadences, id: \.self) { Text(text("cadence." + $0)).tag($0) }
+    private func screenChooser(_ snapshot: DJConnectCanvasSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(text("choose_screens")).font(.headline).accessibilityAddTraits(.isHeader)
+            if snapshot.targets.isEmpty { Text(text("no_screens")).foregroundStyle(.secondary) }
+            ForEach(snapshot.targets) { target in
+                let isSelected = snapshot.preferences.selected_targets.contains(target.id)
+                Button {
+                    change {
+                        if isSelected {
+                            $0.selected_targets.removeAll { $0 == target.id }
+                            $0.cadence_overrides.removeValue(forKey: target.id)
+                        } else {
+                            $0.selected_targets.append(target.id)
                         }
                     }
-                }
-                if snapshot?.can_manage_devices == true {
-                    Section {
-                        Text(text("forget_detail")).font(.caption).foregroundStyle(.secondary)
-                        if target.shared_profiles > 1 { Text(text("shared_warning")).foregroundStyle(.secondary) }
-                        if target.remote_cleanup {
-                            Toggle(text("cleanup_remote"), isOn: $cleanupRemote)
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(isSelected ? Color.white : Color.white.opacity(0.62))
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(target.name).multilineTextAlignment(.leading)
+                            Text(status(target.state)).font(.caption).foregroundStyle(.secondary)
                         }
-                        Button(text(allowRemaining || target.forgetting == true ? "forget_anyway" : "forget"), role: .destructive) {
-                            confirmingForget = true
-                        }
+                        Spacer(minLength: 0)
                     }
+                    .frame(minHeight: 44)
+                    .padding(.horizontal, 12)
+                    .background(.white.opacity(isSelected ? 0.15 : 0.06), in: RoundedRectangle(cornerRadius: 12))
+                    .contentShape(RoundedRectangle(cornerRadius: 12))
                 }
-                if let notice { Text(notice).foregroundStyle(.secondary) }
-                if busy { ProgressView() }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+                .accessibilityIdentifier("music-canvas-screen-" + target.id)
+                .disabled(busy)
             }
-            .disabled(busy)
-            .confirmationDialog(text("forget") + " — " + target.name, isPresented: $confirmingForget, titleVisibility: .visible) {
-                Button(text(allowRemaining || target.forgetting == true ? "forget_anyway" : "forget"), role: .destructive) { forget(target) }
-                Button(text("cancel"), role: .cancel) {}
-            } message: { Text(text("forget_detail")) }
         }
-        .accessibilityIdentifier("music-canvas-target-popup")
+    }
+
+    private func settings(_ snapshot: DJConnectCanvasSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            settingRow(text("enabled")) {
+                Toggle(text("enabled"), isOn: Binding(get: { snapshot.preferences.enabled }, set: { enabled in
+                    change { $0.enabled = enabled }
+                }))
+                .labelsHidden()
+            }
+            settingRow(text("composition")) {
+                Picker(text("composition"), selection: Binding(get: { snapshot.preferences.composition }, set: { value in
+                    change { $0.composition = value }
+                })) {
+                    ForEach(["central", "free", "full"], id: \.self) { Text(text($0)).tag($0) }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+            }
+            settingRow(text("matte")) {
+                Picker(text("matte"), selection: Binding(get: { snapshot.preferences.matte }, set: { value in
+                    change { $0.matte = value }
+                })) {
+                    ForEach(["off", "matching", "contrast"], id: \.self) { Text(text($0)).tag($0) }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+            }
+            settingRow(text("cadence")) {
+                Picker(text("cadence"), selection: Binding(get: { snapshot.preferences.cadence }, set: { value in
+                    change { $0.cadence = value }
+                })) {
+                    ForEach(DJConnectCanvasPreferences.cadences, id: \.self) { Text(text("cadence." + $0)).tag($0) }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+            }
+            let configurable = snapshot.targets.filter {
+                snapshot.can_manage_devices || snapshot.preferences.selected_targets.contains($0.id)
+            }
+            if !configurable.isEmpty {
+                Divider()
+                Text(text("screens")).font(.headline).accessibilityAddTraits(.isHeader)
+                ForEach(configurable) { target in
+                    DisclosureGroup(isExpanded: Binding(get: { selected?.id == target.id }, set: { expanded in
+                        if expanded {
+                            selected = target; cleanupRemote = false; allowRemaining = false
+                            width = ""; height = ""; orientation = "portrait"; preview = nil
+                            if target.preview_available { loadPreview(target.id) }
+                        } else if selected?.id == target.id {
+                            selected = nil; preview = nil
+                        }
+                    })) {
+                        targetSettings(target, snapshot: snapshot).padding(.top, 10)
+                    } label: {
+                        Text(target.name).multilineTextAlignment(.leading)
+                    }
+                }
+            }
+        }
+        .disabled(busy)
+    }
+
+    private func settingRow<Control: View>(_ label: String, @ViewBuilder control: () -> Control) -> some View {
+        HStack(spacing: 12) {
+            Text(label)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityHidden(true)
+            Spacer(minLength: 0)
+            control()
+        }
+        .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
+    }
+
+    private func targetSettings(_ target: DJConnectCanvasTarget, snapshot: DJConnectCanvasSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(status(target.state)).font(.caption).foregroundStyle(.secondary)
+            if target.preview_available, selected?.id == target.id, let preview {
+                Image(decorative: preview.image, scale: 1).resizable().scaledToFit()
+            }
+            if snapshot.can_manage_devices,
+               target.state == "canvas_manual_takeover" || target.state != "ready" && !target.preview_available {
+                if target.screen.width == nil {
+                    settingRow(text("width")) {
+                        TextField(text("width"), text: $width).labelsHidden().multilineTextAlignment(.trailing)
+                            .frame(maxWidth: 110)
+                    }
+                }
+                if target.screen.height == nil {
+                    settingRow(text("height")) {
+                        TextField(text("height"), text: $height).labelsHidden().multilineTextAlignment(.trailing)
+                            .frame(maxWidth: 110)
+                    }
+                }
+                if target.screen.orientation == nil {
+                    settingRow(text("orientation")) {
+                        Picker(text("orientation"), selection: $orientation) {
+                            Text(text("portrait")).tag("portrait")
+                            Text(text("landscape")).tag("landscape")
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                    }
+                }
+                Text(text(target.adapter == "samsung" ? "tv_permission" : "screen_setup"))
+                    .font(.caption).foregroundStyle(.secondary)
+                Button(text("connect")) { setup(target) }
+                    .djConnectButtonStyle(DJConnectButtonStyle())
+            }
+            if snapshot.preferences.selected_targets.contains(target.id) {
+                settingRow(text("override")) {
+                    Picker(text("override"), selection: Binding(get: {
+                        snapshot.preferences.cadence_overrides[target.id] ?? "inherit"
+                    }, set: { value in
+                        change {
+                            if value == "inherit" { $0.cadence_overrides.removeValue(forKey: target.id) }
+                            else { $0.cadence_overrides[target.id] = value }
+                        }
+                    })) {
+                        Text(text("inherit")).tag("inherit")
+                        ForEach(DJConnectCanvasPreferences.cadences, id: \.self) { Text(text("cadence." + $0)).tag($0) }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                }
+            }
+            if snapshot.can_manage_devices {
+                if target.shared_profiles > 1 { Text(text("shared_warning")).foregroundStyle(.secondary) }
+                if target.remote_cleanup {
+                    settingRow(text("cleanup_remote")) {
+                        Toggle(text("cleanup_remote"), isOn: $cleanupRemote).labelsHidden()
+                    }
+                }
+                Button(text(allowRemaining || target.forgetting == true ? "forget_anyway" : "forget"), role: .destructive) {
+                    confirmingForget = true
+                }
+            }
+        }
+        .confirmationDialog(text("forget") + " — " + target.name, isPresented: $confirmingForget, titleVisibility: .visible) {
+            Button(text(allowRemaining || target.forgetting == true ? "forget_anyway" : "forget"), role: .destructive) { forget(target) }
+            Button(text("cancel"), role: .cancel) {}
+        } message: { Text(text("forget_detail")) }
     }
 
     private func status(_ state: String) -> String {
@@ -249,6 +337,7 @@ struct MusicCanvasView: View {
         let captured = scope, id = UUID()
         operationID = id
         readID = UUID() // An older read cannot overwrite this pending choice.
+        refreshing = false
         Task {
             guard current(captured), operationID == id else { return }
             var receipt: DJConnectCanvasReceipt?
@@ -291,36 +380,36 @@ struct MusicCanvasView: View {
     }
 }
 
-/// The same app canvas, hero, frosted content and explicit action used by
-/// ordinary DJConnect popups. It owns presentation only, never Canvas state.
+/// Uses the feedback popup's glass surface for the heading, controls and actions.
 @MainActor struct MusicCanvasPopupSurface<Content: View>: View {
     let title: String
-    let language: String
-    let done: () -> Void
     @ViewBuilder var content: () -> Content
+
+    private var card: some View {
+        VStack(spacing: 16) {
+            DJConnectHeroGlyph(systemImage: "photo.artframe")
+            Text(title)
+                .font(.title2.weight(.bold))
+                .multilineTextAlignment(.center)
+                .accessibilityAddTraits(.isHeader)
+            content()
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity)
+        .djSessionFrostedSurface()
+        .padding(28)
+    }
 
     var body: some View {
         ZStack {
             DJConnectCanvasBackground()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    VStack(spacing: 12) {
-                        DJConnectHeroGlyph(systemImage: "photo.artframe")
-                        Text(title).font(.title2.bold()).multilineTextAlignment(.center)
-                            .accessibilityAddTraits(.isHeader)
-                    }.frame(maxWidth: .infinity)
-                    content().padding(20).frame(maxWidth: .infinity, alignment: .leading)
-                        .djSessionFrostedSurface()
-                    Button(DJConnectLocalization.localized(key: "ui.canvas.done", language: language), action: done)
-                        .djConnectButtonStyle(DJConnectButtonStyle(emphasis: .primary, expands: true))
-                        .accessibilityIdentifier("music-canvas-done")
-                }.padding(24)
-            }.scrollBounceBehavior(.basedOnSize)
+            ViewThatFits(in: .vertical) {
+                card.fixedSize(horizontal: false, vertical: true)
+                ScrollView { card }.scrollBounceBehavior(.basedOnSize)
+            }
         }
-        .frame(minWidth: djConnectDialogMinimumWidth, idealWidth: 560, maxWidth: 680)
-        #if os(macOS)
-        .frame(minHeight: 420, idealHeight: 640)
-        #endif
+        .frame(minWidth: djConnectDialogMinimumWidth, idealWidth: 520, maxWidth: 620)
         .presentationBackground { DJConnectCanvasBackground() }
     }
 }

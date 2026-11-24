@@ -34,10 +34,11 @@ import AppKit
     #expect(!visible.isEmpty && visible.count < inventory.types.count)
     for language in ["en", "nl", "de", "fr", "es"] {
         for width: CGFloat in [390, 960] {
-            let content = SessionCurrentDJCard(sessionID: inventory.sessionID, state: .expanded, mood: nil) {
-                DJPersonaAvatarView(confirmedMood: nil, language: language).frame(width: 80, height: 80)
+            let mood = width == 390 ? "groove" : "energy"
+            let content = SessionCurrentDJCard(sessionID: inventory.sessionID, state: .expanded, mood: mood) {
+                DJPersonaAvatarView(confirmedMood: mood, language: language).frame(width: 80, height: 80)
             } detail: {
-                AskDJMomentsCardContent(controller: controller, language: language, result: { AnyView(EmptyView()) })
+                AskDJMomentsCardContent(controller: controller, language: language, mood: mood, result: { AnyView(EmptyView()) })
             }
             .environment(\.dynamicTypeSize, .accessibility2)
             .environment(\.djConnectGlassEffectsEnabled, false)

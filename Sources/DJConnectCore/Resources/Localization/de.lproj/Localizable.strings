@@ -1819,6 +1819,7 @@
 "ui.canvas.open" = "Musik als Kunst anzeigen";
 "ui.canvas.description" = "Kunst, Farbe und Stimmung passend zu deiner Session.";
 "ui.canvas.enabled" = "Auf Bildschirmen anzeigen";
+"ui.canvas.choose_screens" = "Wähle deine Bildschirme";
 "ui.canvas.screens" = "Bildschirme";
 "ui.canvas.no_screens" = "Noch keine geeigneten Bildschirme gefunden.";
 "ui.canvas.provider_required" = "Wähle in Home Assistant einen Bildgenerator aus.";

@@ -233,11 +233,7 @@ private struct DJSessionGlassSurface: ViewModifier {
     @ViewBuilder func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         let tint = surfaceTint ?? (currentMomentBorder ? artworkTint : nil)
-        let moodColors = DJConnectSessionMoodTheme(sessionMood: mood).colorValues.map { value in
-            Color(red: Double((value >> 16) & 255) / 255,
-                  green: Double((value >> 8) & 255) / 255,
-                  blue: Double(value & 255) / 255)
-        }
+        let moodColors = DJConnectSessionMoodTheme(sessionMood: mood).swiftUIColors
         let borderGradient = LinearGradient(colors: moodColors, startPoint: .topLeading, endPoint: .bottomTrailing)
         let bordered = content.background {
             if let tint {
@@ -596,7 +592,7 @@ struct NativeSessionMomentsView: View {
                     .accessibilityAddTraits(.isHeader)
             }
         } else if let model = playbackModel, model.askDJMoments.hasPriority {
-            AskDJMomentsCardContent(controller: model.askDJMoments, language: language) {
+            AskDJMomentsCardContent(controller: model.askDJMoments, language: language, mood: session.selectedMood) {
                 if let result = model.askDJMoments.currentResult {
                     let epoch = model.sessionHistory.responseEpoch
                     let generation = model.askDJMoments.generation

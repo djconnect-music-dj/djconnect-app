@@ -1,6 +1,16 @@
 import SwiftUI
 import DJConnectCore
 
+extension DJConnectSessionMoodTheme {
+    var swiftUIColors: [Color] {
+        colorValues.map { value in
+            Color(red: Double((value >> 16) & 255) / 255,
+                  green: Double((value >> 8) & 255) / 255,
+                  blue: Double(value & 255) / 255)
+        }
+    }
+}
+
 /// Hardware/UI preference only. Never sent to or stored on a DJConnect Profile.
 enum DJConnectGlassAppearance {
     static let storageKey = "DJConnectGlassEffectsEnabled"

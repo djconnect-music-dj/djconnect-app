@@ -666,20 +666,66 @@ enum DJConnectSection: Hashable {
     case privacy
 
     #if os(macOS)
-    func detailWidth(in availableWidth: CGFloat) -> CGFloat {
+    var usesConstrainedDetail: Bool {
         switch self {
         case .games, .musicDNA, .discovery:
-            availableWidth
-        case .djSession, .savedSessions, .trackInsight, .askDJ, .queue, .more,
-             .playlists, .settings, .logs, .about, .legal, .privacy:
-            // Keep both existing list gutters outside the shared content width.
-            min(availableWidth, djConnectListContentMaxWidth + 2 * djConnectScreenHorizontalPadding)
+            false
+        default:
+            true
         }
+    }
+
+    func detailWidth(in availableWidth: CGFloat) -> CGFloat {
+        // Keep both existing list gutters outside the shared content width.
+        usesConstrainedDetail
+            ? min(availableWidth, djConnectListContentMaxWidth + 2 * djConnectScreenHorizontalPadding)
+            : availableWidth
     }
     #endif
 }
 
+private extension EnvironmentValues {
+    @Entry var djConnectDetailOwnsBackground = false
+}
+
+/// The screen can also appear outside the Mac detail, for example in a sheet.
+struct DJConnectMainScreenBackground: View {
+    var mood: String? = nil
+    @Environment(\.djConnectDetailOwnsBackground) private var detailOwnsBackground
+
+    var body: some View {
+        if !detailOwnsBackground {
+            if let mood {
+                DJSessionPinnedMoodBackground(mood: mood).ignoresSafeArea(.container)
+            } else {
+                DJConnectCanvasBackground()
+            }
+        }
+    }
+}
+
 #if os(macOS)
+struct DJConnectMacDetailViewport<Content: View>: View {
+    let section: DJConnectSection
+    let mood: String?
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        GeometryReader { viewport in
+            content
+                .environment(\.djConnectDetailOwnsBackground, section.usesConstrainedDetail)
+                .frame(width: section.detailWidth(in: viewport.size.width),
+                       height: viewport.size.height, alignment: .top)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .background {
+                    if section.usesConstrainedDetail {
+                        DJConnectMainScreenBackground(mood: section == .djSession ? mood : nil)
+                    }
+                }
+        }
+    }
+}
+
 private enum DJConnectSidebarFocusTarget: Hashable {
     case section(DJConnectSection)
     case feedback
@@ -858,12 +904,10 @@ public struct DJConnectRootView: View {
                     .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 280)
                     .sessionIntroductionTarget("navigation")
                 } detail: {
-                    GeometryReader { viewport in
-                    ZStack(alignment: .bottom) {
-                        selectedView
-                            .id(selectedSection)
-                            .frame(width: selectedSection.detailWidth(in: viewport.size.width),
-                                   height: viewport.size.height, alignment: .top)
+                    DJConnectMacDetailViewport(section: selectedSection, mood: model.activeDJSession?.selectedMood) {
+                        selectedView.id(selectedSection)
+                    }
+                    .overlay(alignment: .bottom) {
                         if shouldShowOfflineNetworkBanner {
                             OfflineNetworkBanner(
                                 language: model.language,
@@ -875,7 +919,6 @@ public struct DJConnectRootView: View {
                         }
                     }
                     .animation(.snappy(duration: 0.22), value: shouldShowOfflineNetworkBanner)
-                    }
                     // Native chrome already occupies its own titlebar. Do not
                     // add macOS's scroll-edge veil over the top of detail content.
                     .scrollEdgeEffectHidden(true, for: .top)
@@ -4128,7 +4171,7 @@ struct TrackInsightView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                DJConnectCanvasBackground()
+                DJConnectMainScreenBackground()
                 GeometryReader { proxy in
                     let contentWidth = min(maxContentWidth(for: proxy.size), proxy.size.width)
                     ZStack(alignment: .top) {
@@ -8940,13 +8983,12 @@ private struct DJSessionView: View {
         NavigationStack {
             ZStack {
                 if let session = model.activeDJSession {
-                    DJSessionPinnedMoodBackground(mood: session.selectedMood)
-                        .ignoresSafeArea(.container)
+                    DJConnectMainScreenBackground(mood: session.selectedMood)
                     SessionTimelineScreen(model: model, sessionID: session.id, activeSession: session,
                                           openQueueAction: openQueueAction,
                                           refreshAction: { await refreshNowPlayingWithToast() })
                 } else {
-                    DJConnectCanvasBackground()
+                    DJConnectMainScreenBackground()
                     idleSessionContent(contentTop: contentTop)
                 }
             }
@@ -9589,7 +9631,7 @@ private struct VibeCastDestinationPicker: View {
             VStack(spacing: 4) {
                 Button { openScreen(false) } label: {
                     destinationRow(localizedKey(language, "ui.vibecast.destinations.screen"),
-                                   symbol: "tv.badge.wifi", showsChevron: true)
+                                   showsChevron: true) { Image(systemName: "tv.badge.wifi") }
                 }
                 .buttonStyle(.plain)
                 .disabled(castTarget != nil)
@@ -9598,7 +9640,7 @@ private struct VibeCastDestinationPicker: View {
                 ForEach(model.legacyCastDevices) { device in
                     Button { model.connectLegacyCast(deviceID: device.id) } label: {
                         HStack {
-                            destinationRow(device.name, symbol: "tv.badge.wifi", showsChevron: true)
+                            destinationRow(device.name, showsChevron: true) { GoogleCastDeviceGlyph() }
                             if model.legacyCastConnectingDeviceID == device.id { ProgressView() }
                         }
                     }
@@ -9617,7 +9659,7 @@ private struct VibeCastDestinationPicker: View {
                         castTarget = device.receiverID
                     } label: {
                         HStack {
-                            destinationRow(device.name, symbol: "tv.badge.wifi", showsChevron: true)
+                            destinationRow(device.name, showsChevron: true) { GoogleCastDeviceGlyph() }
                             if let castTarget, castTarget == device.receiverID { ProgressView() }
                         }
                     }
@@ -9627,9 +9669,11 @@ private struct VibeCastDestinationPicker: View {
                 }
                 #endif
             }
-            Text(localizedKey(language, statusKey))
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+            if let statusKey {
+                Text(localizedKey(language, statusKey))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
             DJConnectNotNowLinkButton(language: language, key: "ui.not.now.b1e535") { dismiss() }
         }
         .padding(24)
@@ -9637,7 +9681,7 @@ private struct VibeCastDestinationPicker: View {
         .padding(16)
     }
 
-    private var statusKey: String {
+    private var statusKey: String? {
         #if os(iOS)
         if model.legacyCastNeedsConfirmation { return "ui.vibecast.cast.confirm_again" }
         switch model.legacyCastState {
@@ -9648,12 +9692,12 @@ private struct VibeCastDestinationPicker: View {
         case .recovering: return "ui.vibecast.cast.waiting"
         default: break
         }
-        if !model.legacyCastDevices.isEmpty { return "ui.vibecast.cast.choose" }
+        if !model.legacyCastDevices.isEmpty { return nil }
         return "ui.vibecast.destinations.scanning"
         #else
         if castTarget != nil { return "ui.vibecast.cast.connecting" }
         if castFailed { return "ui.vibecast.cast.failed" }
-        if discovery.devices.contains(where: { $0.receiverID != nil }) { return "ui.vibecast.cast.choose" }
+        if discovery.devices.contains(where: { $0.receiverID != nil }) { return nil }
         if !discovery.devices.isEmpty { return "ui.vibecast.destinations.unavailable" }
         if discovery.failed { return "ui.vibecast.destinations.network" }
         if discovery.searching { return "ui.vibecast.destinations.scanning" }
@@ -9661,9 +9705,10 @@ private struct VibeCastDestinationPicker: View {
         #endif
     }
 
-    private func destinationRow(_ title: String, symbol: String, showsChevron: Bool) -> some View {
+    private func destinationRow<Icon: View>(_ title: String, showsChevron: Bool,
+                                            @ViewBuilder icon: () -> Icon) -> some View {
         HStack(spacing: 12) {
-            Label(title, systemImage: symbol)
+            Label { Text(title) } icon: { icon().frame(width: 20).accessibilityHidden(true) }
             Spacer()
             if showsChevron { Image(systemName: "chevron.right").font(.footnote.weight(.semibold)) }
         }
@@ -9671,6 +9716,30 @@ private struct VibeCastDestinationPicker: View {
         .frame(minHeight: 44)
         .background(.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
         .contentShape(Rectangle())
+    }
+}
+
+private struct GoogleCastDeviceGlyph: View {
+    var body: some View {
+        Path { path in
+            path.move(to: CGPoint(x: 1, y: 4))
+            path.addLine(to: CGPoint(x: 1, y: 2))
+            path.addQuadCurve(to: CGPoint(x: 2, y: 1), control: CGPoint(x: 1, y: 1))
+            path.addLine(to: CGPoint(x: 17, y: 1))
+            path.addQuadCurve(to: CGPoint(x: 18, y: 2), control: CGPoint(x: 18, y: 1))
+            path.addLine(to: CGPoint(x: 18, y: 12))
+            path.addQuadCurve(to: CGPoint(x: 17, y: 13), control: CGPoint(x: 18, y: 13))
+            path.addLine(to: CGPoint(x: 11, y: 13))
+
+            path.move(to: CGPoint(x: 1, y: 6))
+            path.addQuadCurve(to: CGPoint(x: 8, y: 13), control: CGPoint(x: 8, y: 6))
+            path.move(to: CGPoint(x: 1, y: 9.5))
+            path.addQuadCurve(to: CGPoint(x: 4.5, y: 13), control: CGPoint(x: 4.5, y: 9.5))
+            path.move(to: CGPoint(x: 1, y: 13))
+            path.addLine(to: CGPoint(x: 1.5, y: 13))
+        }
+        .stroke(style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+        .frame(width: 19, height: 14)
     }
 }
 
@@ -11415,6 +11484,9 @@ private struct AskDJView: View {
     }
 
     private func maxContentWidth(for size: CGSize) -> CGFloat {
+        #if os(macOS)
+        return size.width
+        #else
         #if os(iOS)
         if UIDevice.current.userInterfaceIdiom == .pad {
             // Match Queue: use the available pane with the shared 16-point
@@ -11423,6 +11495,7 @@ private struct AskDJView: View {
         }
         #endif
         return shouldUseWideLayout(for: size) ? djConnectMacDetailContentMaxWidth : djConnectContentMaxWidth
+        #endif
     }
 
     private var floatingControlTopPadding: CGFloat {
@@ -11660,9 +11733,9 @@ private struct AskDJView: View {
                                     closeAction: { dismissAskDJSearch() }
                                 )
                                 #if os(macOS)
-                                .padding(.horizontal, 20)
+                                .padding(.horizontal, djConnectScreenHorizontalPadding)
                                 .padding(.vertical, 10)
-                                .frame(maxWidth: .infinity, alignment: .top)
+                                .frame(width: contentWidth, alignment: .top)
                                 #else
                                 .padding(.horizontal, djConnectScreenHorizontalPadding)
                                 .padding(.top, floatingControlTopPadding + 10)
@@ -11675,9 +11748,16 @@ private struct AskDJView: View {
                         .overlay(alignment: .bottom) {
                             if usesFloatingComposer && !isSearchVisible {
                                 composer
-                                    .djFloatingAskDJWidth(maximum: min(contentWidth, 1000))
+                                    #if !os(macOS)
+                                    .djFloatingAskDJWidth(maximum: min(contentWidth, djConnectListContentMaxWidth))
+                                    #endif
                                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { floatingComposerHeight = $0 }
+                                    #if os(macOS)
+                                    .padding(.horizontal, djConnectScreenHorizontalPadding)
+                                    .frame(width: contentWidth)
+                                    #else
                                     .padding(.horizontal, 12)
+                                    #endif
                                     .padding(.bottom, composerBottomPadding)
                             }
                         }
@@ -11754,7 +11834,6 @@ private struct AskDJView: View {
                 #endif
                 }
             }
-            .background(DJConnectCanvasBackground())
             .djStatusToastOverlay(text: manualRefresh.notice?.text ?? toast, systemImage: "bubble.left.and.bubble.right")
             .navigationTitle(screenTitle(model.language, key: "Ask DJ", isDemoMode: model.isDemoMode))
             .accessibilityElement(children: .contain)
@@ -11841,7 +11920,7 @@ private struct AskDJView: View {
     var body: some View {
         navigationContent
         .djConnectFindShortcut(action: showAskDJSearch)
-        .background(DJConnectCanvasBackground())
+        .background(DJConnectMainScreenBackground())
         #if os(iOS)
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
             composerKeyboardVisible = true
@@ -14754,7 +14833,7 @@ struct QueueView: View {
             .accessibilityIdentifier("screen-queue")
             .djConnectFindShortcut(action: showQueueSearch)
             .scrollContentBackgroundIfAvailable(.hidden)
-            .background(DJConnectCanvasBackground())
+            .background(DJConnectMainScreenBackground())
             #if os(iOS)
             .contentMargins(.horizontal, 0, for: .scrollContent)
             #else
@@ -14796,7 +14875,7 @@ struct QueueView: View {
                 }
             }
         }
-        .background(DJConnectCanvasBackground())
+        .background(DJConnectMainScreenBackground())
     }
 
     private func queueScrollContent(maxWidth: CGFloat) -> some View {
@@ -15066,7 +15145,7 @@ struct PlaylistsView: View {
             .accessibilityIdentifier("screen-playlists")
             .djConnectFindShortcut(action: showPlaylistSearch)
             .scrollContentBackgroundIfAvailable(.hidden)
-            .background(DJConnectCanvasBackground())
+            .background(DJConnectMainScreenBackground())
             #if os(iOS)
             .contentMargins(.horizontal, 0, for: .scrollContent)
             #else
@@ -17068,7 +17147,7 @@ private struct MoreView: View {
                 .padding(.horizontal, djConnectScreenHorizontalPadding)
                 .padding(.vertical, djConnectScreenVerticalPadding)
             }
-            .background(DJConnectCanvasBackground())
+            .background(DJConnectMainScreenBackground())
             .navigationTitle(screenTitle(model.language, key: "More", isDemoMode: model.isDemoMode))
             .navigationDestination(item: $destinationSelection) { destination($0).djConnectMouseBackNavigation() }
         }
@@ -17959,7 +18038,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                DJConnectCanvasBackground()
+                DJConnectMainScreenBackground()
                 SettingsContentContainer {
                 SettingsGlassSection(title: localizedKey(model.language, "ui.app")) {
                     LabeledContent(localizedKey(model.language, "ui.app.language")) {
@@ -18274,7 +18353,7 @@ struct SettingsView: View {
                     }
                 }
                 .presentationBackground {
-                    DJConnectCanvasBackground()
+                    DJConnectMainScreenBackground()
                 }
             }
             .djConnectPopup(item: $musicDNAImportPreview) { preview in
@@ -18290,7 +18369,7 @@ struct SettingsView: View {
                     }
                 )
                 .presentationBackground {
-                    DJConnectCanvasBackground()
+                    DJConnectMainScreenBackground()
                 }
             }
             .fileExporter(
@@ -18323,7 +18402,7 @@ struct SettingsView: View {
         .djConnectButtonStyle(DJConnectButtonStyle(usesDestructiveGlass: true))
         .tint(.white)
         .accentColor(.white)
-        .background(DJConnectCanvasBackground())
+        .background(DJConnectMainScreenBackground())
     }
 
 }
@@ -18505,7 +18584,7 @@ private struct LogsView: View {
                 .hidden()
             }
         }
-        .background(DJConnectCanvasBackground())
+        .background(DJConnectMainScreenBackground())
         .onChange(of: showingWatchLogs) { _, enabled in
             dismissLogSearch()
             model.setWatchLogCollection(enabled)
@@ -18730,7 +18809,7 @@ private struct AboutView: View {
 
     var body: some View {
         ZStack {
-            DJConnectCanvasBackground()
+            DJConnectMainScreenBackground()
             ScrollView {
                 VStack(alignment: .leading, spacing: djConnectCardSpacing) {
                     AboutBanner()
@@ -18984,7 +19063,7 @@ private struct LegalNoticesView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                DJConnectCanvasBackground()
+                DJConnectMainScreenBackground()
                 ScrollView {
                     VStack(alignment: .leading, spacing: djConnectCardSpacing) {
                         AboutBanner()
@@ -19035,7 +19114,7 @@ private struct PrivacyView: View {
 
     var body: some View {
         ZStack {
-            DJConnectCanvasBackground()
+            DJConnectMainScreenBackground()
             ScrollView {
                 VStack(alignment: .leading, spacing: djConnectCardSpacing) {
                     AboutBanner()

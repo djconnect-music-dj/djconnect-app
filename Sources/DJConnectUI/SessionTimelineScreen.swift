@@ -241,7 +241,7 @@ struct SavedSessionsView: View {
                 isSearchVisible = true
                 DispatchQueue.main.async { isSearchFocused = true }
             }
-            .background(DJConnectCanvasBackground())
+            .background(DJConnectMainScreenBackground())
             .safeAreaInset(edge: .top) {
                 if isSearchVisible {
                     AskDJSearchBar(language: model.language,
@@ -539,11 +539,6 @@ struct SessionTimelineScreen: View {
             ?? timeline.session.flatMap { $0.id == sessionID ? $0.startedAt : nil }
             ?? history.sessions.first(where: { $0.id == sessionID })?.startedAt
         return startedAt.flatMap { SessionStartMetadata.text(startedAt: $0, language: model.language) }
-    }
-    @ViewBuilder private var sessionBackground: some View {
-        if let activeSession {
-            DJSessionPinnedMoodBackground(mood: activeSession.selectedMood).ignoresSafeArea(.container)
-        } else { DJConnectCanvasBackground() }
     }
     private func text(_ key: String) -> String { DJConnectLocalization.localized(key: key, language: model.language) }
     #if DEBUG && targetEnvironment(simulator)
@@ -877,7 +872,7 @@ struct SessionTimelineScreen: View {
             }
             #endif
             .djConnectPopup(isPresented: $canvasPresented) { MusicCanvasView(model: model) }
-            .background(sessionBackground)
+            .background(DJConnectMainScreenBackground(mood: activeSession?.selectedMood))
             .coordinateSpace(name: AskDJHelpPanelLayout.coordinateSpace)
             .simultaneousGesture(SpatialTapGesture(coordinateSpace: .global).onEnded { tap in
                 guard activeSession != nil, sessionControlIntent == nil, !inlineSearchBounds.isEmpty,
