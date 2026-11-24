@@ -954,14 +954,22 @@ private final class HistoryReplySequence: @unchecked Sendable {
     let fixture = HistoryWireFixture { _ in (500, Data(), 0) }
     defer { fixture.close() }
     let (model, defaults, name) = fixture.model()
-    defer { defaults.removePersistentDomain(forName: name) }
+    defer { model.markInactiveSession(); defaults.removePersistentDomain(forName: name) }
     defaults.set("ha-install-test", forKey: "DJConnectHAInstallID")
     #expect(model.canChooseNativePushConsent)
     #expect(!model.nativePushAllowed(.widget))
     #expect(!model.nativePushAllowed(.liveActivityUpdate))
 
     model.setNativePushAllowed(true, for: .widget)
-    let firstWidget = try #require(model.nativePushConsentGeneration(.widget))
+    #expect(model.nativePushAllowed(.widget), "This is explicit user intent, not a confirmed server decision")
+    #expect(model.nativePushConsentGeneration(.widget) == nil)
+    #expect(!model.nativeWidgetPushOwner.hasReadCustody)
+    func operation() throws -> String {
+        let bytes = try #require(defaults.data(forKey: "DJConnectWidgetConsent.v1"))
+        let intent = try #require(JSONSerialization.jsonObject(with: bytes) as? [String: Any])
+        return try #require(intent["operationID"] as? String)
+    }
+    let firstWidget = try operation()
     #expect(!model.nativePushAllowed(.liveActivityUpdate))
     model.setNativePushAllowed(true, for: .liveActivityUpdate)
     let activity = try #require(model.nativePushConsentGeneration(.liveActivityUpdate))
@@ -969,7 +977,8 @@ private final class HistoryReplySequence: @unchecked Sendable {
     #expect(!model.nativePushAllowed(.widget))
     #expect(model.nativePushConsentGeneration(.liveActivityUpdate) == activity)
     model.setNativePushAllowed(true, for: .widget)
-    let nextWidget = try #require(model.nativePushConsentGeneration(.widget))
+    let nextWidget = try operation()
+    #expect(model.nativePushConsentGeneration(.widget) == nil)
     #expect(nextWidget != firstWidget)
 
     defaults.set("another-ha-install", forKey: "DJConnectHAInstallID")
@@ -10866,4 +10875,105 @@ private struct ForYouScenarioResponses: Sendable {
         let path = request.url!.path
         return path.contains("ask_dj/message") || path.contains("speech") || path.contains("session/end")
     })
+}
+
+private final class ForYouOriginalSelectionReplies: @unchecked Sendable {
+    let caps: Data, profile: Data
+    let runtimes: [String: Data]
+    private let lock = NSLock()
+    private var selected = "0"
+    init(caps: Data, profile: Data, runtimes: [String: Data]) { self.caps = caps; self.profile = profile; self.runtimes = runtimes }
+    func select(_ value: String) { lock.withLock { selected = value } }
+    func reply(_ request: URLRequest) -> (Int, Data, TimeInterval) {
+        if request.url!.path.hasSuffix("/capabilities") { return (200, caps, 0) }
+        if request.url!.path.hasSuffix("/session/active") { return (200, lock.withLock { runtimes[selected]! }, 0) }
+        return (200, profile, 0)
+    }
+}
+@Test(.isolatedClientResources, arguments: ["lifetime", "source", "settings"])
+@MainActor func forYouOriginalCoreSelectionSurvivesPreparationAndRejectsExpiredOrWithdrawnReplay(_ scenario: String) async throws {
+    let withdraw = scenario != "lifetime"
+    let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Fixtures")
+    let bytes = try Data(contentsOf: root.appendingPathComponent("for-you-visible-native-fixture-1c96e9ba.json"))
+    #expect(SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined() == "183246d33d2fec11adb5db1dd3c2663ecfe439c32e8b1fdbadafd2794fb7ed4f")
+    let producer = try #require(JSONSerialization.jsonObject(with: bytes) as? [String: Any])
+    let withdrawalBytes = try Data(contentsOf: root.appendingPathComponent("for-you-source-withdrawal-native-fixture-1c96e9ba.json"))
+    #expect(SHA256.hash(data: withdrawalBytes).map { String(format: "%02x", $0) }.joined() == "8ee6e0927d6d0933af9037e956a75b0be384e3a1b659b07920e2a7c4f1e166d2")
+    let withdrawal = try #require(JSONSerialization.jsonObject(with: withdrawalBytes) as? [String: Any])
+    let stages: [String: [String: Any]]
+    if withdraw {
+        stages = ["0": try #require(withdrawal["before"] as? [String: Any]),
+            "14": try #require(withdrawal["immediately_before_withdrawal"] as? [String: Any])]
+    } else { stages = try #require(producer["public_for_you_by_visible_elapsed_seconds"] as? [String: [String: Any]]) }
+    let original = try #require(stages["0"])
+    let sessionID = try #require(original["session_id"] as? String)
+    let input = try ForYouScenarioInput.make(scenario: "playing")
+    var wrapper = try #require(JSONSerialization.jsonObject(with: input.runtimeData) as? [String: Any])
+    var session = try #require(wrapper["session"] as? [String: Any])
+    var broadcast = try #require(session["broadcast"] as? [String: Any])
+    var fields = try #require(broadcast["session"] as? [String: Any])
+    fields["session_id"] = sessionID; broadcast["session"] = fields
+    session["session_id"] = sessionID; session["broadcast"] = broadcast; wrapper["session"] = session
+    // Only this ordinary owner/history HTTP wrapper is synthetic. Every Core
+    // for_you DTO below remains byte-for-byte semantically unchanged, including
+    // IDs, original expires_in, source withdrawal and no automatic model calls.
+    var runtimes: [String: Data] = [:]
+    for (key, dto) in stages { var envelope = wrapper; envelope["for_you"] = dto; runtimes[key] = try historyData(envelope) }
+    let withdrawnDTO = try #require(withdrawal["original_source_authority_withdrawn"] as? [String: Any])
+    var withdrawnEnvelope = wrapper; withdrawnEnvelope["for_you"] = withdrawnDTO
+    runtimes["withdrawn"] = try historyData(withdrawnEnvelope)
+    let replies = ForYouOriginalSelectionReplies(caps: input.caps, profile: input.profile, runtimes: runtimes)
+    let fixture = HistoryWireFixture { replies.reply($0) }; defer { fixture.close() }
+    let (model, defaults, name) = fixture.model()
+    defer { model.markInactiveSession(); defaults.removePersistentDomain(forName: name) }
+    model.language = "en"
+    let clock = try #require(producer["clock"] as? [String: Any])
+    let publishedWall: Double
+    if withdraw {
+        let ownClock = try #require(withdrawal["clock"] as? [String: Any])
+        publishedWall = try #require(ownClock["withdrawn_wall"] as? Double) - 14
+    } else { publishedWall = try #require(clock["original_new_selection_wall_deadline"] as? Double) - 60 }
+    let origin = ContinuousClock.now
+    var elapsed: TimeInterval = 0
+    let projection = model.sessionForYou
+    projection.now = { Date(timeIntervalSince1970: publishedWall + elapsed) }
+    projection.instant = { origin.advanced(by: .seconds(elapsed)) }
+    await model.sessionHistory.prepare(); await model.refreshActiveDJSession()
+    // This fixture supplies actual GET projections, not a WebSocket/NDJSON
+    // producer. Retire the unsupported channel before it can report a synthetic
+    // transport failure against this otherwise live owner HTTP fixture.
+    model.stopSessionBroadcast(); model.isConnected = true
+    await projection.refresh()
+    #expect(projection.offer?.offer_id == original["offer_id"] as? String && projection.canChoose)
+    for second in withdraw ? [14] : [14, 16, 40] {
+        elapsed = Double(second); replies.select(String(second))
+        let refreshed = await model.refreshActiveDJSession(); model.stopSessionBroadcast()
+        #expect(refreshed, "Elapsed \(second), active-session GET must be accepted")
+        #expect(projection.canChoose && projection.offer?.options.count == 3,
+            "Elapsed \(second); scope=\(projection.scope != nil), connected=\(model.isConnected), backend=\(model.backendAvailable), mode=\(model.haConnectionMode), owner=\(model.sessionHistory.hasAuthorizedOwner), profile=\(model.canUseProfileConversation), runtime=\(model.activeDJSession?.runtimeState ?? "nil"), state=\(projection.offer?.state ?? "nil"), choices=\(projection.offer?.options.count ?? -1), remaining=\(projection.offer?.expires_in ?? -1)")
+    }
+    let cached = try JSONDecoder().decode(DJConnectForYou.self, from: historyData(original))
+    if withdraw {
+        if scenario == "settings" {
+            // Explicit synthetic negative vector for the canonical inert-preview
+            // rule, separate from the untouched real source-withdrawal DTO.
+            var changed = original; changed["reason"] = "session_settings_changed"; changed["actions_available"] = false
+            projection.observe(try JSONDecoder().decode(DJConnectForYou.self, from: historyData(changed)))
+            #expect(!projection.canChoose && projection.offer?.options.count == 3)
+            projection.observe(cached)
+            #expect(!projection.canChoose && projection.offer?.options.count == 3)
+        }
+        elapsed = 14; replies.select("withdrawn"); await model.refreshActiveDJSession(); model.stopSessionBroadcast()
+        #expect(!projection.canChoose && projection.offer?.options.isEmpty == true)
+        projection.observe(cached)
+        #expect(!projection.canChoose && projection.offer?.options.isEmpty == true)
+    } else {
+        // Repeated cached bodies may not restart the original selection clock.
+        projection.observe(cached); elapsed = 59; #expect(projection.canChoose)
+        elapsed = 60; #expect(!projection.canChoose)
+        replies.select("60"); await model.refreshActiveDJSession(); model.stopSessionBroadcast()
+        #expect(!projection.canChoose && projection.offer?.options.count == 3)
+        elapsed = 61; projection.observe(cached); #expect(!projection.canChoose)
+    }
+    #expect(fixture.requests.allSatisfy { $0.httpMethod == "GET" })
 }

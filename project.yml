@@ -19,6 +19,9 @@ packages:
   JOSESwift:
     url: https://github.com/airsidemobile/JOSESwift.git
     revision: c2664a902e75c0426a1d43132bd4babc6fd173d3
+  GoogleCast:
+    url: https://github.com/googlecast/google-cast-ios-sdk.git
+    revision: 104500df8ce2a827ca3b3392bf16877fae413a33
 targets:
   DJConnectCoreIOS:
     type: framework
@@ -97,6 +100,8 @@ targets:
       - path: Apps/Shared/Assets.xcassets
       - path: Apps/Shared/AppIconIOSAdaptive.icon
     dependencies:
+      - package: GoogleCast
+        product: GoogleCastDynamic
       - target: DJConnectCoreIOS
       - target: DJConnectUIIOS
       - target: DJConnectWatch
@@ -130,7 +135,7 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-        NSLocalNetworkUsageDescription: DJConnect connects to Home Assistant on your local network.
+        NSLocalNetworkUsageDescription: DJConnect finds Home Assistant and Google Cast screens on your local network.
         NSMicrophoneUsageDescription: DJConnect records your voice for push-to-talk music requests to Home Assistant.
         NSSpeechRecognitionUsageDescription: DJConnect uses speech recognition for on-device Ask DJ transcription and wake phrase detection.
         NSSupportsLiveActivities: true
@@ -139,6 +144,7 @@ targets:
         NSBonjourServices:
           - _home-assistant._tcp.
           - _googlecast._tcp
+          - _8EA92910._googlecast._tcp
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
           NSExceptionDomains:

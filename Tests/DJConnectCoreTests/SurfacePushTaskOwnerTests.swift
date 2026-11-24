@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import Testing
 @testable import DJConnectCore
 @testable import DJConnectUI
@@ -436,4 +437,69 @@ extension SurfacePushTaskOwnerTests {
         owner.register(using: fixture.client(), observationGeneration: owner.observationGeneration)
         #expect(fixture.requests.count == 2)
     }
+}
+
+@Test(.isolatedClientResources) @MainActor func historicalLocalWidgetChoiceAndTrialJournalCannotRestoreOrdinaryAdmission() throws {
+    let name = "ordinary-widget-restore-" + UUID().uuidString
+    let defaults = try #require(UserDefaults(suiteName: name))
+    defer { defaults.removePersistentDomain(forName: name) }
+    defaults.set("synthetic-original-install", forKey: "DJConnectHAInstallID")
+    let token = "synthetic-restoration-token"
+    let seed = DJConnectAppModel(defaults: defaults, tokenStore: DJConnectInMemoryTokenStore(token: token), startBackgroundTasks: false)
+    defer { seed.markInactiveSession() }
+    let fields = ["synthetic-original-install", seed.identity.deviceID, seed.identity.clientType.rawValue, token]
+    let framed = fields.map { "\($0.utf8.count):\($0)" }.joined()
+    let pairing = SHA256.hash(data: Data(framed.utf8)).map { String(format: "%02x", $0) }.joined()
+    let generation = UUID().uuidString
+    let local: [String: Any] = ["widget": ["pairing": pairing, "generation": generation]]
+    defaults.set(try JSONSerialization.data(withJSONObject: local), forKey: "DJConnectNativeSurfacePushConsent.v1")
+    let oldTrial: [String: Any] = ["pairing": pairing, "enabled": true, "operationID": UUID().uuidString, "expectedRevision": 0, "confirmed": true]
+    defaults.set(try JSONSerialization.data(withJSONObject: oldTrial), forKey: "DJConnectWidgetConsentTrial.v1")
+    let restored = DJConnectAppModel(defaults: defaults, tokenStore: DJConnectInMemoryTokenStore(token: token), startBackgroundTasks: false)
+    defer { restored.markInactiveSession() }
+    #expect(restored.canChooseNativePushConsent)
+    #expect(!restored.nativePushAllowed(.widget))
+    #expect(restored.nativePushConsentGeneration(.widget) == nil)
+    #expect(!restored.nativeWidgetPushOwner.hasReadCustody)
+    #expect(!restored.nativePushAllowed(.liveActivityUpdate))
+    #expect(defaults.data(forKey: "DJConnectWidgetConsent.v1") == nil)
+}
+
+@Test(.isolatedClientResources) @MainActor func widgetReenableNeverOverwritesUnconfirmedOptOutIncludingAfterRestart() throws {
+    let name = "widget-cleanup-queue-" + UUID().uuidString
+    let defaults = try #require(UserDefaults(suiteName: name)); defer { defaults.removePersistentDomain(forName: name) }
+    defaults.set("synthetic-cleanup-install", forKey: "DJConnectHAInstallID")
+    let token = "synthetic-cleanup-token"
+    let model = DJConnectAppModel(defaults: defaults, tokenStore: DJConnectInMemoryTokenStore(token: token), startBackgroundTasks: false)
+    defer { model.markInactiveSession() }
+    func pending() throws -> [String: Any] {
+        let bytes = try #require(defaults.data(forKey: "DJConnectWidgetConsent.v1"))
+        return try #require(JSONSerialization.jsonObject(with: bytes) as? [String: Any])
+    }
+    func queued() throws -> [String: Any] {
+        let bytes = try #require(defaults.data(forKey: "DJConnectWidgetConsentReenable.v1"))
+        return try #require(JSONSerialization.jsonObject(with: bytes) as? [String: Any])
+    }
+    model.setNativePushAllowed(false, for: .widget)
+    let original = try pending()
+    #expect(original["enabled"] as? Bool == false)
+    model.setNativePushAllowed(true, for: .widget)
+    let waiting = try queued()
+    #expect(try pending()["operationID"] as? String == original["operationID"] as? String)
+    #expect(waiting["enabled"] as? Bool == true && waiting["operationID"] as? String != original["operationID"] as? String)
+    #expect(model.nativePushAllowed(.widget) && model.nativePushConsentGeneration(.widget) == nil)
+    #expect(!model.nativeWidgetPushOwner.hasReadCustody)
+    model.markInactiveSession()
+    let restored = DJConnectAppModel(defaults: defaults, tokenStore: DJConnectInMemoryTokenStore(token: token), startBackgroundTasks: false)
+    defer { restored.markInactiveSession() }
+    // Restoring desired UI intent cannot replace the original cleanup or
+    // create a server acknowledgement, SDK original or positive admission.
+    restored.setNativePushAllowed(true, for: .widget)
+    #expect(try pending()["operationID"] as? String == original["operationID"] as? String)
+    #expect(try queued()["operationID"] as? String == waiting["operationID"] as? String)
+    #expect(restored.nativePushConsentGeneration(.widget) == nil && !restored.nativeWidgetPushOwner.hasReadCustody)
+    restored.setNativePushAllowed(false, for: .widget)
+    #expect(defaults.data(forKey: "DJConnectWidgetConsentReenable.v1") == nil)
+    #expect(try pending()["operationID"] as? String == original["operationID"] as? String)
+    #expect(!restored.nativePushAllowed(.widget))
 }

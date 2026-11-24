@@ -1,6 +1,6 @@
 import Foundation
 import CryptoKit
-#if DEBUG && os(iOS) && !targetEnvironment(simulator) && canImport(DeviceCheck)
+#if os(iOS) && !targetEnvironment(simulator) && canImport(DeviceCheck)
 import DeviceCheck
 #endif
 
@@ -370,6 +370,27 @@ public final class DJConnectClient: Sendable {
         return consent
     }
 
+    /// A committed write receipt is not the current consent decision. The
+    /// independent read keeps a later withdrawal from authorizing first trust.
+    public struct WidgetPushConsentSuperseded: Error, Sendable {}
+    public func confirmWidgetPushConsent(enabled: Bool, operationID: UUID, expectedRevision: Int64,
+        isCurrent: @escaping @MainActor @Sendable () -> Bool) async throws -> WidgetPushConsent {
+        do {
+            _ = try await writeWidgetPushConsent(enabled: enabled, operationID: operationID,
+                expectedRevision: expectedRevision, isCurrent: isCurrent)
+        } catch DJConnectError.server(statusCode: 409, message: _) {
+            let observed = try await readWidgetPushConsent(isCurrent: isCurrent)
+            if observed.revision > expectedRevision { throw WidgetPushConsentSuperseded() }
+            throw DJConnectError.invalidResponse
+        }
+        let observed = try await readWidgetPushConsent(isCurrent: isCurrent)
+        guard observed.revision == expectedRevision + 1, observed.enabled == enabled else {
+            if observed.revision > expectedRevision { throw WidgetPushConsentSuperseded() }
+            throw DJConnectError.invalidResponse
+        }
+        return observed
+    }
+
     private static let maximumWidgetConsentRevision: Int64 = 9_007_199_254_740_991
 
     private func widgetPushConsentExchange(
@@ -410,7 +431,7 @@ public final class DJConnectClient: Sendable {
                 if case let .string(value)? = fields[key] { return value }
                 return ""
             }
-            let audience = "djc-native-push-ha-dev/1"
+            let audience = "djc-native-push/1"
             let operation = string("operation_id")
             let nonce = string("challenge_nonce")
             let encodedHash = string("client_data_hash_b64")
@@ -498,32 +519,26 @@ public final class DJConnectClient: Sendable {
         try await widgetFirstKeyReceipt("status", challenge: challenge, proof: nil, isCurrent: isCurrent)
     }
 
-    private struct WidgetFirstKeyCheckpoint: Codable {
-        let challenge: WidgetFirstKeyChallenge
-        let keyIdentifier: String
-        var registered: Bool
-    }
+    @MainActor private static var widgetFirstKeyInFlight = false
 
-    @MainActor private static var widgetFirstKeyTrialInFlight = false
-
-    /// The HA-dev trial stores only local operation metadata. Once the
-    /// checkpoint exists, recovery uses status and never resubmits proof.
+    /// Ordinary first trust owns durable one-shot SDK phases. A checkpoint
+    /// supplies neither a new SDK original nor a surface/clock admission.
     @MainActor
-    public func enrollWidgetFirstKeyForTrial(
+    public func enrollWidgetFirstKey(
         isCurrent: @escaping @MainActor @Sendable () -> Bool
     ) async throws {
-        #if DEBUG && os(iOS) && !targetEnvironment(simulator) && canImport(DeviceCheck)
+        #if os(iOS) && !targetEnvironment(simulator) && canImport(DeviceCheck)
         let service = DCAppAttestService.shared
-        guard isCurrent(), service.isSupported, !Self.widgetFirstKeyTrialInFlight else {
+        guard isCurrent(), service.isSupported, !Self.widgetFirstKeyInFlight else {
             throw DJConnectError.invalidResponse
         }
-        Self.widgetFirstKeyTrialInFlight = true
-        defer { Self.widgetFirstKeyTrialInFlight = false }
+        Self.widgetFirstKeyInFlight = true
+        defer { Self.widgetFirstKeyInFlight = false }
         let token = try loadedToken()
         let binding = widgetPairingBinding(token: token)
         let directory = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
                                                      appropriateFor: nil, create: true)
-            .appendingPathComponent("DJConnectWidgetFirstKeyTrial-v1", isDirectory: true)
+            .appendingPathComponent("DJConnectWidgetFirstKey-v1", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         var excludedDirectory = directory
         var values = URLResourceValues()
@@ -533,46 +548,34 @@ public final class DJConnectClient: Sendable {
             .map { "\($0.utf8.count):\($0)" }.joined()
         let name = SHA256.hash(data: Data(scope.utf8)).map { String(format: "%02x", $0) }.joined()
         let journal = directory.appendingPathComponent(name)
-        func save(_ checkpoint: WidgetFirstKeyCheckpoint) throws {
-            try JSONEncoder().encode(checkpoint).write(to: journal, options: [.atomic, .completeFileProtection])
+        let ownerCurrent: @MainActor () -> Bool = {
+            isCurrent() && (try? self.widgetPairingBinding(token: self.loadedToken())) == binding
         }
-        let saved: Data?
-        do {
-            saved = try Data(contentsOf: journal)
-        } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
-            saved = nil
-        }
-        var checkpoint: WidgetFirstKeyCheckpoint
-        if let saved {
-            checkpoint = try JSONDecoder().decode(WidgetFirstKeyCheckpoint.self, from: saved)
-            guard checkpoint.challenge.pairingBinding == binding else { throw DJConnectError.invalidResponse }
-            if checkpoint.registered { return }
-            try await recoverWidgetFirstKey(checkpoint.challenge, isCurrent: isCurrent)
-        } else {
-            try await prepareWidgetFirstKey(isCurrent: isCurrent)
-            let challenge = try await requestWidgetFirstKeyChallenge(isCurrent: isCurrent)
-            func verifyCurrent() throws {
-                try Task.checkCancellation()
-                guard isCurrent(), challenge.isCurrent(), challenge.pairingBinding == binding,
-                      try widgetPairingBinding(token: loadedToken()) == binding else {
-                    throw DJConnectError.invalidResponse
-                }
-            }
-            try verifyCurrent()
-            let key = try await service.generateKey()
-            try verifyCurrent()
-            let attestation = try await service.attestKey(key, clientDataHash: challenge.clientDataHash)
-            try verifyCurrent()
-            checkpoint = .init(challenge: challenge, keyIdentifier: key, registered: false)
-            try save(checkpoint)
-            try await registerWidgetFirstKey(challenge, keyIdentifier: key, attestation: attestation,
-                                            isCurrent: isCurrent)
-        }
-        guard isCurrent(), try widgetPairingBinding(token: loadedToken()) == binding else {
-            throw DJConnectError.invalidResponse
-        }
-        checkpoint.registered = true
-        try save(checkpoint)
+        let ports = WidgetFirstKeyOperation.Ports(load: {
+            let bytes: Data
+            do { bytes = try Data(contentsOf: journal) }
+            catch let error as CocoaError where error.code == .fileReadNoSuchFile { return nil }
+            guard bytes.count <= 65_536 else { throw DJConnectError.invalidResponse }
+            return try JSONDecoder().decode(WidgetFirstKeyOperation.Record.self, from: bytes)
+        }, save: { record in
+            let bytes = try JSONEncoder().encode(record)
+            guard bytes.count <= 65_536 else { throw DJConnectError.invalidResponse }
+            try bytes.write(to: journal, options: [.atomic, .completeFileProtection])
+        }, challenge: {
+            try await self.prepareWidgetFirstKey(isCurrent: isCurrent)
+            return try await self.requestWidgetFirstKeyChallenge(isCurrent: isCurrent)
+        }, ownerCurrent: ownerCurrent, current: { challenge in
+            ownerCurrent() && challenge.isCurrent() && challenge.pairingBinding == binding
+        }, generateKey: {
+            try await service.generateKey()
+        }, attestKey: { key, hash in
+            try await service.attestKey(key, clientDataHash: hash)
+        }, register: { challenge, key, proof in
+            try await self.registerWidgetFirstKey(challenge, keyIdentifier: key, attestation: proof, isCurrent: isCurrent)
+        }, status: { challenge in
+            try await self.recoverWidgetFirstKey(challenge, isCurrent: isCurrent)
+        })
+        try await WidgetFirstKeyOperation.run(ports)
         #else
         throw DJConnectError.invalidResponse
         #endif
@@ -3450,6 +3453,24 @@ public extension DJConnectClient {
         })
     }
 
+    /// Prepares only Core's genuinely owned original Widget purpose. This
+    /// content-free ACK grants no clock, target, field, restore or SDK rights.
+    /// The caller starts its separate context operation with a NEW C0 afterward.
+    @MainActor public func prepareNativeWidgetSurface(sessionID: String, operationID: String,
+        isCurrent: @escaping @MainActor @Sendable () -> Bool) async throws {
+        guard identity.clientType == .ios, DJConnectSurfacePushCoordinate.identifier(sessionID),
+              operationID.range(of: "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", options: .regularExpression) != nil else {
+            throw DJConnectError.invalidResponse
+        }
+        let body: [String: Any] = ["contract_version": 1, "operation_id": operationID,
+            "device_id": identity.deviceID, "client_type": identity.clientType.rawValue, "session_id": sessionID]
+        let bytes = try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
+        let data = try await surfacePushPOST("widget/prepare", bytes: bytes, isCurrent: isCurrent)
+        let fields = try RendezvousFlatJSON.parse(data, maximumBytes: 4096)
+        guard fields == ["contract_version": .integer(1), "state": .string("prepared"),
+            "operation_id": .string(operationID), "session_id": .string(sessionID)] else { throw DJConnectError.invalidResponse }
+    }
+
     // Internal task-owner port; strict outer-v3 validation stays independent of
     // historical v1/v2 APIs. No fallback or new authority is created here.
     @MainActor func nativeSurfacePushV3POST(_ part: String, bytes: Data,
@@ -3473,7 +3494,7 @@ public extension DJConnectClient {
     }
     @MainActor private func surfacePushPOST(_ path: String, bytes: Data,
         isCurrent: @escaping @MainActor @Sendable () -> Bool) async throws -> Data {
-        guard ["context","register","revoke","status","retained-authorize"].contains(path),
+        guard ["context","register","revoke","status","retained-authorize","widget/prepare"].contains(path),
               isCurrent(), !Task.isCancelled else { throw CancellationError() }
         let originalToken = try loadedToken()
         var request = try authenticatedRequest(path:"/api/djconnect/v1/push/surface/" + path)

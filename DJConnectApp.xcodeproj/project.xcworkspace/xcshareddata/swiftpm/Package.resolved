@@ -1,6 +1,23 @@
 {
-  "originHash" : "a4cdebb91e26df5946bdfc26b9027801862128bec7397dd2d9277b5fb48373ba",
+  "originHash" : "b9a4a3b97ec0e148dc9c4fbc7bfda66cdb6e9cb7aaa01fb169c2e79b0e8ec915",
   "pins" : [
+    {
+      "identity" : "google-cast-ios-sdk",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/googlecast/google-cast-ios-sdk.git",
+      "state" : {
+        "revision" : "104500df8ce2a827ca3b3392bf16877fae413a33"
+      }
+    },
+    {
+      "identity" : "gtm-session-fetcher",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/google/gtm-session-fetcher.git",
+      "state" : {
+        "revision" : "a2ab612cb980066ee56d90d60d8462992c07f24b",
+        "version" : "3.5.0"
+      }
+    },
     {
       "identity" : "joseswift",
       "kind" : "remoteSourceControl",

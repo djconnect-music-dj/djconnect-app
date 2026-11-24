@@ -1567,11 +1567,17 @@ public final class DJConnectAppModel: ObservableObject {
         var expectedRevision: Int64?
         var confirmed = false
     }
-    private static let widgetConsentIntentKey = "DJConnectWidgetConsentTrial.v1"
+    private static let widgetConsentIntentKey = "DJConnectWidgetConsent.v1"
     @Published private var widgetConsentIntent: WidgetConsentIntent?
     private var widgetConsentTask: Task<Void, Never>?
+    private var widgetFirstKeyTask: Task<Void, Never>?
+    private var widgetFirstKeyTaskOperation: UUID?
+    private var widgetFirstKeyTaskGeneration = UUID()
     private var widgetConsentRetryAfter: Date?
     private var confirmedWidgetConsent: UUID?
+    private var completedWidgetFirstKeyOperation: UUID? // Actual current-process ACK only; never an admission.
+    private var queuedWidgetEnableIntent: WidgetConsentIntent?
+    private static let widgetReenableIntentKey = "DJConnectWidgetConsentReenable.v1"
     private let nativeWidgetRegistrationInstance = UUID().uuidString
     private var passiveSurfaceObservation: AnyCancellable?
     public let profileDJSettings = ProfileDJSettingsModel()
@@ -3914,7 +3920,7 @@ public final class DJConnectAppModel: ObservableObject {
     public func markActiveSession() {
         endpointStatusRefreshAt = nil
         isAppInForeground = true
-        refreshWidgetConsentTrial(force: true)
+        refreshWidgetConsent(force: true)
         #if os(iOS) && canImport(WatchConnectivity)
         resumeWatchProxySetupIfNeeded()
         #endif
@@ -4036,6 +4042,7 @@ public final class DJConnectAppModel: ObservableObject {
         isAppInForeground = false
         confirmedWidgetConsent = nil
         widgetConsentTask?.cancel()
+        retireWidgetFirstKeyTask()
         sessionStartup.reconcile()
         sessionForYou.reconcile()
         directSessionAttemptEpoch = UUID()
@@ -10693,7 +10700,7 @@ public final class DJConnectAppModel: ObservableObject {
     func refreshForegroundStateFromPollTimer() async {
         guard isAppInForeground, pairingStatus == .paired, !isDemoMode,
               !isOfflineModeActive, !isRefreshing else { return }
-        refreshWidgetConsentTrial()
+        refreshWidgetConsent()
         // Session polling continues independently of music. Also rearm the
         // bounded status recovery if metadata or a foreground interruption
         // left the backend unavailable without a live recovery task.
@@ -12797,25 +12804,17 @@ public final class DJConnectAppModel: ObservableObject {
 
     var canChooseNativePushConsent: Bool { nativePushConsentPairing != nil }
 
-    private var usesWidgetConsentTrial: Bool {
-        #if DEBUG && os(iOS)
-        UIDevice.current.userInterfaceIdiom == .phone
-            && ProcessInfo.processInfo.arguments.contains("--widget-consent-trial")
-        #else
-        false
-        #endif
-    }
-
     func nativePushAllowed(_ role: DJConnectSurfacePushTaskOwner.Role) -> Bool {
-        if role == .widget, usesWidgetConsentTrial {
+        if role == .widget {
+            if let queued = queuedWidgetEnableIntent, queued.pairing == nativePushConsentPairing { return true }
             return widgetConsentIntent?.pairing == nativePushConsentPairing && widgetConsentIntent?.enabled == true
         }
         return nativePushConsentGeneration(role) != nil
     }
 
     func nativePushConsentGeneration(_ role: DJConnectSurfacePushTaskOwner.Role) -> UUID? {
-        if role == .widget, usesWidgetConsentTrial {
-            guard nativePushAllowed(role), let intent = widgetConsentIntent,
+        if role == .widget {
+            guard nativePushAllowed(role), let intent = widgetConsentIntent, intent.enabled,
                   confirmedWidgetConsent == intent.operationID else { return nil }
             return intent.operationID
         }
@@ -12825,13 +12824,27 @@ public final class DJConnectAppModel: ObservableObject {
     }
 
     func setNativePushAllowed(_ enabled: Bool, for role: DJConnectSurfacePushTaskOwner.Role) {
-        if role == .widget, usesWidgetConsentTrial {
+        if role == .widget {
             guard let pairing = nativePushConsentPairing else { return }
-            confirmedWidgetConsent = nil
+            restoreWidgetConsentIntents(pairing: pairing)
+            if enabled, widgetConsentIntent?.pairing == pairing,
+               widgetConsentIntent?.enabled == true || queuedWidgetEnableIntent?.pairing == pairing { return }
+            confirmedWidgetConsent = nil; completedWidgetFirstKeyOperation = nil
+            retireWidgetFirstKeyTask()
             bindNativePushOwners()
-            saveWidgetConsentIntent(.init(pairing: pairing, enabled: enabled))
+            if enabled {
+                if widgetConsentIntent?.enabled == false {
+                    if queuedWidgetEnableIntent == nil { saveQueuedWidgetEnableIntent(.init(pairing: pairing, enabled: true)) }
+                } else {
+                    guard widgetConsentIntent?.enabled != true else { return }
+                    saveWidgetConsentIntent(.init(pairing: pairing, enabled: true))
+                }
+            } else {
+                saveQueuedWidgetEnableIntent(nil)
+                if widgetConsentIntent?.enabled != false { saveWidgetConsentIntent(.init(pairing: pairing, enabled: false)) }
+            }
             widgetConsentRetryAfter = nil
-            refreshWidgetConsentTrial(force: true)
+            refreshWidgetConsent(force: true)
             return
         }
         if enabled {
@@ -12851,7 +12864,9 @@ public final class DJConnectAppModel: ObservableObject {
     }
 
     private func clearNativePushConsent() {
-        confirmedWidgetConsent = nil
+        retireWidgetFirstKeyTask()
+        confirmedWidgetConsent = nil; completedWidgetFirstKeyOperation = nil
+        saveQueuedWidgetEnableIntent(nil)
         saveWidgetConsentIntent(nil)
         nativeWidgetPushOwner.bind(nil)
         nativeActivityPushOwner.bind(nil)
@@ -12864,33 +12879,62 @@ public final class DJConnectAppModel: ObservableObject {
         defaults.set(intent.flatMap { try? JSONEncoder().encode($0) }, forKey: Self.widgetConsentIntentKey)
     }
 
-    private func refreshWidgetConsentTrial(force: Bool = false) {
-        guard usesWidgetConsentTrial, isAppInForeground, widgetConsentTask == nil,
-              let pairing = nativePushConsentPairing else { return }
+    private func saveQueuedWidgetEnableIntent(_ intent: WidgetConsentIntent?) {
+        queuedWidgetEnableIntent = intent
+        defaults.set(intent.flatMap { try? JSONEncoder().encode($0) }, forKey: Self.widgetReenableIntentKey)
+    }
+    private func restoreWidgetConsentIntents(pairing: String) {
+        if let intent = widgetConsentIntent, intent.pairing != pairing {
+            widgetConsentIntent = nil; queuedWidgetEnableIntent = nil
+            confirmedWidgetConsent = nil; completedWidgetFirstKeyOperation = nil
+        }
         if widgetConsentIntent == nil, let data = defaults.data(forKey: Self.widgetConsentIntentKey),
            let saved = try? JSONDecoder().decode(WidgetConsentIntent.self, from: data), saved.pairing == pairing {
             widgetConsentIntent = saved
         }
+        if queuedWidgetEnableIntent == nil, widgetConsentIntent != nil,
+           let data = defaults.data(forKey: Self.widgetReenableIntentKey),
+           let saved = try? JSONDecoder().decode(WidgetConsentIntent.self, from: data), saved.pairing == pairing,
+           saved.enabled, !saved.confirmed, saved.expectedRevision == nil {
+            queuedWidgetEnableIntent = saved
+        }
+        if let queued = queuedWidgetEnableIntent, queued.operationID == widgetConsentIntent?.operationID { saveQueuedWidgetEnableIntent(nil) }
+    }
+    private func completeWidgetOptOut(_ pairing: String) {
+        if let next = queuedWidgetEnableIntent, next.pairing == pairing {
+            // Preserve the completed withdrawal before this separate, explicit
+            // future opt-in. Never overwrite an unacknowledged opt-out intent.
+            saveWidgetConsentIntent(next); saveQueuedWidgetEnableIntent(nil)
+            widgetConsentRetryAfter = nil
+        } else { saveWidgetConsentIntent(nil) }
+    }
+
+    private func refreshWidgetConsent(force: Bool = false) {
+        guard isAppInForeground, widgetConsentTask == nil,
+              let pairing = nativePushConsentPairing else { return }
+        restoreWidgetConsentIntents(pairing: pairing)
         guard let intent = widgetConsentIntent, intent.pairing == pairing,
               force || (widgetConsentRetryAfter.map { $0 <= Date() } ?? true) else { return }
         widgetConsentRetryAfter = Date().addingTimeInterval(30)
+        let ownerEpoch = sessionHistory.responseEpoch, profileID = sessionHistory.authorizedProfileID
         widgetConsentTask = Task { [weak self] in
             guard let self else { return }
             defer {
                 self.widgetConsentTask = nil
                 if let latest = self.widgetConsentIntent, latest.operationID != intent.operationID,
                    self.widgetConsentRetryAfter == nil {
-                    self.refreshWidgetConsentTrial(force: true)
+                    self.refreshWidgetConsent(force: true)
                 }
             }
-            await self.reconcileWidgetConsent(intent)
+            await self.reconcileWidgetConsent(intent, ownerEpoch: ownerEpoch, profileID: profileID)
         }
     }
 
-    private func reconcileWidgetConsent(_ intent: WidgetConsentIntent) async {
+    private func reconcileWidgetConsent(_ intent: WidgetConsentIntent, ownerEpoch: UUID, profileID: String?) async {
         let current: @MainActor @Sendable () -> Bool = { [weak self] in
             guard let self else { return false }
             return !Task.isCancelled && self.isAppInForeground && self.nativePushConsentPairing == intent.pairing
+                && self.sessionHistory.responseEpoch == ownerEpoch && self.sessionHistory.authorizedProfileID == profileID
                 && self.widgetConsentIntent?.operationID == intent.operationID
         }
         do {
@@ -12909,17 +12953,15 @@ public final class DJConnectAppModel: ObservableObject {
                 latest = initial
             } else {
                 do {
-                    _ = try await client.writeWidgetPushConsent(enabled: pending.enabled, operationID: pending.operationID,
-                                                               expectedRevision: expected, isCurrent: current)
-                } catch DJConnectError.server(statusCode: 409, message: _) {
-                    let observed = try await client.readWidgetPushConsent(isCurrent: current)
-                    guard current(), observed.revision > expected else { return }
-                    // A newer server decision defeats an old opt-in. Opt-out
-                    // stays queued as a fresh, revision-fenced intent.
+                    latest = try await client.confirmWidgetPushConsent(enabled: pending.enabled, operationID: pending.operationID,
+                        expectedRevision: expected, isCurrent: current)
+                } catch is DJConnectClient.WidgetPushConsentSuperseded {
+                    guard current() else { return }
+                    // A later authoritative decision defeats an old opt-in.
+                    // Opt-out stays queued as its own fresh revision-fenced intent.
                     saveWidgetConsentIntent(pending.enabled ? nil : .init(pairing: pending.pairing, enabled: false))
                     return
                 }
-                latest = try await client.readWidgetPushConsent(isCurrent: current)
             }
             guard current() else { return }
             guard latest.revision == expected + 1, latest.enabled == pending.enabled else {
@@ -12931,29 +12973,69 @@ public final class DJConnectAppModel: ObservableObject {
                 return
             }
             if pending.enabled {
-                if confirmedWidgetConsent == pending.operationID { return }
                 pending.confirmed = true
                 saveWidgetConsentIntent(pending)
-                try await client.enrollWidgetFirstKeyForTrial(isCurrent: current)
-                guard current() else { return }
-                let afterEnrollment = try await client.readWidgetPushConsent(isCurrent: current)
-                guard current() else { return }
-                guard afterEnrollment.enabled, afterEnrollment.revision == latest.revision else {
-                    confirmedWidgetConsent = nil
-                    nativeWidgetPushOwner.bind(nil)
-                    saveWidgetConsentIntent(nil)
-                    return
-                }
+                // This is only the independently read consent fact. It grants
+                // no SDK/key restoration, issuer role or native clock rights.
                 confirmedWidgetConsent = pending.operationID
                 bindNativePushOwners()
+                beginWidgetFirstKeyEnrollment(pending, client: client, isCurrent: current)
             } else {
-                saveWidgetConsentIntent(nil)
+                completeWidgetOptOut(pending.pairing)
             }
         } catch {
-            // A missing acknowledgement leaves the exact intent for retry.
-            if current(), confirmedWidgetConsent == intent.operationID {
-                confirmedWidgetConsent = nil
+            // A missing key/SDK outcome is not a denial of the independently
+            // acknowledged consent fact, and is never surface admission.
+            let withdrawal: Bool
+            switch error as? DJConnectError {
+            case .authStale?, .missingToken?, .profile?, .clientTypeMismatch?: withdrawal = true
+            default: withdrawal = false
+            }
+            if current(), withdrawal {
+                confirmedWidgetConsent = nil; completedWidgetFirstKeyOperation = nil
                 nativeWidgetPushOwner.bind(nil)
+            }
+        }
+    }
+
+    private func retireWidgetFirstKeyTask() {
+        widgetFirstKeyTaskGeneration = UUID()
+        widgetFirstKeyTask?.cancel(); widgetFirstKeyTask = nil; widgetFirstKeyTaskOperation = nil
+    }
+    private func beginWidgetFirstKeyEnrollment(_ intent: WidgetConsentIntent, client: DJConnectClient,
+        isCurrent: @escaping @MainActor @Sendable () -> Bool) {
+        guard completedWidgetFirstKeyOperation != intent.operationID,
+              widgetFirstKeyTaskOperation != intent.operationID, isCurrent() else { return }
+        retireWidgetFirstKeyTask()
+        let generation = widgetFirstKeyTaskGeneration
+        widgetFirstKeyTaskOperation = intent.operationID
+        widgetFirstKeyTask = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                if self.widgetFirstKeyTaskGeneration == generation {
+                    self.widgetFirstKeyTask = nil; self.widgetFirstKeyTaskOperation = nil
+                }
+            }
+            do {
+                try await client.enrollWidgetFirstKey(isCurrent: isCurrent)
+                guard isCurrent(), self.widgetFirstKeyTaskGeneration == generation else { return }
+                let observed = try await client.readWidgetPushConsent(isCurrent: isCurrent)
+                guard isCurrent(), self.widgetFirstKeyTaskGeneration == generation else { return }
+                guard observed.enabled, observed.revision == (intent.expectedRevision ?? -1) + 1 else {
+                    self.confirmedWidgetConsent = nil; self.completedWidgetFirstKeyOperation = nil
+                    self.nativeWidgetPushOwner.bind(nil); self.saveWidgetConsentIntent(nil)
+                    return
+                }
+                self.completedWidgetFirstKeyOperation = intent.operationID
+            } catch {
+                // SDK completion must never hold the pure opt-out writer. Its
+                // original durable phase owns any late key/proof callback.
+                guard isCurrent(), self.widgetFirstKeyTaskGeneration == generation else { return }
+                switch error as? DJConnectError {
+                case .authStale?, .missingToken?, .profile?, .clientTypeMismatch?:
+                    self.confirmedWidgetConsent = nil; self.nativeWidgetPushOwner.bind(nil)
+                default: break
+                }
             }
         }
     }

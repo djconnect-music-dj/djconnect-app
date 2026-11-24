@@ -600,7 +600,7 @@ Registratie is geen bewijs van implementatie of herstel op een apparaat.
   verlenging van oude keuzen of het verwijderen van vervalcontroles.
 - Controleer op tijdstippen 14, 16 en 40 seconden, plus echte wijzigingen van
   onderwerp, eigenaar, sessie, bron of instellingen en verlopen acties.
-- Status: geregistreerd; Core en Apple onderzoeken parallel. Nog niet opgelost.
+- Status: Core heeft het zichtbare beslisbudget gescheiden van de voorbereiding. Apple bewaart de oorspronkelijke deadline en definitieve intrekking. Echte Core-wire-regressies op 14/16/40/60 seconden slagen; live iOS-herkwalificatie blijft open.
 
 ## 35. iOS Horizon: hapert en wordt na enkele seconden onbeschikbaar
 
@@ -650,3 +650,30 @@ Punt32 vervolgbron: echte owner view.dynamics ack, expliciete bounded dynamics m
 Actuele status35: smalle Horizontransportfix is gecommit in df1cdd1: alleen getypeerde tijdelijke netwerkfouten behouden een nog geldige oorspronkelijke cursor binnen ongewijzigde owner/session/source/epoch. Geen leaseverlenging;19 causale fencegevallen geslaagd in de68-test Macrun. Echte iOS-runtimekwalificatie blijft open. Status34 blijft onderzoek: native VoorYou gebruikt de oorspronkelijke Core expires_in met minimum-deadlinepins voor hetzelfde offer; geen lokale15slease vastgesteld.
 
 Checkpoint3/32/36: definitieve Mac build-for-testing geslaagd en116testfuncties in7suites geslaagd (help-preview-assets-test.log/xcresult). Inclusief7echte AppModel-ingressfences met originele Corepreviewbytes,90sHelp met echte nieuwe GETresponses en replay/hide/context/authfences, hostdynamiek wirebody en onafhankelijke mismatchreadback.40native previewcapturen met echte shippingSpotifyasset; NL768 en DE320 visueel gecontroleerd: intro/titel/artist/logo leesbaar, wrapping zonder afkapping. StandaloneXCTestasset wordt uitsluitend in testhost geladen. Negen lichte contract-/lokalisatie-/hygienechecks opnieuw geslaagd. Dit checkpoint bevat geen nieuwe fysieke installatie, APNsacceptatie of iOS-runtimeacceptatie.
+
+
+Checkpoint 24 november — Voor jou, Widgets en Cast:
+- Bevroren macOS build-for-testing geslaagd; geen bronwijzigingen tijdens compilatie.
+  139 testfuncties in zeven suites geslaagd (`widget-sdk-final-test.log/xcresult`).
+- Voor jou gebruikt ongewijzigde echte Coreproducer-fixtures met expliciet
+  synthetische bron/fakeclock. Geldige keuzes blijven op 14/16/40 seconden;
+  oorspronkelijke expiry, source-withdrawal en instellingen-intrekking blijven
+  definitief. Oude beschikbare DTOs kunnen geen ingetrokken aanbod heropenen.
+- Gewone Widget-keuze gebruikt nu de oorspronkelijke serverrevisie en operatie,
+  onafhankelijke readback en het geselecteerde productaudience. Afmelden blijft
+  behouden bij direct opnieuw aanmelden en herstart. AppAttest-fasen worden vóór
+  hun effect vastgelegd; onbekende uitkomsten starten geen vervangende sleutel.
+  Consent, sleutel-ACK en native read-/clockbevoegdheid blijven aparte feiten.
+- De Widget-prepareclient transporteert uitsluitend de gesloten originele ACK;
+  runtime-mount en gekwalificeerde native clock blijven afzonderlijk open.
+- Echte Google Cast SDK-adapter en elf contractregressies geïntegreerd. De
+  officiële iOS-dependency is exact vastgezet. Appmodel-/schermintegratie,
+  volledige iOS-link, consolekwalificatie en fysieke Cast-acceptatie staan open.
+- iOS-checkpoint 532132d bouwde en draaide werkelijk via officiële simulator-CLI;
+  video en frames op 30 en 70 seconden tonen doorlopende demo-animatie/progress.
+  Dat bewijst geen live provider-incident of interactieve navigatie. De host mist
+  Simulator-GUI; de volgende volledige runtimeproef gebruikt een nieuwe eigen
+  DeviceSet. Alleen onze oude inactieve simulator is verwijderd; alle bewijs,
+  producten en testresultaten zijn behouden.
+- Fysieke pushactivering/afmelding, Live Activity en afzonderlijke Watchkanalen
+  zijn nog niet end-to-end gekwalificeerd. Er is geen nieuwe installatieclaim.
