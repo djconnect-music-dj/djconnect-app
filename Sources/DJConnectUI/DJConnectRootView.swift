@@ -9669,9 +9669,11 @@ private struct VibeCastDestinationPicker: View {
                 }
                 #endif
             }
-            Text(localizedKey(language, statusKey))
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+            if let statusKey {
+                Text(localizedKey(language, statusKey))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
             DJConnectNotNowLinkButton(language: language, key: "ui.not.now.b1e535") { dismiss() }
         }
         .padding(24)
@@ -9679,7 +9681,7 @@ private struct VibeCastDestinationPicker: View {
         .padding(16)
     }
 
-    private var statusKey: String {
+    private var statusKey: String? {
         #if os(iOS)
         if model.legacyCastNeedsConfirmation { return "ui.vibecast.cast.confirm_again" }
         switch model.legacyCastState {
@@ -9690,12 +9692,12 @@ private struct VibeCastDestinationPicker: View {
         case .recovering: return "ui.vibecast.cast.waiting"
         default: break
         }
-        if !model.legacyCastDevices.isEmpty { return "ui.vibecast.cast.choose" }
+        if !model.legacyCastDevices.isEmpty { return nil }
         return "ui.vibecast.destinations.scanning"
         #else
         if castTarget != nil { return "ui.vibecast.cast.connecting" }
         if castFailed { return "ui.vibecast.cast.failed" }
-        if discovery.devices.contains(where: { $0.receiverID != nil }) { return "ui.vibecast.cast.choose" }
+        if discovery.devices.contains(where: { $0.receiverID != nil }) { return nil }
         if !discovery.devices.isEmpty { return "ui.vibecast.destinations.unavailable" }
         if discovery.failed { return "ui.vibecast.destinations.network" }
         if discovery.searching { return "ui.vibecast.destinations.scanning" }
