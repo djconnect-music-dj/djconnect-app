@@ -4483,7 +4483,7 @@ func momentInsightCreditProvenanceDoesNotInventAnalysisOrParseDebugObjects(_ var
     let attempts = MusicDNARecoveryAttempts()
     let original = try #require(momentInsightProducerCase()["body"] as? [String: Any])
     var firstBody = original, firstSubject = original["subject"] as! [String: Any]
-    firstSubject["expires_in"] = 0.4; firstBody["subject"] = firstSubject
+    firstSubject["expires_in"] = 60.0; firstBody["subject"] = firstSubject
     let firstDetail = try historyData(firstBody)
     var laterBody = original, laterSubject = original["subject"] as! [String: Any]
     laterSubject["expires_in"] = 599.0
@@ -4507,10 +4507,15 @@ func momentInsightCreditProvenanceDoesNotInventAnalysisOrParseDebugObjects(_ var
     let offer = try #require(model.activeDJSession?.broadcast.nativeCurrentInsightNavigation(at: Date()))
     model.openMomentTrackInsight(offer)
     for _ in 0..<200 where model.isLoadingMomentTrackInsight { try await Task.sleep(for: .milliseconds(10)) }
-    #expect(model.momentTrackInsight != nil)
+    try #require(model.momentTrackInsight != nil)
+    let originalDeadline = try #require(model.momentInsightDeadline)
     #expect(await model.refreshMomentTrackInsight() == !changedRecording)
-    try await Task.sleep(for: .milliseconds(500))
-    #expect(model.momentTrackInsight == nil && !model.canRetryMomentTrackInsight)
+    #expect(model.momentInsightDeadline == originalDeadline)
+    if changedRecording {
+        #expect(model.momentTrackInsight == nil && !model.canRetryMomentTrackInsight)
+    } else {
+        #expect(model.momentTrackInsight != nil && model.canRetryMomentTrackInsight)
+    }
     #expect(fixture.requests.filter { $0.url!.path.hasSuffix("/track_insight") }.count == 2)
 }
 

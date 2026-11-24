@@ -2377,7 +2377,7 @@ public final class DJConnectAppModel: ObservableObject {
     @Published public private(set) var momentTrackInsightErrorMessage: String?
     @Published public private(set) var isLoadingMomentTrackInsight = false
     private var momentInsightGeneration = UUID()
-    private var momentInsightDeadline: Date?
+    private(set) var momentInsightDeadline: Date?
     private var momentInsightStyle = ""
     private var momentInsightMediaIdentity: String?
     private var momentInsightRetryAllowed = true

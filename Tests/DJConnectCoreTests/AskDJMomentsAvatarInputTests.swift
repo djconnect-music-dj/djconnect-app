@@ -89,10 +89,10 @@ private struct MomentsNativeInputOutcome {
     }
 
     private func checkNestedControls() async throws {
-        try await click(try #require(state.regions["photo"]), count: 1)
+        try click(try #require(state.regions["photo"]), count: 1)
         try await awaitDelivery { self.state.photos == 1 }
         try await observeNoCascade()
-        try await click(try #require(state.regions["source"]), count: 1)
+        try click(try #require(state.regions["source"]), count: 1)
         try await awaitDelivery { self.state.sources == 1 }
         try await observeNoCascade()
         #expect(state.photos == 1 && state.sources == 1)
@@ -102,7 +102,7 @@ private struct MomentsNativeInputOutcome {
     private func checkAvatar(_ outcome: MomentsNativeInputOutcome) async throws {
         let avatar = try #require(state.regions["avatar"])
         #expect(avatar.width >= 44 && avatar.height >= 44)
-        try await click(avatar, count: outcome.clickCount)
+        try click(avatar, count: outcome.clickCount)
         try await awaitDelivery {
             self.state.opens == outcome.opens && self.state.jokes == outcome.jokes
         }
@@ -112,15 +112,19 @@ private struct MomentsNativeInputOutcome {
         #expect(state.mounts == 1)
     }
 
-    private func click(_ region: CGRect, count: Int) async throws {
+    private func click(_ region: CGRect, count: Int) throws {
         let point = host.convert(CGPoint(x: region.midX, y: region.midY), to: nil)
+        // Deliver each gesture without yielding the main actor between clicks.
+        // Keep native event timestamps within one double-click interval.
+        let spacing = min(0.04, NSEvent.doubleClickInterval / 4)
+        let start = ProcessInfo.processInfo.systemUptime - spacing * Double(count - 1)
         for index in 1...count {
+            let timestamp = start + spacing * Double(index - 1)
             for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
-                let event = try #require(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                let event = try #require(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: timestamp,
                     windowNumber: window.windowNumber, context: nil, eventNumber: index, clickCount: index, pressure: type == .leftMouseDown ? 1 : 0))
                 window.sendEvent(event)
             }
-            try await Task.sleep(for: .milliseconds(40))
         }
     }
 
