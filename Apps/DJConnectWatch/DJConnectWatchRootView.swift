@@ -1533,11 +1533,10 @@ private struct DJConnectWatchGlassBrandIcon: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var winkEyeOpenness: CGFloat?
     @Environment(\.watchSessionTheme) private var theme
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
-        DJPersonaGraphic(colors: theme.watchColors, highContrast: contrast == .increased, opaque: reduceTransparency,
+        DJPersonaGraphic(colors: theme.watchColors, highContrast: contrast == .increased,
                         winkEyeOpenness: winkEyeOpenness)
             .frame(width: size, height: size)
             .accessibilityHidden(true)

@@ -30,9 +30,8 @@ import AppKit
     controller.open()
     for _ in 0..<500 { if controller.inventory != nil { break }; try await Task.sleep(for: .milliseconds(2)) }
     try #require(controller.inventory != nil)
-    let offered = inventory.types.filter(\.available)
-    let unavailable = inventory.types.filter { !$0.available }
-    #expect(!offered.isEmpty && !unavailable.isEmpty)
+    let visible = inventory.visibleTypes
+    #expect(!visible.isEmpty && visible.count < inventory.types.count)
     for language in ["en", "nl", "de", "fr", "es"] {
         for width: CGFloat in [390, 960] {
             let content = SessionCurrentDJCard(sessionID: inventory.sessionID, state: .expanded, mood: nil) {
@@ -64,28 +63,28 @@ import AppKit
                 return min(color.redComponent, color.greenComponent, color.blueComponent) > 0.85
             }
 
-            // Hosted SwiftUI actually draws the catalogue even when its local AppKit
-            // AX tree is empty. Count separated title regions below the header.
-            // The fixture offers two short titles, one per row at phone width and
-            // side by side at the wide width.
+            // Count the rendered title groups in the catalogue below the header.
+            // Convert layout points to bitmap pixels using this capture's scale.
+            let scale = CGFloat(bitmap.pixelsWide) / host.bounds.width
+            func pixels(_ points: CGFloat) -> Int { Int((points * scale).rounded()) }
             let narrow = width == 390
-            let columns = 170..<(bitmap.pixelsWide - 82)
-            let rows = 78..<(bitmap.pixelsHigh - 20)
+            let columns = pixels(170)..<(bitmap.pixelsWide - pixels(24))
+            let rows = pixels(80)..<(bitmap.pixelsHigh - pixels(20))
             let detected = narrow
                 ? rows.filter { y in columns.contains { x in isTextInk(x, y) } }
                 : columns.filter { x in rows.contains { y in isTextInk(x, y) } }
-            let groups = zip(detected, detected.dropFirst()).filter { $1 - $0 > 26 }.count
+            let groups = zip(detected, detected.dropFirst()).filter { $1 - $0 > pixels(13) }.count
                 + (detected.isEmpty ? 0 : 1)
-            #expect(groups == offered.count, "\(language)/\(width): visible catalogue titles")
+            #expect(groups == visible.count, "\(language)/\(width): visible catalogue titles")
 
             // The close button's white xmark is the only bright ink in this
             // small top-trailing area. Look for each diagonal on both sides.
-            let centerX = bitmap.pixelsWide - 50
-            let centerY = 51
+            let centerX = bitmap.pixelsWide - pixels(50)
+            let centerY = pixels(50)
             for direction in [-1, 1] {
                 for side in [-1, 1] {
-                    let foundStroke = (3...7).contains { step in
-                        (-2...2).contains { offset in
+                    let foundStroke = (pixels(3)...pixels(7)).contains { step in
+                        (-pixels(2)...pixels(2)).contains { offset in
                             let x = centerX + step * side
                             let y = centerY + step * side * direction + offset
                             return isTextInk(x, y)

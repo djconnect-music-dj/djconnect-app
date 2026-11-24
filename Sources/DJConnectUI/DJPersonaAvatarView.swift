@@ -87,7 +87,6 @@ struct DJPersonaAvatarView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var resourcesPermitMotion = Self.resourcesPermitMotionNow()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
 
     private static func resourcesPermitMotionNow() -> Bool {
@@ -114,7 +113,7 @@ struct DJPersonaAvatarView: View {
     }
 
     var body: some View {
-        DJPersonaGraphic(colors: colors, highContrast: contrast == .increased, opaque: reduceTransparency,
+        DJPersonaGraphic(colors: colors, highContrast: contrast == .increased,
                          activity: activity ?? .resting, speechIsPlaying: speechIsPlaying,
                          animatesActivity: scenePhase == .active && !reduceMotion && resourcesPermitMotion)
             .onReceive(NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)
@@ -136,7 +135,6 @@ struct DJPersonaAvatarView: View {
 struct DJPersonaGraphic: View {
     let colors: [Color]
     let highContrast: Bool
-    let opaque: Bool
     var activity: DJPersonaActivity = .resting
     var speechIsPlaying = false
     var animatesActivity = false
@@ -148,22 +146,8 @@ struct DJPersonaGraphic: View {
         GeometryReader { geometry in
             let side = min(geometry.size.width, geometry.size.height)
             ZStack {
-                // A dark, feathered backing separates the entire headset from
-                // the mood-colored card, including its outer band and earcups.
-                // It belongs to this fixed canvas and never moves with activity.
-                if opaque {
-                    Circle().fill(Color.black)
-                } else {
-                    Circle().fill(RadialGradient(stops: [
-                        .init(color: .black.opacity(0.76), location: 0),
-                        .init(color: .black.opacity(0.56), location: 0.60),
-                        .init(color: .clear, location: 1)
-                    ], center: .center, startRadius: 0, endRadius: side * 0.52))
-                }
-                Circle().fill(Color.black.opacity(opaque ? 1 : 0.82)).padding(side * 0.15)
                 DJPersonaMark(includesWaveform: activity == .resting && winkEyeOpenness == nil)
                     .fill(gradient)
-                    .shadow(color: .black.opacity(0.85), radius: side * 0.035, y: side * 0.015)
                 if let winkEyeOpenness {
                     VStack(spacing: side * 0.045) {
                         HStack(spacing: side * 0.13) {
