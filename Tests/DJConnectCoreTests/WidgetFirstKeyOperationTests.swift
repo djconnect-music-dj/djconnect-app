@@ -203,11 +203,13 @@ import Testing
         try WidgetReauthorizationOperation.canonical(#require(response["first_key_receipt"] as? [String:Any])),
         try #require(response["operation_id"] as? String),try #require(challenge["expires_at_ms"] as? Int64))
 }
-@Test(.isolatedClientResources, arguments:["producer","hash","receipt","nonce","duplicate","unsafe","late","policy","extra"])
+@Test(.isolatedClientResources, arguments:["producer","fraction","bool-version","hash","receipt","nonce","duplicate","unsafe","late","policy","extra"])
 @MainActor func widgetReauthorizationBindsActualCoreProducerAndOriginalDeadlines(_ mode:String) throws {
     let fixture = try reauthorizationProducer()
     var response = try #require(JSONSerialization.jsonObject(with:fixture.data) as? [String:Any])
     var challenge = try #require(response["challenge"] as? [String:Any])
+    if mode == "fraction" { response["contract_version"] = 1.5 }
+    if mode == "bool-version" { response["contract_version"] = true }
     if mode == "hash" { response["client_data_hash_b64"] = Data(repeating:0,count:32).base64EncodedString() }
     if mode == "receipt" { var r = try #require(response["first_key_receipt"] as? [String:Any]);r["key_revision"] = 2;response["first_key_receipt"] = r }
     if mode == "nonce" { challenge["challenge_nonce"] = "noncanonical";response["challenge"] = challenge }
