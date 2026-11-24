@@ -2693,6 +2693,7 @@ struct PairingQRScannerView: View {
                         .frame(maxWidth: .infinity)
                         .background(DJConnectMaterial(.ultraThin))
                 }
+                .allowsHitTesting(false)
             }
             .navigationTitle(localizedKey(language, "ui.scan.qr.code"))
             .navigationBarTitleDisplayMode(.inline)
@@ -2766,6 +2767,7 @@ private final class PairingQRScannerViewController: UIViewController, @preconcur
     private let sessionQueue = DispatchQueue(label: "dev.djconnect.qr-capture", qos: .userInitiated)
     private var previewLayer: AVCaptureVideoPreviewLayer?
     private weak var captureDevice: AVCaptureDevice?
+    private var pinchStartZoom: CGFloat?
     private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
     private var previewRotationObservation: NSKeyValueObservation?
 
@@ -2773,6 +2775,30 @@ private final class PairingQRScannerViewController: UIViewController, @preconcur
         super.viewDidLoad()
         view.backgroundColor = .black
         configureSession()
+        view.addGestureRecognizer(UIPinchGestureRecognizer(target: self, action: #selector(zoomCamera(_:))))
+    }
+
+    @objc private func zoomCamera(_ gesture: UIPinchGestureRecognizer) {
+        guard let device = captureDevice else { return }
+        switch gesture.state {
+        case .began:
+            pinchStartZoom = device.videoZoomFactor
+        case .changed:
+            guard let start = pinchStartZoom, gesture.scale.isFinite else { return }
+            do {
+                try device.lockForConfiguration()
+                defer { device.unlockForConfiguration() }
+                device.videoZoomFactor = min(device.maxAvailableVideoZoomFactor,
+                                             max(device.minAvailableVideoZoomFactor, start * gesture.scale))
+            } catch {
+                // The capture device may become unavailable while the sheet closes.
+                pinchStartZoom = nil
+            }
+        case .ended, .cancelled, .failed:
+            pinchStartZoom = nil
+        default:
+            break
+        }
     }
 
     override func viewDidLayoutSubviews() {
