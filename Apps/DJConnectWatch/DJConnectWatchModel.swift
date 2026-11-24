@@ -2585,6 +2585,7 @@ final class DJConnectWatchModel: NSObject, ObservableObject {
         didSet {
             guard oldValue != watchMomentNotificationsEnabled else { return }
             UserDefaults.standard.set(watchMomentNotificationsEnabled, forKey: "watch.moment.notifications.v1")
+            if !watchMomentNotificationsEnabled { clearWatchMomentIntent() }
             UserDefaults.standard.removeObject(forKey: registeredPushSignatureKey)
             registerStoredPushTokenIfPossible()
         }
@@ -2599,6 +2600,11 @@ final class DJConnectWatchModel: NSObject, ObservableObject {
         }
     }
 
+    func canPresentWatchMomentNotification(_ intent: DJConnectWatchMomentOpenIntent) -> Bool {
+        watchMomentNotificationsEnabled && isAppForeground && canUseBackend && !isDemoMode &&
+            intent.isPending() && foregroundSession.current()?.session?.id == intent.sessionID
+    }
+
     @Published private(set) var watchHomeOpenSequence = 0
     func openWatchHome(from url: URL) {
         guard url.absoluteString == "djconnect://" ||
@@ -2608,13 +2614,14 @@ final class DJConnectWatchModel: NSObject, ObservableObject {
         Task { await refreshForegroundSession(force: true) }
     }
     @Published private(set) var watchMomentOpenIntent: DJConnectWatchMomentOpenIntent? = {
-        guard let data = UserDefaults.standard.data(forKey: "watch.moment.open.intent.v1"),
+        guard UserDefaults.standard.bool(forKey: "watch.moment.notifications.v1"),
+              let data = UserDefaults.standard.data(forKey: "watch.moment.open.intent.v1"),
               let intent = try? JSONDecoder().decode(DJConnectWatchMomentOpenIntent.self, from: data),
               intent.isPending() else { return nil }
         return intent
     }()
     func openWatchMoment(_ intent: DJConnectWatchMomentOpenIntent) {
-        guard intent.isPending() else { return }
+        guard watchMomentNotificationsEnabled, intent.isPending() else { return }
         watchMomentOpenIntent = intent
         UserDefaults.standard.set(try? JSONEncoder().encode(intent), forKey: "watch.moment.open.intent.v1")
     }

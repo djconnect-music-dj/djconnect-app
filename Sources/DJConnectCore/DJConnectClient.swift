@@ -1,6 +1,6 @@
 import Foundation
 import CryptoKit
-#if DEBUG && os(iOS) && !targetEnvironment(simulator) && canImport(DeviceCheck)
+#if os(iOS) && !targetEnvironment(simulator) && canImport(DeviceCheck)
 import DeviceCheck
 #endif
 
@@ -204,6 +204,114 @@ public final class DJConnectClient: Sendable {
     // The display consent coordinator and the generation-fenced stop use these paired routes.
     // It first validates a fresh selected-installation/owner context. The same
     // predicate is carried through the budget hop into synchronous dispatch.
+    /// Confirmed host presentation and participation policy for an existing share.
+    public struct VibeCastOwnerState: Decodable, Equatable, Sendable {
+        public struct Policy: Decodable, Equatable, Sendable {
+            public let information: Bool
+            public let requests: String
+            public let max_pending: Int
+            public let screen_focus: Bool
+        }
+        public struct View: Decodable, Equatable, Sendable { public let mode: String; public let dynamics: Double }
+        public let success: Bool
+        public let contract_version: Int
+        public let policy: Policy
+        public let view: View
+        public var isValid: Bool {
+            success && contract_version == 1 && ["flow", "vibescape"].contains(view.mode) &&
+            view.dynamics.isFinite && (0...1).contains(view.dynamics) &&
+            ["disabled", "review", "auto_queue"].contains(policy.requests) && (1...10).contains(policy.max_pending)
+        }
+    }
+
+    public func vibeCastOwnerState(shareID: String, sessionID: String, issuerEpoch: String,
+                                  expectedInstallationID: String, pairedLocalOrigin: URL?,
+                                  isCurrent: @escaping @MainActor @Sendable () -> Bool) async throws -> VibeCastOwnerState {
+        let context = try await displayOwnerContext(expectedInstallationID: expectedInstallationID,
+            pairedLocalOrigin: pairedLocalOrigin, isCurrent: isCurrent)
+        guard await isCurrent(), context.sessionID == sessionID, context.issuerEpoch == issuerEpoch,
+              context.shareID == shareID else { throw DJConnectError.invalidResponse }
+        let data = try await participationOwnerExchange("context", shareID: shareID, sessionID: sessionID, extra: [:], isCurrent: isCurrent)
+        let state = try decoder.decode(VibeCastOwnerState.self, from: data)
+        guard state.isValid else { throw DJConnectError.invalidResponse }
+        return state
+    }
+
+    public func setVibeCastLive(_ enabled: Bool, shareID: String, sessionID: String, issuerEpoch: String,
+                               expectedInstallationID: String, pairedLocalOrigin: URL?,
+                               isCurrent: @escaping @MainActor @Sendable () -> Bool) async throws -> VibeCastOwnerState {
+        let before = try await vibeCastOwnerState(shareID: shareID, sessionID: sessionID, issuerEpoch: issuerEpoch,
+            expectedInstallationID: expectedInstallationID, pairedLocalOrigin: pairedLocalOrigin, isCurrent: isCurrent)
+        if before.policy.information == enabled { return before }
+        let policy: [String: Any] = ["information": enabled, "requests": enabled ? "review" : "disabled",
+            "max_pending": before.policy.max_pending, "screen_focus": false]
+        _ = try await participationOwnerExchange("configure", shareID: shareID, sessionID: sessionID,
+            extra: ["policy": policy], isCurrent: isCurrent)
+        let after = try await vibeCastOwnerState(shareID: shareID, sessionID: sessionID, issuerEpoch: issuerEpoch,
+            expectedInstallationID: expectedInstallationID, pairedLocalOrigin: pairedLocalOrigin, isCurrent: isCurrent)
+        guard after.policy.information == enabled else { throw DJConnectError.invalidResponse }
+        return after
+    }
+
+    public func setVibeCastView(_ mode: String, dynamics: Double? = nil, shareID: String, sessionID: String, issuerEpoch: String,
+                               expectedInstallationID: String, pairedLocalOrigin: URL?,
+                               isCurrent: @escaping @MainActor @Sendable () -> Bool) async throws -> VibeCastOwnerState {
+        guard ["flow", "vibescape"].contains(mode), dynamics.map({ $0.isFinite && (0...1).contains($0) }) ?? true else { throw DJConnectError.invalidResponse }
+        let before = try await vibeCastOwnerState(shareID: shareID, sessionID: sessionID, issuerEpoch: issuerEpoch,
+            expectedInstallationID: expectedInstallationID, pairedLocalOrigin: pairedLocalOrigin, isCurrent: isCurrent)
+        if before.view.mode == mode && (dynamics.map({ $0 == before.view.dynamics }) ?? true) { return before }
+        var extra: [String: Any] = ["mode": mode]
+        if let dynamics { extra["dynamics"] = dynamics }
+        _ = try await participationOwnerExchange("presentation", shareID: shareID, sessionID: sessionID,
+            extra: extra, isCurrent: isCurrent)
+        let after = try await vibeCastOwnerState(shareID: shareID, sessionID: sessionID, issuerEpoch: issuerEpoch,
+            expectedInstallationID: expectedInstallationID, pairedLocalOrigin: pairedLocalOrigin, isCurrent: isCurrent)
+        guard after.view.mode == mode, dynamics.map({ $0 == after.view.dynamics }) ?? true else { throw DJConnectError.invalidResponse }
+        return after
+    }
+
+    private func participationOwnerExchange(_ action: String, shareID: String, sessionID: String, extra: [String: Any],
+                                            isCurrent: @escaping @MainActor @Sendable () -> Bool) async throws -> Data {
+        guard ["context", "configure", "presentation"].contains(action), [.ios, .macos].contains(identity.clientType),
+              DJConnectRendezvousQR.canonicalToken(shareID), !sessionID.isEmpty else { throw DJConnectError.invalidResponse }
+        let token = try loadedToken()
+        var request = try authenticatedRequest(path: "/api/djconnect/v1/participation/owner/" + action)
+        request.httpMethod = "POST"; request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: extra.merging(["contract_version": 1,
+            "identity": ["device_id": identity.deviceID, "client_type": identity.clientType.rawValue],
+            "session_id": sessionID, "share_id": shareID]) { _, binding in binding })
+        let data = try await sessionArtworkTransport.prepare(request, isCurrent: {
+            isCurrent() && (try? self.tokenStore.loadToken()) == token
+        })
+        guard await isCurrent(), try loadedToken() == token else { throw DJConnectError.invalidResponse }
+        return data
+    }
+
+    /// Explicit host intent: end this share, not playback or the owner's DJ Session.
+    public func endVibeCastShare(shareID: String, sessionID: String, issuerEpoch: String,
+                                expectedInstallationID: String, pairedLocalOrigin: URL?,
+                                isCurrent: @escaping @MainActor @Sendable () -> Bool) async throws {
+        let token = try loadedToken()
+        let current: @MainActor @Sendable () -> Bool = {
+            isCurrent() && (try? self.tokenStore.loadToken()) == token
+        }
+        let context = try await displayOwnerContext(expectedInstallationID: expectedInstallationID,
+            pairedLocalOrigin: pairedLocalOrigin, isCurrent: current)
+        guard await current(), context.sessionID == sessionID, context.issuerEpoch == issuerEpoch,
+              context.shareID == shareID, DJConnectRendezvousQR.canonicalToken(shareID) else { throw DJConnectError.invalidResponse }
+        let body = try JSONSerialization.data(withJSONObject: ["contract_version": 1,
+            "identity": ["device_id": identity.deviceID, "client_type": identity.clientType.rawValue],
+            "session_id": sessionID, "share_id": shareID])
+        let data = try await displayConsentExchange(path: "revoke", body: body, isCurrent: current)
+        struct Reply: Decodable { let success: Bool; let contract_version: Int }
+        let reply = try decoder.decode(Reply.self, from: data)
+        guard await current(), reply.success, reply.contract_version == 1 else { throw DJConnectError.invalidResponse }
+        let verified = try await displayOwnerContext(expectedInstallationID: expectedInstallationID,
+            pairedLocalOrigin: pairedLocalOrigin, isCurrent: current)
+        guard await current(), verified.sessionID == sessionID, verified.issuerEpoch == issuerEpoch,
+              verified.shareID != shareID else { throw DJConnectError.invalidResponse }
+    }
+
     func displayConsentExchange(path: String, body: Data,
                                 isCurrent: @escaping @MainActor @Sendable () -> Bool) async throws -> Data {
         guard ["resolve", "approve", "revoke"].contains(path), [.ios, .macos].contains(identity.clientType) else {
@@ -262,6 +370,27 @@ public final class DJConnectClient: Sendable {
         return consent
     }
 
+    /// A committed write receipt is not the current consent decision. The
+    /// independent read keeps a later withdrawal from authorizing first trust.
+    public struct WidgetPushConsentSuperseded: Error, Sendable {}
+    public func confirmWidgetPushConsent(enabled: Bool, operationID: UUID, expectedRevision: Int64,
+        isCurrent: @escaping @MainActor @Sendable () -> Bool) async throws -> WidgetPushConsent {
+        do {
+            _ = try await writeWidgetPushConsent(enabled: enabled, operationID: operationID,
+                expectedRevision: expectedRevision, isCurrent: isCurrent)
+        } catch DJConnectError.server(statusCode: 409, message: _) {
+            let observed = try await readWidgetPushConsent(isCurrent: isCurrent)
+            if observed.revision > expectedRevision { throw WidgetPushConsentSuperseded() }
+            throw DJConnectError.invalidResponse
+        }
+        let observed = try await readWidgetPushConsent(isCurrent: isCurrent)
+        guard observed.revision == expectedRevision + 1, observed.enabled == enabled else {
+            if observed.revision > expectedRevision { throw WidgetPushConsentSuperseded() }
+            throw DJConnectError.invalidResponse
+        }
+        return observed
+    }
+
     private static let maximumWidgetConsentRevision: Int64 = 9_007_199_254_740_991
 
     private func widgetPushConsentExchange(
@@ -302,7 +431,7 @@ public final class DJConnectClient: Sendable {
                 if case let .string(value)? = fields[key] { return value }
                 return ""
             }
-            let audience = "djc-native-push-ha-dev/1"
+            let audience = "djc-native-push/1"
             let operation = string("operation_id")
             let nonce = string("challenge_nonce")
             let encodedHash = string("client_data_hash_b64")
@@ -337,6 +466,12 @@ public final class DJConnectClient: Sendable {
             guard case let .string(generation)? = fields.removeValue(forKey: "registry_generation"),
                   generation.range(of: #"\A[A-Za-z0-9_-]{1,128}\z"#, options: .regularExpression) != nil else {
                 throw DJConnectError.invalidResponse
+            }
+            // Production verifier evidence bounds are DATA, not the original
+            // challenge lifetime or native clock/read permission.
+            for key in ["apple_evidence_expires_at_ms", "apple_status_expires_at_ms"] {
+                guard case let .integer(value)? = fields.removeValue(forKey: key),
+                      (1...9_007_199_254_740_991).contains(value) else { throw DJConnectError.invalidResponse }
             }
             var expected = receiptBindings.mapValues(RendezvousFlatJSON.Value.string)
             expected["contract_version"] = .integer(1)
@@ -374,48 +509,42 @@ public final class DJConnectClient: Sendable {
     public func registerWidgetFirstKey(
         _ challenge: WidgetFirstKeyChallenge, keyIdentifier: String, attestation: Data,
         isCurrent: @escaping @MainActor @Sendable () -> Bool
-    ) async throws {
+    ) async throws -> Data {
         guard let key = Data(base64Encoded: keyIdentifier), key.count == 32,
               key.base64EncodedString() == keyIdentifier, (1...16_384).contains(attestation.count) else {
             throw DJConnectError.invalidResponse
         }
-        try await widgetFirstKeyReceipt("register", challenge: challenge, proof: [
+        return try await widgetFirstKeyReceipt("register", challenge: challenge, proof: [
             "kind": "attestation", "key_id_b64": keyIdentifier, "proof_b64": attestation.base64EncodedString()
         ], isCurrent: isCurrent)
     }
 
     public func recoverWidgetFirstKey(
         _ challenge: WidgetFirstKeyChallenge, isCurrent: @escaping @MainActor @Sendable () -> Bool
-    ) async throws {
-        try await widgetFirstKeyReceipt("status", challenge: challenge, proof: nil, isCurrent: isCurrent)
+    ) async throws -> Data {
+        return try await widgetFirstKeyReceipt("status", challenge: challenge, proof: nil, isCurrent: isCurrent)
     }
 
-    private struct WidgetFirstKeyCheckpoint: Codable {
-        let challenge: WidgetFirstKeyChallenge
-        let keyIdentifier: String
-        var registered: Bool
-    }
+    @MainActor private static var widgetFirstKeyInFlight = false
 
-    @MainActor private static var widgetFirstKeyTrialInFlight = false
-
-    /// The HA-dev trial stores only local operation metadata. Once the
-    /// checkpoint exists, recovery uses status and never resubmits proof.
+    /// Ordinary first trust owns durable one-shot SDK phases. A checkpoint
+    /// supplies neither a new SDK original nor a surface/clock admission.
     @MainActor
-    public func enrollWidgetFirstKeyForTrial(
-        isCurrent: @escaping @MainActor @Sendable () -> Bool
+    public func enrollWidgetFirstKey(
+        sourceReference: String? = nil, isCurrent: @escaping @MainActor @Sendable () -> Bool
     ) async throws {
-        #if DEBUG && os(iOS) && !targetEnvironment(simulator) && canImport(DeviceCheck)
+        #if os(iOS) && !targetEnvironment(simulator) && canImport(DeviceCheck)
         let service = DCAppAttestService.shared
-        guard isCurrent(), service.isSupported, !Self.widgetFirstKeyTrialInFlight else {
+        guard isCurrent(), service.isSupported, !Self.widgetFirstKeyInFlight else {
             throw DJConnectError.invalidResponse
         }
-        Self.widgetFirstKeyTrialInFlight = true
-        defer { Self.widgetFirstKeyTrialInFlight = false }
+        Self.widgetFirstKeyInFlight = true
+        defer { Self.widgetFirstKeyInFlight = false }
         let token = try loadedToken()
         let binding = widgetPairingBinding(token: token)
         let directory = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
                                                      appropriateFor: nil, create: true)
-            .appendingPathComponent("DJConnectWidgetFirstKeyTrial-v1", isDirectory: true)
+            .appendingPathComponent("DJConnectWidgetFirstKey-v1", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         var excludedDirectory = directory
         var values = URLResourceValues()
@@ -425,55 +554,120 @@ public final class DJConnectClient: Sendable {
             .map { "\($0.utf8.count):\($0)" }.joined()
         let name = SHA256.hash(data: Data(scope.utf8)).map { String(format: "%02x", $0) }.joined()
         let journal = directory.appendingPathComponent(name)
-        func save(_ checkpoint: WidgetFirstKeyCheckpoint) throws {
-            try JSONEncoder().encode(checkpoint).write(to: journal, options: [.atomic, .completeFileProtection])
+        let ownerCurrent: @MainActor () -> Bool = {
+            isCurrent() && (try? self.widgetPairingBinding(token: self.loadedToken())) == binding
         }
-        let saved: Data?
-        do {
-            saved = try Data(contentsOf: journal)
-        } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
-            saved = nil
+        let hadOriginalJournal = FileManager.default.fileExists(atPath:journal.path)
+        let loadOriginal: () throws -> WidgetFirstKeyOperation.Record? = {
+            let bytes: Data
+            do { bytes = try Data(contentsOf:journal) }
+            catch let error as CocoaError where error.code == .fileReadNoSuchFile { return nil }
+            guard bytes.count <= 65536 else { throw DJConnectError.invalidResponse }
+            return try JSONDecoder().decode(WidgetFirstKeyOperation.Record.self,from:bytes)
         }
-        var checkpoint: WidgetFirstKeyCheckpoint
-        if let saved {
-            checkpoint = try JSONDecoder().decode(WidgetFirstKeyCheckpoint.self, from: saved)
-            guard checkpoint.challenge.pairingBinding == binding else { throw DJConnectError.invalidResponse }
-            if checkpoint.registered { return }
-            try await recoverWidgetFirstKey(checkpoint.challenge, isCurrent: isCurrent)
-        } else {
-            try await prepareWidgetFirstKey(isCurrent: isCurrent)
-            let challenge = try await requestWidgetFirstKeyChallenge(isCurrent: isCurrent)
-            func verifyCurrent() throws {
-                try Task.checkCancellation()
-                guard isCurrent(), challenge.isCurrent(), challenge.pairingBinding == binding,
-                      try widgetPairingBinding(token: loadedToken()) == binding else {
-                    throw DJConnectError.invalidResponse
-                }
+        let ports = WidgetFirstKeyOperation.Ports(load: {
+            let bytes: Data
+            do { bytes = try Data(contentsOf: journal) }
+            catch let error as CocoaError where error.code == .fileReadNoSuchFile { return nil }
+            guard bytes.count <= 65_536 else { throw DJConnectError.invalidResponse }
+            return try JSONDecoder().decode(WidgetFirstKeyOperation.Record.self, from: bytes)
+        }, save: { record in
+            let bytes = try JSONEncoder().encode(record)
+            guard bytes.count <= 65_536 else { throw DJConnectError.invalidResponse }
+            try bytes.write(to: journal, options: [.atomic, .completeFileProtection])
+        }, challenge: {
+            try await self.prepareWidgetFirstKey(isCurrent: isCurrent)
+            return try await self.requestWidgetFirstKeyChallenge(isCurrent: isCurrent)
+        }, ownerCurrent: ownerCurrent, current: { challenge in
+            ownerCurrent() && challenge.isCurrent() && challenge.pairingBinding == binding
+        }, generateKey: {
+            try await service.generateKey()
+        }, attestKey: { key, hash in
+            try await service.attestKey(key, clientDataHash: hash)
+        }, register: { challenge, key, proof in
+            try await self.registerWidgetFirstKey(challenge, keyIdentifier: key, attestation: proof, isCurrent: isCurrent)
+        }, status: { challenge in
+            try await self.recoverWidgetFirstKey(challenge, isCurrent: isCurrent)
+        })
+        // A previous genuine first-key receipt is only comparison DATA for a
+        // genuinely new assertion flow. Never replay first trust to re-enable.
+        if hadOriginalJournal, let original = try loadOriginal(), original.phase == .registered,
+           original.receipt != nil {
+            // The original 120s first-key challenge is deliberately NOT renewed
+            // or status-aliased here. The server owns the new role challenge.
+        } else { try await WidgetFirstKeyOperation.run(ports) }
+        if hadOriginalJournal {
+            guard let original = try loadOriginal(), original.phase == .registered,
+                  original.challenge.pairingBinding == binding, let receipt = original.receipt,
+                  let key = original.keyIdentifier, let sourceReference,
+                  sourceReference.range(of:#"\A[0-9a-f]{64}\z"#,options:.regularExpression) != nil else {
+                throw DJConnectError.invalidResponse
             }
-            try verifyCurrent()
-            let key = try await service.generateKey()
-            try verifyCurrent()
-            let attestation = try await service.attestKey(key, clientDataHash: challenge.clientDataHash)
-            try verifyCurrent()
-            checkpoint = .init(challenge: challenge, keyIdentifier: key, registered: false)
-            try save(checkpoint)
-            try await registerWidgetFirstKey(challenge, keyIdentifier: key, attestation: attestation,
-                                            isCurrent: isCurrent)
+            try original.challenge.validateReceipt(receipt)
+            let destination = directory.appendingPathComponent("reauthorization-" + sourceReference)
+            let load: () throws -> WidgetReauthorizationOperation.Record? = {
+                let bytes: Data
+                do { bytes = try Data(contentsOf:destination) }
+                catch let error as CocoaError where error.code == .fileReadNoSuchFile { return nil }
+                guard bytes.count <= 65536 else { throw DJConnectError.invalidResponse }
+                return try JSONDecoder().decode(WidgetReauthorizationOperation.Record.self,from:bytes)
+            }
+            let operation = try load()?.operationID ?? DJConnectOperationIdentity.uuidV7(milliseconds:Int(Date().timeIntervalSince1970*1000))
+            let reauth = WidgetReauthorizationOperation.Ports(load:load,save:{ record in
+                let bytes = try JSONEncoder().encode(record)
+                guard bytes.count <= 65536 else { throw DJConnectError.invalidResponse }
+                try bytes.write(to:destination,options:[.atomic,.completeFileProtection])
+            },ownerCurrent:ownerCurrent,current:{ ownerCurrent() && $0.isCurrent() },challenge:{
+                try await self.requestWidgetReauthorizationChallenge(operationID:operation,receipt:receipt,isCurrent:isCurrent)
+            },assertion:{ key,hash in
+                // Existing real key only: no generateKey or attestKey path.
+                try await service.generateAssertion(key,clientDataHash:hash)
+            },register:{ challenge,key,proof in
+                try await self.completeWidgetReauthorization("register",challenge:challenge,
+                    proof:["kind":"assertion","key_id_b64":key,"proof_b64":proof.base64EncodedString()],isCurrent:isCurrent)
+            },status:{ challenge in
+                try await self.completeWidgetReauthorization("status",challenge:challenge,proof:nil,isCurrent:isCurrent)
+            })
+            try await WidgetReauthorizationOperation.run(operationID:operation,key:key,receipt:receipt,ports:reauth)
         }
-        guard isCurrent(), try widgetPairingBinding(token: loadedToken()) == binding else {
-            throw DJConnectError.invalidResponse
-        }
-        checkpoint.registered = true
-        try save(checkpoint)
         #else
         throw DJConnectError.invalidResponse
         #endif
     }
 
+    @MainActor func requestWidgetReauthorizationChallenge(operationID: String, receipt: Data,
+        isCurrent: @escaping @MainActor @Sendable () -> Bool) async throws -> WidgetReauthorizationOperation.Challenge {
+        guard WidgetReauthorizationOperation.uuidV7(operationID), receipt.count <= 4096 else { throw DJConnectError.invalidResponse }
+        try DJConnectSurfacePushJSON.validate(receipt)
+        let object = try JSONSerialization.jsonObject(with:receipt)
+        let body = try WidgetReauthorizationOperation.canonical(["contract_version":1,"device_id":identity.deviceID,
+            "client_type":identity.clientType.rawValue,"operation_id":operationID,"first_key_receipt":object])
+        let started = ProcessInfo.processInfo.systemUptime
+        let data = try await widgetPairExchange(route:"challenge",body:body,reauthorization:true,isCurrent:isCurrent)
+        return try WidgetReauthorizationOperation.Challenge.parse(data,operationID:operationID,receipt:receipt,
+            nowMS:Int64(Date().timeIntervalSince1970*1000),requestedUptime:started,uptime:ProcessInfo.processInfo.systemUptime)
+    }
+    @MainActor private func completeWidgetReauthorization(_ action: String, challenge: WidgetReauthorizationOperation.Challenge,
+        proof: [String:String]?, isCurrent: @escaping @MainActor @Sendable () -> Bool) async throws {
+        guard ["register","status"].contains(action) else { throw DJConnectError.invalidResponse }
+        var object: [String:Any] = ["contract_version":1,"device_id":identity.deviceID,
+            "client_type":identity.clientType.rawValue,"operation_id":challenge.operationID]
+        if let proof {
+            guard action == "register", Set(proof.keys) == ["kind","key_id_b64","proof_b64"],proof["kind"] == "assertion",
+                  let encodedKey = proof["key_id_b64"], let key = Data(base64Encoded:encodedKey),key.count == 32,key.base64EncodedString() == encodedKey,
+                  let encodedProof = proof["proof_b64"],let bytes = Data(base64Encoded:encodedProof),(1...16384).contains(bytes.count),bytes.base64EncodedString() == encodedProof else { throw DJConnectError.invalidResponse }
+            object["apple_proof"] = proof
+        } else if action == "register" { throw DJConnectError.invalidResponse }
+        let current: @MainActor @Sendable () -> Bool = { isCurrent() && challenge.isCurrent() }
+        let data = try await widgetPairExchange(route:action,body:WidgetReauthorizationOperation.canonical(object),reauthorization:true,isCurrent:current)
+        let fields = try RendezvousFlatJSON.parse(data,maximumBytes:1024)
+        guard fields == ["contract_version":.integer(1),"operation_id":.string(challenge.operationID),"state":.string("ready")] else { throw DJConnectError.invalidResponse }
+    }
+
     private func widgetFirstKeyReceipt(
         _ action: String, challenge: WidgetFirstKeyChallenge, proof: [String: String]?,
         isCurrent: @escaping @MainActor @Sendable () -> Bool
-    ) async throws {
+    ) async throws -> Data {
         var payload: [String: Any] = ["contract_version": 1, "device_id": identity.deviceID,
                                       "client_type": identity.clientType.rawValue, "operation_id": challenge.operationID]
         if let proof { payload["apple_proof"] = proof }
@@ -484,6 +678,7 @@ public final class DJConnectClient: Sendable {
         let data = try await widgetPairExchange(route: "pair-witness/" + action, body: body,
                                                expectedPairing: challenge.pairingBinding, isCurrent: current)
         try challenge.validateReceipt(data)
+        return data
     }
 
     private func widgetFirstKeyIdentity() throws -> Data {
@@ -498,7 +693,7 @@ public final class DJConnectClient: Sendable {
     }
 
     private func widgetPairExchange(
-        route: String, body: Data?, expectedPairing: Data? = nil,
+        route: String, body: Data?, expectedPairing: Data? = nil, reauthorization: Bool = false,
         isCurrent: @escaping @MainActor @Sendable () -> Bool
     ) async throws -> Data {
         guard identity.clientType == .ios else { throw DJConnectError.invalidResponse }
@@ -506,7 +701,8 @@ public final class DJConnectClient: Sendable {
         if let expectedPairing, widgetPairingBinding(token: originalToken) != expectedPairing {
             throw DJConnectError.invalidResponse
         }
-        let url = try endpoint(path: Self.apiV1Path("push/native/" + route))
+        if reauthorization, !["challenge","register","status"].contains(route) { throw DJConnectError.invalidResponse }
+        let url = try endpoint(path: Self.apiV1Path((reauthorization ? "native/widget/reauthorize/" : "push/native/") + route))
         _ = try makeDJConnectIdentity(deviceToken: originalToken)
         var request = makeAuthenticatedRequest(url: url, token: originalToken)
         request.cachePolicy = .reloadIgnoringLocalCacheData
@@ -770,6 +966,20 @@ public final class DJConnectClient: Sendable {
         }
         let request = try vibeCastRequest(payload)
         return try await decodedResponse(for: request)
+    }
+
+    /// Existing paired owner read, transported by the platform's POST route.
+    /// This returns only the existing read-only legacy CAF capability.
+    public func legacyCastCapability(sessionID: String, isCurrent: @escaping @MainActor () -> Bool) async throws -> DJConnectLegacyCastContract.Capability {
+        guard await isCurrent(), !Task.isCancelled, !sessionID.isEmpty, sessionID.count <= 128,
+              DJConnectLegacyCastContract.origin(baseURL.absoluteString) != nil else { throw DJConnectLegacyCastContract.Error.scopeChanged }
+        let request = try jsonRequest(path: Self.apiV1Path("session/broadcast/token"),
+                                      payload: DJConnectSessionEndRequest(sessionID: sessionID))
+        let value: DJConnectLegacyCastContract.Capability = try await decodedResponse(for: request)
+        guard await isCurrent(), !Task.isCancelled, value.sessionID == sessionID else {
+            throw DJConnectLegacyCastContract.Error.scopeChanged
+        }
+        return value
     }
 
     public func startSession(_ payload: DJConnectSessionStartRequest) async throws -> DJConnectSessionResponse {
@@ -2364,7 +2574,7 @@ public final class DJConnectClient: Sendable {
 
     public func classify(statusCode: Int, body: Data? = nil, networkError: Error? = nil) -> DJConnectError? {
         if let networkError {
-            return .network(message: networkError.localizedDescription)
+            return .network(message: networkError.localizedDescription, code: (networkError as? URLError)?.code)
         }
 
         let envelope = body.flatMap { try? decoder.decode(DJConnectErrorEnvelope.self, from: $0) }
@@ -2543,7 +2753,7 @@ public final class DJConnectClient: Sendable {
                 throw CancellationError()
             }
             if !DJConnectHybridTransport.canReplayLegacy(request) { throw DJConnectHybridTransportError.deliveryUnknown }
-            throw DJConnectError.network(message: error.localizedDescription)
+            throw DJConnectError.network(message: error.localizedDescription, code: (error as? URLError)?.code)
         }
 
         return (data, response)
@@ -3342,6 +3552,24 @@ public extension DJConnectClient {
         })
     }
 
+    /// Prepares only Core's genuinely owned original Widget purpose. This
+    /// content-free ACK grants no clock, target, field, restore or SDK rights.
+    /// The caller starts its separate context operation with a NEW C0 afterward.
+    @MainActor public func prepareNativeWidgetSurface(sessionID: String, operationID: String,
+        isCurrent: @escaping @MainActor @Sendable () -> Bool) async throws {
+        guard identity.clientType == .ios, DJConnectSurfacePushCoordinate.identifier(sessionID),
+              operationID.range(of: "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", options: .regularExpression) != nil else {
+            throw DJConnectError.invalidResponse
+        }
+        let body: [String: Any] = ["contract_version": 1, "operation_id": operationID,
+            "device_id": identity.deviceID, "client_type": identity.clientType.rawValue, "session_id": sessionID]
+        let bytes = try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
+        let data = try await surfacePushPOST("widget/prepare", bytes: bytes, isCurrent: isCurrent)
+        let fields = try RendezvousFlatJSON.parse(data, maximumBytes: 4096)
+        guard fields == ["contract_version": .integer(1), "state": .string("prepared"),
+            "operation_id": .string(operationID), "session_id": .string(sessionID)] else { throw DJConnectError.invalidResponse }
+    }
+
     // Internal task-owner port; strict outer-v3 validation stays independent of
     // historical v1/v2 APIs. No fallback or new authority is created here.
     @MainActor func nativeSurfacePushV3POST(_ part: String, bytes: Data,
@@ -3365,7 +3593,7 @@ public extension DJConnectClient {
     }
     @MainActor private func surfacePushPOST(_ path: String, bytes: Data,
         isCurrent: @escaping @MainActor @Sendable () -> Bool) async throws -> Data {
-        guard ["context","register","revoke","status","retained-authorize"].contains(path),
+        guard ["context","register","revoke","status","retained-authorize","widget/prepare"].contains(path),
               isCurrent(), !Task.isCancelled else { throw CancellationError() }
         let originalToken = try loadedToken()
         var request = try authenticatedRequest(path:"/api/djconnect/v1/push/surface/" + path)

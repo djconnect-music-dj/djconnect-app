@@ -172,6 +172,7 @@ public struct DJConnectBroadcastState: Codable, Equatable, Sendable {
     public var sessionMedia: [DJConnectSessionMedia] = []
     public var nativeDelivery: DJConnectNativeMomentDelivery? = nil
         public var sessionForecast: DJConnectSessionForecast? = nil
+    public var horizonMoment: DJConnectHorizonMomentPreview? = nil
     public var djMoments: [DJConnectMoment] = []
     public var presentations: [DJConnectPresentation] = []
     public var playback: DJConnectSessionPlayback? = nil
@@ -188,6 +189,7 @@ public struct DJConnectBroadcastState: Codable, Equatable, Sendable {
         case sessionMedia = "session_media"
         case nativeDelivery = "native_delivery"
             case sessionForecast = "session_forecast"
+        case horizonMoment = "horizon_moment"
         case djMoments = "dj_moments", presentations, playback
         case delivery = "broadcast"
         case sessionFlow = "session_flow"
@@ -208,6 +210,7 @@ public struct DJConnectBroadcastState: Codable, Equatable, Sendable {
         sessionMedia = Array(((try? c.decode([LossyBroadcastValue<DJConnectSessionMedia>].self, forKey: .sessionMedia))?.compactMap(\.value) ?? []).prefix(64))
         nativeDelivery = try? c.decode(DJConnectNativeMomentDelivery.self, forKey: .nativeDelivery)
             sessionForecast = try? c.decode(DJConnectSessionForecast.self, forKey: .sessionForecast)
+        horizonMoment = try? c.decode(DJConnectHorizonMomentPreview.self, forKey: .horizonMoment)
         struct PrivateSpeech: Decodable { let schema_version: Int; let moments: [DJConnectOptionalSessionSpeech] }
         struct SpeechKey: CodingKey {
             let stringValue: String; let intValue: Int? = nil
@@ -240,6 +243,7 @@ public struct DJConnectSessionRuntime: Codable, Equatable, Sendable, Identifiabl
     public var startedAt: String
     public var planner: DJConnectPlannerRuntime
     public var broadcast: DJConnectBroadcastState
+    public var ownerProfileID: String? = nil
 
     public var id: String { sessionID }
 
@@ -254,6 +258,7 @@ public struct DJConnectSessionRuntime: Codable, Equatable, Sendable, Identifiabl
         case runtimeState = "runtime_state"
         case startedAt = "started_at"
         case planner, broadcast
+        case ownerProfileID = "owner_profile_id"
     }
 }
 
@@ -328,6 +333,7 @@ public struct DJConnectSessionBroadcastEvent: Codable, Equatable, Sendable {
         public var sessionMedia: [DJConnectSessionMedia] = []
         public var nativeDelivery: DJConnectNativeMomentDelivery? = nil
         public var sessionForecast: DJConnectSessionForecast? = nil
+        public var horizonMoment: DJConnectHorizonMomentPreview? = nil
         public var djMoment: DJConnectMoment? = nil
         public var presentation: DJConnectPresentation? = nil
         public var playback: DJConnectSessionPlayback? = nil
@@ -341,6 +347,7 @@ public struct DJConnectSessionBroadcastEvent: Codable, Equatable, Sendable {
             case sessionMedia = "session_media"
             case nativeDelivery = "native_delivery"
             case sessionForecast = "session_forecast"
+            case horizonMoment = "horizon_moment"
             case djMoment = "dj_moment"
             case sessionFlow = "session_flow"
         }
@@ -353,6 +360,7 @@ public struct DJConnectSessionBroadcastEvent: Codable, Equatable, Sendable {
             sessionMedia = Array(((try? c.decode([LossyBroadcastValue<DJConnectSessionMedia>].self, forKey: .sessionMedia))?.compactMap(\.value) ?? []).prefix(64))
             nativeDelivery = try? c.decode(DJConnectNativeMomentDelivery.self, forKey: .nativeDelivery)
             sessionForecast = try? c.decode(DJConnectSessionForecast.self, forKey: .sessionForecast)
+            horizonMoment = try? c.decode(DJConnectHorizonMomentPreview.self, forKey: .horizonMoment)
             djMoment = try? c.decode(DJConnectMoment.self, forKey: .djMoment)
             presentation = try? c.decode(DJConnectPresentation.self, forKey: .presentation)
             playback = try? c.decode(DJConnectSessionPlayback.self, forKey: .playback)
@@ -452,6 +460,7 @@ public extension DJConnectSessionRuntime {
         state.sessionMedia = broadcastEvent.payload.sessionMedia
         state.nativeDelivery = broadcastEvent.payload.nativeDelivery
         state.sessionForecast = broadcastEvent.payload.sessionForecast
+        state.horizonMoment = broadcastEvent.payload.horizonMoment
         if let sequence = broadcastEvent.deliverySequence { state.delivery = .init(snapshotWatermark: sequence) }
         if let playback = broadcastEvent.payload.playback { state.playback = playback }
         if let moment = broadcastEvent.payload.djMoment, moment.sessionID == sessionID,

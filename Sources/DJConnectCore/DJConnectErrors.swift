@@ -21,7 +21,7 @@ public enum DJConnectError: Error, Equatable, Sendable {
     case notConfigured(message: String?)
     case server(statusCode: Int, message: String?)
     case decodingFailed(statusCode: Int, endpoint: String, message: String?)
-    case network(message: String)
+    case network(message: String, code: URLError.Code? = nil)
     case invalidResponse
     case invalidConfiguration(String)
     case missingToken
@@ -321,6 +321,13 @@ struct DJConnectErrorEnvelope: Codable {
 }
 
 public extension DJConnectError {
+    /// Only typed connectivity interruptions qualify. Unknown, TLS and auth
+    /// failures never authorize keeping a protected read through this rule.
+    var isTransientConnectivityFailure: Bool {
+        guard case let .network(_, code) = self, let code else { return false }
+        return [.timedOut, .networkConnectionLost, .notConnectedToInternet, .cannotFindHost, .dnsLookupFailed].contains(code)
+    }
+
     /// These failures revoke the local Session projection, not the server Runtime.
     var invalidatesSessionAuthority: Bool {
         switch self {

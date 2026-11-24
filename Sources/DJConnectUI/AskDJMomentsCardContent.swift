@@ -59,7 +59,12 @@ struct AskDJMomentsCardContent: View {
                     .onChange(of: reading) { _, active in controller.hold(.reading, active, generation: generation) }
                     .frame(minHeight: 44)
             case .notice:
-                if controller.operationID != nil { Button(text("check_status")) { controller.checkStatus() }.frame(minHeight: 44) }
+                if controller.canChooseAgain {
+                    Button(text("choose")) { controller.chooseAgain() }
+                        .frame(minHeight: 44).accessibilityIdentifier("ask-moments-choose-again")
+                } else if controller.operationID != nil {
+                    Button(text("check_status")) { controller.checkStatus() }.frame(minHeight: 44)
+                }
             case .idle: EmptyView()
             }
             if let notice = controller.noticeText { Text(notice).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }

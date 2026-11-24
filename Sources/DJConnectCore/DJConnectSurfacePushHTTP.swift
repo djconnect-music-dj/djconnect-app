@@ -19,10 +19,13 @@ public struct DJConnectSurfacePushRequest: Sendable {
             : ["instance_id", "app_bundle_id", "activity_id", "attributes_type"]
         let consentFields: Set<String> = ["background_read", "os_snapshot_cache", "locked_display", "external_push_content", "allow_remote_start"]
         let version = osVersion.split(separator: ".").compactMap { Int($0) }
-        guard id(sessionID), id(identity.deviceID), identity.deviceID.hasPrefix(platform == "macos" ? "djconnect-macos-" : "djconnect-ios-"), let instance = target["instance_id"], id(instance),
+        guard id(sessionID), id(identity.deviceID), identity.deviceID.hasPrefix(platform == "watchos" ? "djconnect-watchos-" : platform == "macos" ? "djconnect-macos-" : "djconnect-ios-"), let instance = target["instance_id"], id(instance),
               operationID.range(of: "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", options: .regularExpression) != nil,
-              ["ios", "ipados", "macos"].contains(platform),
-              identity.clientType.rawValue == (platform == "macos" ? "macos" : "ios"),
+              ["ios", "ipados", "macos", "watchos"].contains(platform),
+              platform != "watchos" || (role == "widget" && target["app_bundle_id"] == "dev.djconnect.ios.watch" &&
+                target["extension_bundle_id"] == DJConnectWatchWidgetPushToken.extensionBundleID &&
+                target["widget_kind"] == DJConnectWatchWidgetPushToken.widgetKind),
+              identity.clientType.rawValue == (platform == "watchos" ? "watchos" : platform == "macos" ? "macos" : "ios"),
               osVersion.range(of: "^[1-9][0-9]?(?:\\.[0-9]{1,2}){1,2}$", options: .regularExpression) != nil,
               version.count >= 2, role == "widget" ? version[0] >= 26 :
                 (platform != "macos" && (version[0] > (platform == "ipados" ? 17 : 16) ||

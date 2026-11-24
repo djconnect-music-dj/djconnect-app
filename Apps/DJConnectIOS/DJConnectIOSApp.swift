@@ -3,6 +3,9 @@ import DJConnectUI
 import SwiftUI
 import UIKit
 import UserNotifications
+#if canImport(GoogleCast)
+@preconcurrency import GoogleCast
+#endif
 
 @main
 struct DJConnectIOSApp: App {
@@ -18,8 +21,23 @@ struct DJConnectIOSApp: App {
         _model = StateObject(wrappedValue: model)
     }
 
+    #if canImport(GoogleCast)
+    @MainActor private static let nativeCastContext: GCKCastContext = {
+        // Exactly once per process, before discovery or any secret handoff.
+        let logger = GCKLogger.sharedInstance()
+        logger.loggingEnabled = false; logger.fileLoggingEnabled = false; logger.consoleLoggingEnabled = false
+        GCKCastContext.setSharedInstanceWith(DJConnectGoogleCastSender.receiverOptions())
+        return GCKCastContext.sharedInstance()
+    }()
+    #endif
+
     private static func makeRegisteredModel() -> DJConnectAppModel {
         let model = makeModel()
+        #if canImport(GoogleCast)
+        if !model.isDemoMode && !ProcessInfo.processInfo.arguments.contains("--uitesting") {
+            model.attachLegacyCastSender(DJConnectGoogleCastSender(context: nativeCastContext))
+        }
+        #endif
         DJConnectSessionPlaybackIntentBridge.nextTrack = { [weak model] presentationID in
             await model?.skipTrackFromLiveActivity(presentationID: presentationID) ?? false
         }

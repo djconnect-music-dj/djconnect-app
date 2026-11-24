@@ -1352,6 +1352,7 @@ struct SessionTimelineScreen: View {
     private func currentHeader(_ session: DJConnectSessionRuntime) -> some View {
         VStack(alignment: .leading, spacing: djConnectSessionFlowSpacing) {
             SessionForYouCard(model: model)
+            SessionHorizonMomentCard(model: model, session: session)
             NativeSessionMomentsView(session: session, language: model.language,
             isRecovering: model.djSessionIsRecovering,
             isLiveUnavailable: model.djSessionLiveUnavailable,
@@ -1764,6 +1765,23 @@ struct SessionTimestampText: View {
 }
 
 
+/// Stable two-column card layout on iPad/Mac; compact phone cards keep their stack.
+struct SessionContributionColumns<Artwork: View, Detail: View>: View {
+    let horizontal: Bool
+    @ViewBuilder let artwork: () -> Artwork
+    @ViewBuilder let detail: () -> Detail
+    private var layout: AnyLayout {
+        horizontal ? AnyLayout(HStackLayout(alignment: .top, spacing: 16))
+            : AnyLayout(VStackLayout(alignment: .leading, spacing: 10))
+    }
+    var body: some View {
+        layout {
+            artwork()
+            detail().frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
 struct SessionEntryView: View, Equatable {
     @Environment(\.openURL) private var openURL
     let entry: DJConnectHistoryEntry
@@ -1839,10 +1857,14 @@ struct SessionEntryView: View, Equatable {
                 } else {
                     VStack(alignment: .leading, spacing: 10) {
                         if entry.momentType == "music_origin", let origin = entry.musicOrigin, origin.isValid {
-                            MusicOriginContentView(origin: origin, title: entry.title ?? "", story: entry.text ?? "", language: language,
-                                discover: opensActiveComposer ? artworkModel.map { model in
-                                    { discoverMusicOrigin(origin, sessionID: entry.sessionID, model: model, begin: askAction) }
-                                } : nil)
+                            SessionContributionColumns(horizontal: horizontalContribution) {
+                                if horizontalContribution { entryArtwork }
+                            } detail: {
+                                MusicOriginContentView(origin: origin, title: entry.title ?? "", story: entry.text ?? "", language: language,
+                                    discover: opensActiveComposer ? artworkModel.map { model in
+                                        { discoverMusicOrigin(origin, sessionID: entry.sessionID, model: model, begin: askAction) }
+                                    } : nil)
+                            }
                             Button(DJConnectLocalization.localized(key: "ui.live_impression.ask", language: language), action: askAction).frame(minHeight: 44)
                         } else if entry.momentType == "live_impression", let impression = entry.liveImpression,
                            impression.isValid, let model = artworkModel {
@@ -1851,25 +1873,17 @@ struct SessionEntryView: View, Equatable {
                                 sessionID: entry.sessionID, target: .entry(entry.id), model: model)
                             Button(DJConnectLocalization.localized(key: "ui.live_impression.ask", language: language), action: askAction)
                                 .frame(minHeight: 44)
-                        } else if horizontalPlayback {
-                            HStack(alignment: .top, spacing: 16) {
+                        } else if horizontalPlayback || horizontalContribution {
+                            SessionContributionColumns(horizontal: true) {
                                 entryArtwork
-                                playbackDescription
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            } detail: {
+                                if horizontalPlayback { playbackDescription }
+                                else { contributionDescription }
                             }
                             .padding(.trailing, replayAction != nil ? 88 : 40)
                         } else {
                             entryArtwork
-                            entryHeading
-                            HStack(alignment: .top, spacing: 12) {
-                                if let settingsConfirmationMood {
-                                    DJPersonaAvatarView(confirmedMood: settingsConfirmationMood, language: language)
-                                        .frame(width: 44, height: 44)
-                                        .accessibilityHidden(true)
-                                }
-                                SessionHighlightedText(text: entry.text ?? "", highlights: highlights).font(.title3)
-                                    .modifier(ContributionContentAction(question: contributionQuestion, action: contributionAction))
-                            }
+                            contributionDescription
                         }
                         SessionTimestampText(value: entry.occurredAt, language: language).font(.caption).foregroundStyle(.secondary)
                         if entry.momentType == "live_impression" {
@@ -1951,6 +1965,28 @@ struct SessionEntryView: View, Equatable {
         #else
         return true
         #endif
+    }
+    private var horizontalContribution: Bool {
+        guard entry.kind == .djMoment,
+              ["cover", "playback_thumbnail", "contextual_artist"].contains(entry.sessionMedia?.artwork.role ?? "") else { return false }
+        #if os(iOS)
+        return UIDevice.current.userInterfaceIdiom == .pad
+        #else
+        return true
+        #endif
+    }
+    private var contributionDescription: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            entryHeading
+            HStack(alignment: .top, spacing: 12) {
+                if let settingsConfirmationMood {
+                    DJPersonaAvatarView(confirmedMood: settingsConfirmationMood, language: language)
+                        .frame(width: 44, height: 44).accessibilityHidden(true)
+                }
+                SessionHighlightedText(text: entry.text ?? "", highlights: highlights).font(.title3)
+                    .modifier(ContributionContentAction(question: contributionQuestion, action: contributionAction))
+            }
+        }
     }
     @ViewBuilder private var entryArtwork: some View {
         if let media = entry.sessionMedia, let model = artworkModel {
@@ -3599,5 +3635,71 @@ private struct SessionTimelineAccessibility: ViewModifier {
         } else {
             content.accessibilityIdentifier(identifier)
         }
+    }
+}
+
+
+/// A transient owner preview. No Ask DJ context selection, speech or archive
+/// action can turn its preview identifier into a published Moment identifier.
+struct SessionHorizonMomentCard: View {
+    @ObservedObject var model: DJConnectAppModel
+    let session: DJConnectSessionRuntime
+    private func artworkURL(_ raw: String?) -> URL? {
+        guard let raw, let candidate = URL(string: raw), let parts = URLComponents(string: raw),
+              parts.user == nil, parts.password == nil, parts.query == nil, parts.fragment == nil,
+              ["/api/djconnect/v1/image_proxy/", "/api/djconnect/image_proxy/"].contains(where: parts.path.hasPrefix) else { return nil }
+        let origins = [model.homeAssistantURL, model.haLocalURL, model.haRemoteURL].compactMap { URL(string: $0) }
+        let absolute: URL
+        if let host = candidate.host {
+            guard origins.contains(where: { $0.host?.lowercased() == host.lowercased() && $0.scheme == candidate.scheme && $0.port == candidate.port }) else { return nil }
+            absolute = candidate
+        } else {
+            guard candidate.scheme == nil, let base = origins.first else { return nil }
+            absolute = URL(string: raw, relativeTo: base)!.absoluteURL
+        }
+        return model.resolvedArtworkURL(absolute)
+    }
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { clock in
+            if model.activeDJSession?.id == session.id, let preview = model.visibleHorizonMoment(at: clock.date) {
+                SessionHorizonMomentContent(preview: preview, mood: session.selectedMood, language: model.language,
+                    artworkURL: artworkURL(preview.track.artwork_url))
+            }
+        }
+    }
+}
+
+
+struct SessionHorizonMomentContent: View {
+    let preview: DJConnectHorizonMomentPreview
+    let mood: String
+    let language: String
+    let artworkURL: URL?
+    var body: some View {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 10) {
+                        DJPersonaAvatarView(confirmedMood: mood, language: language)
+                            .frame(width: 32, height: 32).accessibilityHidden(true)
+                        Text("Horizon").font(.headline)
+                    }
+                    HStack(alignment: .top, spacing: 16) {
+                        if let url = artworkURL {
+                            CachedArtworkImage(url: url, mode: .fit) { Color.clear }
+                                .frame(width: 84, height: 84).clipShape(RoundedRectangle(cornerRadius: 10))
+                                .djConnectBreathingArtwork()
+                        }
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(preview.track.title).font(.title3.bold())
+                            Text(preview.track.artist).foregroundStyle(.secondary)
+                            Text(preview.text).font(.title3).fixedSize(horizontal: false, vertical: true)
+                        }.frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    if let source = URL(string: preview.track.source_url) {
+                        SessionSpotifyAttributionLinks(urls: [source])
+                    }
+                }
+                .padding(20).frame(maxWidth: .infinity, alignment: .leading)
+                .djSessionFrostedSurface()
+                .accessibilityIdentifier("session-horizon-up-next")
     }
 }

@@ -85,7 +85,6 @@ import SwiftUI
         for width: CGFloat in [320, 900] {
             let content = VStack(alignment: .leading, spacing: 16) {
                 MusicOriginContentView(origin: origin, title: moment.title, story: moment.content, language: language, discover: {})
-                Text(DJConnectLocalization.localized(key: "ui.ask_dj.accuracy_notice", language: language)).font(.caption)
                 Text("Ask DJ").frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).padding(10).background(.white.opacity(0.12))
             }.padding(20).frame(width: width).foregroundStyle(.white).background(Color.indigo)
                 .environment(\.dynamicTypeSize, .accessibility2).environment(\.colorScheme, .dark)

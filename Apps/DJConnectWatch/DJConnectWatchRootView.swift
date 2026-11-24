@@ -71,6 +71,22 @@ private func playWatchHaptic(_ haptic: WKHapticType, enabled: Bool) {
     #endif
 }
 
+private struct WatchBreathingTrackArtwork: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var isVisible = false
+
+    func body(content: Content) -> some View {
+        let animates = isVisible && scenePhase == .active && !reduceMotion
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !animates)) { context in
+            let phase = (1 - cos(context.date.timeIntervalSinceReferenceDate * .pi / 3)) / 2
+            content.scaleEffect(animates ? 0.985 + 0.015 * phase : 1)
+        }
+        .onAppear { isVisible = true }
+        .onDisappear { isVisible = false }
+    }
+}
+
 private extension Color {
     init?(watchHex: String) {
         var raw = watchHex.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -3717,6 +3733,8 @@ private struct AskDJWatchActionPopover: View {
     @EnvironmentObject private var model: DJConnectWatchModel
     @State private var isPresented = false
     let offer: DJConnectWatchModel.LiveAnswerActions
+    var automaticallyPresentsOutputChoice = false
+    @State private var presentedAutomaticChoice = false
 
     var body: some View {
         TimelineView(.explicit([Date(), offer.expiresAt])) { _ in
@@ -3747,6 +3765,14 @@ private struct AskDJWatchActionPopover: View {
                     .watchStandardBackground()
                 }
             }
+        }
+        .task(id: offer.answerID) {
+            let actions = availableActions
+            guard automaticallyPresentsOutputChoice, !presentedAutomaticChoice,
+                  actions.contains(where: \.isOutputAction),
+                  !actions.contains(where: \.isActiveOutputAction) else { return }
+            presentedAutomaticChoice = true
+            isPresented = true
         }
     }
 
@@ -4582,7 +4608,8 @@ private struct DJConnectWatchCompanionPages: View {
         }
         .onChange(of: model.watchHomeOpenSequence) { _, _ in page = 0; flowPosition = 0; destination = nil }
         .onChange(of: model.watchMomentOpenIntent, initial: true) { _, intent in
-            if let intent { destination = .notification(intent) }
+            if let intent { page = 0; destination = .notification(intent) }
+            else if case .notification = destination { page = 0; destination = nil }
         }
         .onChange(of: demoSession?.id) { _, _ in
             page = 0; flowPosition = 0; destination = nil
@@ -5634,7 +5661,7 @@ private struct DJConnectWatchCompanionVoiceView: View {
                         if let binding = state.current()?.settings.binding,
                            let offer = model.answerActions(id: model.lastWatchVoiceAnswerID, binding: binding, sessionID: context.sessionID),
                            offer.text == reply {
-                            AskDJWatchActionPopover(offer: offer)
+                            AskDJWatchActionPopover(offer: offer, automaticallyPresentsOutputChoice: true)
                         }
                     }
                 } else if case .failed(let message) = model.voiceState {
@@ -5887,6 +5914,7 @@ private struct DJConnectWatchCompanionTrackView: View {
                 }
                 .frame(width: size.width, height: size.height)
                 .clipped()
+                .modifier(WatchBreathingTrackArtwork())
                 .overlay {
                     LinearGradient(stops: [.init(color: .black.opacity(0.48), location: 0),
                                            .init(color: .clear, location: 0.32)],

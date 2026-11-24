@@ -12,14 +12,16 @@ private actor MomentsControllerWire: DJConnectHybridWire {
     private var releaseOriginal = false
     private var lateStatus: CheckedContinuation<Void, Never>?
     private let lateFailure: Bool
+    private let terminalTemporary: Bool
     private(set) var lateStatusReturned = false
     private(set) var originalStarted = false
     private(set) var originalCancelled = false
     private(set) var requestCount = 0
     private(set) var cancelCount = 0
     private(set) var statusCount = 0
-    init(lateFailure: Bool) throws {
+    init(lateFailure: Bool, terminalTemporary: Bool = false) throws {
         self.lateFailure = lateFailure
+        self.terminalTemporary = terminalTemporary
         let url = try #require(askDJMomentsFixtureURL("producer-final"))
         let value = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
         // Shift the declared fixture's clock as one unit, without changing identity/content.
@@ -80,6 +82,12 @@ private actor MomentsControllerWire: DJConnectHybridWire {
         receipt["operation_id"] = originalID; receipt["operation_epoch"] = "fixture-boot"
         receipt["expires_at_ms"] = Int(Date().timeIntervalSince1970 * 1000)+300000
         accepted["operation_receipt"] = receipt
+        if terminalTemporary {
+            accepted["success"] = false; accepted["state"] = "temporarily_unavailable"
+            accepted["result"] = NSNull(); accepted["error"] = "declared_fixture_search_unavailable"
+            accepted["message"] = NSNull()
+            return (try data(accepted), 200)
+        }
         var result = try #require(accepted["result"] as? [String: Any])
         var moment = try #require(result["moment"] as? [String: Any])
         var provenance = try #require(moment["user_requested"] as? [String: Any]); provenance["operation_id"] = originalID
@@ -162,4 +170,35 @@ private actor MomentsControllerWire: DJConnectHybridWire {
     } else { owner = nil; controller.tick() }
     #expect(controller.currentResult == nil)
     #expect(controller.presentation.phase == .idle)
+}
+
+@Test @MainActor func momentsKnownTerminalSearchFailureCanChooseAgainWithoutResubmitting() async throws {
+    let wire = try MomentsControllerWire(lateFailure: false, terminalTemporary: true)
+    let identity = DJConnectIdentity(deviceID: "declared-controller-fixture", deviceName: "Fixture", clientType: .ios, firmware: "4.1.0", appVersion: "4.1.0", platform: .ios)
+    let store = DJConnectInMemoryTokenStore(token: "declared-fixture-token")
+    let url = try #require(URL(string: "https://paired.example"))
+    let hybrid = DJConnectHybridTransport(localURL: nil, remoteURL: url, expectedInstallID: "controller-fixture-install", identity: identity, tokenStore: store, wire: wire)
+    let client = DJConnectClient(baseURL: url, identity: identity, tokenStore: store, hybridTransport: hybrid)
+    let fixtureURL = try #require(askDJMomentsFixtureURL("producer-final"))
+    let fixtureData = try Data(contentsOf: fixtureURL)
+    let fixture = try #require(JSONSerialization.jsonObject(with: fixtureData) as? [String: Any])
+    let inventory = try JSONDecoder().decode(DJConnectAskDJMoments.Inventory.self, from: JSONSerialization.data(withJSONObject: try #require(fixture["inventory"])))
+    let scope = AskDJMomentsController.Scope(profileID: "declared-fixture-profile", sessionID: inventory.sessionID, binding: "fixture-binding", settingsGeneration: "fixture-generation", voiceRevision: "fixture-voice", historyEpoch: UUID(), connection: UUID(), revision: 1)
+    let controller = AskDJMomentsController(testClient: client, scope: { scope })
+    controller.open()
+    for _ in 0..<1000 { if controller.inventory != nil { break }; try await Task.sleep(for: .milliseconds(2)) }
+    controller.select(try #require(controller.inventory?.types.first { $0.typeID == "artist_story" }))
+    await wire.release()
+    for _ in 0..<1000 { if controller.canChooseAgain { break }; try await Task.sleep(for: .milliseconds(2)) }
+    #expect(controller.canChooseAgain && !controller.outcomeUnknown && controller.currentResult == nil)
+    let generation = controller.generation
+    controller.checkStatus()
+    for _ in 0..<10 { await Task.yield() }
+    #expect(await wire.statusCount == 0)
+    controller.chooseAgain()
+    for _ in 0..<1000 { if controller.inventory != nil { break }; try await Task.sleep(for: .milliseconds(2)) }
+    #expect(controller.generation != generation && controller.presentation.phase == .choosing)
+    #expect(controller.operationID == nil && !controller.canChooseAgain)
+    #expect(await wire.requestCount == 1)
+    controller.close()
 }

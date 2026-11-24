@@ -1,5 +1,33 @@
 import Foundation
 
+/// A display-only countdown bounded by both original request clocks. Not a grant.
+public struct DJConnectDisplayShareLifetime: Equatable, Sendable {
+    private let expiresAt: Date
+    private let admittedAt: Date
+    private let requestedUptime: TimeInterval
+    private let deadline: TimeInterval
+
+    public init?(context: DJConnectDisplayOwnerContext, requestedAt: Date, requestedUptime: TimeInterval) {
+        guard context.isAdmissible, let id = context.shareID,
+              DJConnectRendezvousQR.canonicalToken(id), (context.shareGeneration ?? 0) > 0,
+              requestedAt.timeIntervalSince1970.isFinite,
+              requestedUptime.isFinite, requestedUptime >= 0,
+              let text = context.expiresAt, let expiry = displayWireDate(text),
+              let remaining = context.expiresIn, remaining.isFinite, remaining > 0, remaining <= 28800,
+              expiry > requestedAt, expiry.timeIntervalSince(requestedAt) <= 28800 else { return nil }
+        let duration = min(remaining, expiry.timeIntervalSince(requestedAt))
+        expiresAt = requestedAt.addingTimeInterval(duration)
+        admittedAt = requestedAt; self.requestedUptime = requestedUptime
+        deadline = requestedUptime + duration
+    }
+
+    public func remainingSeconds(now: Date = Date(), uptime: TimeInterval = ProcessInfo.processInfo.systemUptime) -> TimeInterval? {
+        guard now.timeIntervalSince1970.isFinite, now >= admittedAt, now < expiresAt,
+              uptime.isFinite, uptime >= requestedUptime, uptime < deadline else { return nil }
+        return min(expiresAt.timeIntervalSince(now), deadline - uptime)
+    }
+}
+
 /// A destination supplied only by a current authenticated selected-HA response.
 /// This is routing information, never display/Session consent or a bearer grant.
 public struct DJConnectDisplayOwnerContext: Decodable, Equatable, Sendable {

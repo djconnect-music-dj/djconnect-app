@@ -8796,7 +8796,8 @@ func transportFallsBackFromLocalToRemoteAfterPairing(device: String) async throw
     let macBonjourServices = try #require(macPlist["NSBonjourServices"] as? [String])
 
     let supportedBonjourServices = ["_home-assistant._tcp.", "_googlecast._tcp"]
-    #expect(iOSBonjourServices.sorted() == supportedBonjourServices.sorted())
+    let supportedIOSBonjourServices = supportedBonjourServices + ["_8EA92910._googlecast._tcp"]
+    #expect(iOSBonjourServices.sorted() == supportedIOSBonjourServices.sorted())
     #expect(macBonjourServices.sorted() == supportedBonjourServices.sorted())
     #expect(String(describing: iOSPlist).contains("_djconnect") == false)
     #expect(String(describing: macPlist).contains("_djconnect") == false)

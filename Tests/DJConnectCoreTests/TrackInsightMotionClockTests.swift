@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import DJConnectCore
 @testable import DJConnectUI
 
 struct TrackInsightMotionClockTests {
@@ -33,6 +34,57 @@ struct TrackInsightMotionClockTests {
         #expect(clock.frame(at: 1001).travel == frozen.travel + 1)
     }
 
+    @Test func wholeTrackProgressDoesNotStopAtReadLeaseBoundaries() {
+        let start = Date(timeIntervalSince1970: 1000)
+        var playback = DJConnectPlayback(uri: "spotify:track:first", isPlaying: true,
+            trackName: "Same title", artistName: "Artist", progressMS: 0, durationMS: 90_000)
+        var anchor = TrackVibePlaybackAnchor()
+        anchor.update(from: playback, at: start)
+        for second in [14.0, 16, 30, 60, 90, 100] {
+            let phase = TrackVibePlaybackPhase(playback: playback, anchor: anchor, date: start.addingTimeInterval(second))
+            #expect(abs(phase.positionSeconds - min(second, 90)) < 0.001)
+            #expect(abs(phase.progress - min(second / 90, 1)) < 0.001)
+        }
+        playback.progressMS = 40_000; playback.isPlaying = false
+        anchor.update(from: playback, at: start.addingTimeInterval(40))
+        #expect(TrackVibePlaybackPhase(playback: playback, anchor: anchor, date: start.addingTimeInterval(60)).positionSeconds == 40)
+        playback.isPlaying = true
+        anchor.update(from: playback, at: start.addingTimeInterval(60))
+        #expect(TrackVibePlaybackPhase(playback: playback, anchor: anchor, date: start.addingTimeInterval(70)).positionSeconds == 50)
+        playback.progressMS = 5_000
+        anchor.update(from: playback, at: start.addingTimeInterval(70))
+        #expect(TrackVibePlaybackPhase(playback: playback, anchor: anchor, date: start.addingTimeInterval(71)).positionSeconds == 6)
+        playback.uri = "spotify:track:second"; playback.progressMS = 0
+        anchor.update(from: playback, at: start.addingTimeInterval(71))
+        #expect(TrackVibePlaybackPhase(playback: playback, anchor: anchor, date: start.addingTimeInterval(72)).positionSeconds == 1)
+    }
+
+    @Test func opaqueCaseSensitiveTrackChangeStartsItsOwnPlaybackAnchor() {
+        let start = Date(timeIntervalSince1970: 1000)
+        var playback = DJConnectPlayback(uri: "spotify:track:AAAAAAAAAAAAAAAAAAAAAA", isPlaying: true,
+            trackName: "Same title", artistName: "Artist", progressMS: 20_000, durationMS: 90_000)
+        var anchor = TrackVibePlaybackAnchor()
+        anchor.update(from: playback, at: start, uptime: 100)
+        playback.uri = "spotify:track:aAAAAAAAAAAAAAAAAAAAAA"
+        anchor.update(from: playback, at: start.addingTimeInterval(1), uptime: 101)
+        let phase = TrackVibePlaybackPhase(playback: playback, anchor: anchor,
+            date: start.addingTimeInterval(2), uptime: 102)
+        #expect(phase.positionSeconds == 21)
+    }
+
+    @Test func observedPlaybackProgressUsesMonotonicTimeDespiteWallClockCorrections() {
+        let start = Date(timeIntervalSince1970: 1000)
+        let playback = DJConnectPlayback(uri: "spotify:track:first", isPlaying: true,
+            trackName: "Track", artistName: "Artist", progressMS: 0, durationMS: 90_000)
+        var anchor = TrackVibePlaybackAnchor()
+        anchor.update(from: playback, at: start, uptime: 100)
+        for wallShift in [-600.0, 600] {
+            let phase = TrackVibePlaybackPhase(playback: playback, anchor: anchor,
+                date: start.addingTimeInterval(wallShift), uptime: 116)
+            #expect(phase.positionSeconds == 16)
+        }
+    }
+
     @Test func wrappedParticleIsInvisibleOnBothSidesOfSeam() {
         for seam in [-1000.0, 0, 1, 1000] {
             #expect(TrackInsightParticleWrap(seam).opacity == 0)
@@ -49,4 +101,22 @@ struct TrackInsightMotionClockTests {
         #expect(TrackInsightParticleWrap.populationOpacity(index: 8, population: 8.25) == 0.25)
         #expect(TrackInsightParticleWrap.populationOpacity(index: 8, population: 9) == 1)
     }
+}
+
+@Test(.isolatedClientResources) @MainActor func pausedTrackRetainsOnlyPresentationIdentityWhileAnalysisReadsStop() throws {
+    let suite = "insight-pause-" + UUID().uuidString
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let model = DJConnectAppModel(defaults: defaults, tokenStore: DJConnectInMemoryTokenStore(), startBackgroundTasks: false)
+    model.applyUITestRuntimeFixture("review_demo")
+    model.playback = DJConnectPlayback(uri: "spotify:track:AAAAAAAAAAAAAAAAAAAAAA", hasPlayback: true, isPlaying: false,
+        trackName: "Same title", artistName: "Artist", progressMS: 15_000, durationMS: 90_000)
+    #expect(model.trackInsightPlaybackPresentationID == "spotify:track:AAAAAAAAAAAAAAAAAAAAAA")
+    #expect(model.visibleTrackInsightPlaybackID == nil)
+    model.playback?.isPlaying = true
+    #expect(model.visibleTrackInsightPlaybackID == model.trackInsightPlaybackPresentationID)
+    model.playback?.uri = "spotify:track:BBBBBBBBBBBBBBBBBBBBBB"
+    #expect(model.trackInsightPlaybackPresentationID == "spotify:track:BBBBBBBBBBBBBBBBBBBBBB")
+    model.playback = nil
+    #expect(model.trackInsightPlaybackPresentationID == nil)
 }

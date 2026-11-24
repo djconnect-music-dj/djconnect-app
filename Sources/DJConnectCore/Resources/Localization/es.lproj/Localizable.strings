@@ -1477,7 +1477,7 @@
 "ui.displayConsent.instructions" = "Introduce el código de tu pantalla VibeCast. Buscar el código no comparte nada.";
 "ui.displayConsent.instructions_after_scan" = "O introduce el código de tu pantalla VibeCast. Buscar el código no comparte nada.";
 "ui.displayConsent.lookup" = "Buscar pantalla";
-"ui.displayConsent.create" = "¿Compartir solo tu DJ Session actual con esta pantalla durante dos horas?";
+"ui.displayConsent.create" = "¿Compartir solo tu DJ Session actual con esta pantalla durante cuatro horas?";
 "ui.displayConsent.existing" = "¿Permitir que esta pantalla use el permiso existente de tu Session actual sin prolongar su vencimiento?";
 "ui.displayConsent.confirm" = "Permitir esta pantalla";
 "ui.displayConsent.active_title" = "VibeCast está activo";
@@ -1874,3 +1874,55 @@
 "ui.canvas.state.image_provider_required" = "Configurar generador de imágenes";
 "ui.canvas.state.waiting_screen" = "Esperando pantalla";
 "ui.canvas.state.unavailable" = "Esperando pantalla o conexión";
+
+"ui.displayConsent.remaining" = "Tiempo de sesión restante: %@";
+
+"ui.live.join" = "Unirse a una sesión (modo invitado)";
+
+"ui.live.leave" = "Salir de la sesión de invitado";
+
+"ui.live.connected" = "Conectado a la sesión de invitado";
+
+"ui.live.not_connected" = "Sin conexión a una sesión de invitado";
+
+"ui.live.join_instructions" = "Escanea el código QR actual de la TV con la cámara del teléfono. Confirma aquí para unirte a VibeCast Live.";
+
+"ui.live.invitation_link" = "Enlace de invitación";
+
+"ui.live.open_invitation" = "Abrir invitación";
+
+"ui.live.invalid_invitation" = "Esta invitación no está disponible. Vuelve a escanear el código QR actual de la TV.";
+
+"ui.live.request_failed" = "No se pudo completar tu petición. No se ha vuelto a enviar.";
+
+"ui.live.request_playing" = "Está sonando tu canción solicitada: %@";
+
+"ui.live.help_title" = "Ayuda para invitados";
+
+"ui.live.help" = "Pide una canción o pregunta sobre la música. No puedes controlar la reproducción ni cambiar los ajustes del anfitrión. Tu conversación es temporal y desaparece al salir.";
+
+"ui.live.composer" = "Pregunta musical o petición de canción…";
+
+"ui.live.host_consent" = "Permite a los invitados unirse, preguntar sobre música y pedir canciones. Mantienes el control de la reproducción y los ajustes.";
+
+"ui.live.help_information_only" = "Pregunta sobre la música de esta sesión. El anfitrión no ha activado las peticiones. No puedes controlar la reproducción ni cambiar los ajustes. Tu conversación desaparece al salir.";
+
+"ui.live.composer_information_only" = "Pregunta sobre la música…";
+
+"ui.live.end_share" = "Finalizar la sesión VibeCast";
+
+"ui.live.react" = "Reaccionar a la canción actual";
+
+"ui.live.local_dynamics" = "Dinámica en este dispositivo";
+
+"ui.live.remote_control" = "Control remoto de VibeCast";
+
+"ui.live.tv_view" = "Vista de la TV";
+
+"ui.vibecast.cast.stop" = "Detener VibeCast en esta pantalla";
+"ui.vibecast.cast.confirm_again" = "Selecciona de nuevo tu pantalla para confirmar la conexión.";
+"ui.vibecast.cast.connecting" = "Conectando con tu pantalla…";
+"ui.vibecast.cast.presenting" = "La pantalla indica que VibeCast se está mostrando.";
+"ui.vibecast.cast.waiting" = "Esperando confirmación de la pantalla…";
+"ui.vibecast.cast.failed" = "No se pudo conectar. Inténtalo de nuevo.";
+"ui.vibecast.cast.choose" = "Elige tu pantalla Google Cast.";

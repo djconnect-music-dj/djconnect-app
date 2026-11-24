@@ -858,6 +858,17 @@ struct DJConnectLocalAudioRoute: Equatable, Sendable {
 
 @MainActor
 public final class DJConnectAppModel: ObservableObject {
+    @Published var isShowingGuestJoin = false
+    @Published private(set) var isPresentingLiveGuest = false
+    func liveGuestPresentationDidChange(_ presented: Bool) {
+        guard isPresentingLiveGuest != presented else { return }
+        isPresentingLiveGuest = presented
+        if presented {
+            retireWidgetFirstKeyTask()
+            suspendLegacyCastObservation()
+            nativeWidgetPushOwner.withdrawLocally(); nativeActivityPushOwner.withdrawLocally()
+        }
+    }
     // View-lifetime presentation only. Never a Profile/defaults/cache field.
     @Published var isShowingVibeScape = false {
         didSet {
@@ -888,6 +899,115 @@ public final class DJConnectAppModel: ObservableObject {
 
     @Published private(set) var displayConsentState: DJConnectDisplayConsentSession.State = .idle
     @Published private(set) var displayConsentExistingShare: DJConnectDisplayConsentSession.ExistingShare?
+    @Published public private(set) var legacyCastDevices: [DJConnectLegacyCastDevice] = []
+    @Published public private(set) var legacyCastState: DJConnectLegacyCastState = .idle
+    @Published public private(set) var legacyCastNeedsConfirmation = false
+    @Published public private(set) var legacyCastConnectingDeviceID: String?
+    private var legacyCastSender: (any DJConnectLegacyCastSending)?
+    private var legacyCastTask: Task<Void, Never>?
+    private var legacyCastOperation = UUID()
+    private struct LegacyCastScope {
+        let installation: String
+        let pairing: [String]
+        let session: String
+        let profile: String
+    }
+    private var legacyCastScope: LegacyCastScope?
+
+    public func attachLegacyCastSender(_ sender: any DJConnectLegacyCastSending) {
+        guard legacyCastSender == nil else { return }
+        legacyCastSender = sender
+        sender.onChange = { [weak self, weak sender] in
+            guard let self, let sender else { return }
+            self.legacyCastDevices = sender.devices
+            self.legacyCastState = sender.state
+        }
+    }
+    private var legacyCastPairing: [String] {
+        [haLocalURL, haRemoteURL, defaults.string(forKey: haInstallIDKey) ?? "",
+         (try? tokenStore.loadToken()) ?? "", identity.deviceID, identity.clientType.rawValue]
+    }
+    public var canConnectLegacyCast: Bool { legacyCastSender != nil && canResolveDisplayConsent }
+    public func startLegacyCastDiscovery() {
+        guard canConnectLegacyCast else { return }
+        legacyCastSender?.startDiscovery()
+    }
+    public func stopLegacyCastDiscovery() { legacyCastSender?.stopDiscovery() }
+    private func suspendLegacyCastObservation() {
+        guard legacyCastScope != nil || legacyCastTask != nil else { return }
+        legacyCastOperation = UUID(); legacyCastTask?.cancel(); legacyCastTask = nil
+        legacyCastConnectingDeviceID = nil
+        legacyCastNeedsConfirmation = true
+        legacyCastSender?.suspendObservation()
+    }
+    public func stopLegacyCast() {
+        legacyCastOperation = UUID(); legacyCastTask?.cancel(); legacyCastTask = nil
+        legacyCastScope = nil; legacyCastConnectingDeviceID = nil; legacyCastNeedsConfirmation = false
+        legacyCastSender?.stopView()
+    }
+    private func reconcileLegacyCastScope() {
+        guard let scope = legacyCastScope else { return }
+        // A suspended history is unknown, not a new owner. It may keep the old
+        // withdrawal handle, but can never authorize a new token or status.
+        if pairingStatus != .paired || legacyCastPairing != scope.pairing ||
+            defaults.string(forKey: haInstallIDKey) != scope.installation ||
+            activeDJSession?.id != scope.session || activeDJSession?.runtimeState != "active" ||
+            sessionHistory.authorizedProfileID.map({ $0 != scope.profile }) == true {
+            stopLegacyCast()
+        }
+    }
+    public func connectLegacyCast(deviceID: String) {
+        guard canConnectLegacyCast, legacyCastTask == nil, let sender = legacyCastSender,
+              sender.devices.contains(where: { $0.id == deviceID }),
+              let destination = captureDisplayConsentDestination() else { return }
+        let client: DJConnectClient
+        do { client = try displayOwnerClient() } catch { legacyCastState = .failed; return }
+        guard DJConnectLegacyCastContract.origin(client.baseURL.absoluteString) != nil else {
+            legacyCastState = .failed; return
+        }
+        let operation = UUID(), epoch = sessionHistory.responseEpoch
+        let pairing = legacyCastPairing
+        let scope = LegacyCastScope(installation: destination.installation, pairing: pairing,
+                                    session: destination.session.id, profile: destination.profile)
+        legacyCastOperation = operation; legacyCastScope = scope
+        legacyCastConnectingDeviceID = deviceID; legacyCastNeedsConfirmation = false
+        let current: @MainActor () -> Bool = { [weak self] in
+            guard let self else { return false }
+            return self.legacyCastOperation == operation && !self.isDemoMode && !self.isPresentingLiveGuest && self.isAppInForeground &&
+                self.pairingStatus == .paired && self.legacyCastPairing == pairing &&
+                self.activeDJSession?.id == scope.session && self.activeDJSession?.runtimeState == "active" &&
+                self.sessionHistory.responseEpoch == epoch && self.sessionHistory.authorizedProfileID == scope.profile
+        }
+        var capabilityReadStarted = false
+        legacyCastTask = Task { [weak self] in
+            guard let self else { return }
+            defer { if self.legacyCastOperation == operation { self.legacyCastTask = nil; self.legacyCastConnectingDeviceID = nil } }
+            do {
+                let owner = try DJConnectLegacyCastOwner(sessionID: scope.session, haOrigin: client.baseURL.absoluteString,
+                    isCurrent: current, capability: {
+                        // One existing owner-authorized token read per explicit
+                        // connect; no ambient route fallback or application retry.
+                        guard !capabilityReadStarted, current() else { throw DJConnectLegacyCastContract.Error.scopeChanged }
+                        capabilityReadStarted = true
+                        return try await client.legacyCastCapability(sessionID: scope.session, isCurrent: current)
+                    })
+                try await sender.connect(to: deviceID, owner: owner)
+                guard current() else { return }
+                self.legacyCastState = sender.state
+            } catch {
+                if self.legacyCastOperation == operation { self.legacyCastState = .failed }
+            }
+        }
+    }
+
+    @Published var vibeCastLiveEnabled = false
+    @Published private var storedVibeCastRemoteState: DJConnectClient.VibeCastOwnerState?
+    @Published private(set) var isUpdatingVibeCastRemote = false
+    private var vibeCastRemoteScope: VibeCastStatusScope?
+    var vibeCastRemoteState: DJConnectClient.VibeCastOwnerState? {
+        vibeCastRemoteScope == vibeCastStatusScope && isVibeCastSharing ? storedVibeCastRemoteState : nil
+    }
+    @Published private var liveDisplayShareLifetime: DJConnectDisplayShareLifetime?
     private var displayConsentFlow: DJConnectDisplayConsentSession?
     private var displayConsentOperation = UUID()
     private var displayConsentOwner: (@MainActor @Sendable () -> Bool)?
@@ -926,6 +1046,12 @@ public final class DJConnectAppModel: ObservableObject {
     var vibeCastScreenSlot: DJConnectDisplayOwnerContext.ScreenSlot? { currentDisplayObservation?.screenSlot }
     var vibeCastStopTarget: DJConnectDisplayOwnerContext.Display? {
         vibeCastScreenSlot?.display ?? liveVibeCastDisplays?.first
+    }
+    var vibeCastShareRemainingSeconds: TimeInterval? {
+        guard isVibeCastSharing else { return nil }
+        if let receipt = displayConsentFlow?.receipt { return receipt.remainingSeconds }
+        guard liveDisplayScope == vibeCastStatusScope else { return nil }
+        return liveDisplayShareLifetime?.remainingSeconds()
     }
 
     var usesLegacyVibeCastStatus: Bool {
@@ -967,16 +1093,20 @@ public final class DJConnectAppModel: ObservableObject {
             self?.liveDisplayRequest == request && self?.vibeCastStatusScope == scope
         }
         do {
+            let requestedAt = Date(), requestedUptime = ProcessInfo.processInfo.systemUptime
             let context = try await displayOwnerClient().displayOwnerContext(
                 expectedInstallationID: scope.installationID,
                 pairedLocalOrigin: Self.normalizedHomeAssistantURL(from: localHomeAssistantURL()),
                 isCurrent: current)
             guard current(), !Task.isCancelled else { return }
+            liveDisplayShareLifetime = context.sessionID == scope.sessionID
+                ? DJConnectDisplayShareLifetime(context: context, requestedAt: requestedAt, requestedUptime: requestedUptime) : nil
             adoptLiveVibeCastDisplayContext(context, scope: scope)
         } catch {
             guard current(), !Task.isCancelled else { return }
             acceptedDisplayObservation = nil
             legacyDisplayStatus = false
+            liveDisplayShareLifetime = nil
         }
     }
 
@@ -1043,7 +1173,7 @@ public final class DJConnectAppModel: ObservableObject {
     }
 
     var canResolveDisplayConsent: Bool {
-        !isDemoMode && [.ios, .macos].contains(identity.clientType) && pairingStatus == .paired && isAppInForeground &&
+        !isDemoMode && !isPresentingLiveGuest && [.ios, .macos].contains(identity.clientType) && pairingStatus == .paired && isAppInForeground &&
             activeDJSession?.runtimeState == "active" && sessionHistory.authorizedProfileID != nil
     }
     var isVibeCastSharing: Bool {
@@ -1070,7 +1200,8 @@ public final class DJConnectAppModel: ObservableObject {
 
     func prepareDisplayConsentPresentation() {
         refreshDisplayConsentPresentation()
-        if !blocksVibeCastScreenSelection { resetDisplayConsent() }
+        if !blocksVibeCastScreenSelection { vibeCastLiveEnabled = false; resetDisplayConsent() }
+        Task { await refreshVibeCastRemote() }
     }
 
     func dismissDisplayConsentPresentation() {
@@ -1157,11 +1288,15 @@ public final class DJConnectAppModel: ObservableObject {
         let operation = displayConsentOperation
         let share: DJConnectDisplayClaim.Share = displayConsentExistingShare.map {
             .existing(id: $0.identifier, generation: $0.generation)
-        } ?? .createTwoHours
+        } ?? .createFourHours
         liveDisplayRequest = UUID()
         acceptedDisplayObservation = nil
         displayConsentState = .approving
-        do { _ = try await flow.approve(share: share) } catch { }
+        do {
+            _ = try await flow.approve(share: share,
+                language: displayConsentExistingShare == nil ? DJConnectLocalization.supportedLanguageCode(language) : nil,
+                live: displayConsentExistingShare == nil ? vibeCastLiveEnabled : nil)
+        } catch { }
         guard displayConsentOperation == operation else { return }
         displayConsentState = flow.state
         refreshDisplayConsentPresentation()
@@ -1174,6 +1309,84 @@ public final class DJConnectAppModel: ObservableObject {
         do { try await flow.revokeDisplay() } catch { }
         guard displayConsentOperation == operation else { return }
         displayConsentState = flow.state
+    }
+
+    func endVibeCastShare() async {
+        guard !stoppingLiveDisplay, let scope = vibeCastStatusScope,
+              let shareID = vibeCastStopTarget?.shareID ?? displayConsentFlow?.receipt?.shareID,
+              let issuer = currentDisplayObservation?.issuerEpoch ?? displayConsentFlow?.resolvedClaim?.issuerEpoch else { return }
+        stoppingLiveDisplay = true
+        let request = UUID(); liveDisplayRequest = request
+        let current: @MainActor @Sendable () -> Bool = { [weak self] in
+            self?.liveDisplayRequest == request && self?.vibeCastStatusScope == scope
+        }
+        do {
+            try await displayOwnerClient().endVibeCastShare(shareID: shareID, sessionID: scope.sessionID, issuerEpoch: issuer,
+                expectedInstallationID: scope.installationID,
+                pairedLocalOrigin: Self.normalizedHomeAssistantURL(from: localHomeAssistantURL()), isCurrent: current)
+            guard current() else { stoppingLiveDisplay = false; return }
+            cancelDisplayConsent(); displayConsentState = .revoked
+            acceptedDisplayObservation = nil; liveDisplayShareLifetime = nil
+        } catch {
+            if current() { displayConsentState = .revokeUncertain }
+        }
+        stoppingLiveDisplay = false
+        if current() { await refreshLiveVibeCastDisplays(scope: scope) }
+    }
+
+    private var observedHostVibeScapeDynamics: (sessionID: String, epoch: UUID, value: Double)?
+    func observeHostVibeScapeDynamics(_ value: Float, sessionID: String, epoch: UUID) {
+        guard value.isFinite, (0...1).contains(value), activeDJSession?.id == sessionID,
+              sessionHistory.responseEpoch == epoch else { return }
+        observedHostVibeScapeDynamics = (sessionID, epoch, Double(value))
+    }
+    func clearHostVibeScapeDynamics(sessionID: String, epoch: UUID) {
+        if observedHostVibeScapeDynamics?.sessionID == sessionID && observedHostVibeScapeDynamics?.epoch == epoch {
+            observedHostVibeScapeDynamics = nil
+        }
+    }
+    func commitHostVibeScapeDynamics(_ value: Float, sessionID: String, epoch: UUID) {
+        observeHostVibeScapeDynamics(value, sessionID: sessionID, epoch: epoch)
+        guard value.isFinite, (0...1).contains(value), isVibeCastSharing else { return }
+        Task {
+            guard activeDJSession?.id == sessionID, sessionHistory.responseEpoch == epoch else { return }
+            await refreshVibeCastRemote(dynamics: Double(value))
+        }
+    }
+    func refreshVibeCastRemote(live: Bool? = nil, mode: String? = nil, dynamics: Double? = nil) async {
+        guard !isUpdatingVibeCastRemote, !stoppingLiveDisplay, let scope = vibeCastStatusScope,
+              let shareID = vibeCastStopTarget?.shareID ?? displayConsentFlow?.receipt?.shareID,
+              let issuer = currentDisplayObservation?.issuerEpoch ?? displayConsentFlow?.resolvedClaim?.issuerEpoch else { return }
+        isUpdatingVibeCastRemote = true
+        defer { isUpdatingVibeCastRemote = false }
+        let current: @MainActor @Sendable () -> Bool = { [weak self] in
+            guard let self else { return false }
+            return self.vibeCastStatusScope == scope && !self.stoppingLiveDisplay &&
+                (self.vibeCastStopTarget?.shareID ?? self.displayConsentFlow?.receipt?.shareID) == shareID
+        }
+        do {
+            let client = try displayOwnerClient()
+            let origin = Self.normalizedHomeAssistantURL(from: localHomeAssistantURL())
+            let response: DJConnectClient.VibeCastOwnerState
+            if let live {
+                response = try await client.setVibeCastLive(live, shareID: shareID, sessionID: scope.sessionID,
+                    issuerEpoch: issuer, expectedInstallationID: scope.installationID, pairedLocalOrigin: origin, isCurrent: current)
+            } else if mode != nil || dynamics != nil {
+                let currentState = try await client.vibeCastOwnerState(shareID: shareID, sessionID: scope.sessionID,
+                    issuerEpoch: issuer, expectedInstallationID: scope.installationID, pairedLocalOrigin: origin, isCurrent: current)
+                let actualVisitDynamics = observedHostVibeScapeDynamics.flatMap { $0.sessionID == scope.sessionID && $0.epoch == sessionHistory.responseEpoch ? $0.value : nil }
+                response = try await client.setVibeCastView(mode ?? currentState.view.mode,
+                    dynamics: dynamics ?? actualVisitDynamics, shareID: shareID, sessionID: scope.sessionID,
+                    issuerEpoch: issuer, expectedInstallationID: scope.installationID, pairedLocalOrigin: origin, isCurrent: current)
+            } else {
+                response = try await client.vibeCastOwnerState(shareID: shareID, sessionID: scope.sessionID,
+                    issuerEpoch: issuer, expectedInstallationID: scope.installationID, pairedLocalOrigin: origin, isCurrent: current)
+            }
+            guard current() else { return }
+            vibeCastRemoteScope = scope; storedVibeCastRemoteState = response
+        } catch {
+            if current() { storedVibeCastRemoteState = nil }
+        }
     }
     func openVibeCastDestinationPicker() {
         refreshDisplayConsentPresentation()
@@ -1465,11 +1678,18 @@ public final class DJConnectAppModel: ObservableObject {
         var expectedRevision: Int64?
         var confirmed = false
     }
-    private static let widgetConsentIntentKey = "DJConnectWidgetConsentTrial.v1"
+    private static let widgetConsentIntentKey = "DJConnectWidgetConsent.v1"
     @Published private var widgetConsentIntent: WidgetConsentIntent?
     private var widgetConsentTask: Task<Void, Never>?
+    private var widgetFirstKeyTask: Task<Void, Never>?
+    private var widgetFirstKeyTaskOperation: String?
+    private var widgetFirstKeyTaskGeneration = UUID()
     private var widgetConsentRetryAfter: Date?
     private var confirmedWidgetConsent: UUID?
+    private var completedWidgetFirstKeyOperation: String? // Actual current-process ACK only; never an admission.
+    private var widgetLastAcceptedServerSessionScope: String?
+    private var queuedWidgetEnableIntent: WidgetConsentIntent?
+    private static let widgetReenableIntentKey = "DJConnectWidgetConsentReenable.v1"
     private let nativeWidgetRegistrationInstance = UUID().uuidString
     private var passiveSurfaceObservation: AnyCancellable?
     public let profileDJSettings = ProfileDJSettingsModel()
@@ -1703,7 +1923,7 @@ public final class DJConnectAppModel: ObservableObject {
     }
     @Published public var pairingStatus: DJConnectPairingStatus = .unpaired {
         didSet {
-            if pairingStatus != .paired { retireDirectSessionRuntimes() }
+            if pairingStatus != .paired { retireDirectSessionRuntimes(); stopLegacyCast() }
             if oldValue != pairingStatus { askDJHelpRuntimeGeneration = UUID(); cancelRendezvous() }
             if startBackgroundTasks, oldValue != .paired, pairingStatus == .paired {
                 schedulePairedRefresh(reason: "Pairing became online")
@@ -1803,6 +2023,8 @@ public final class DJConnectAppModel: ObservableObject {
         didSet {
             sessionStartup.reconcile()
             sessionForYou.reconcile()
+            reconcileLegacyCastScope()
+            if activeDJSession == nil { widgetLastAcceptedServerSessionScope = nil }
             reconcileDirectSessionRuntimes()
             let helpNow = Date()
             reconcileSessionHelpTransition(from: oldValue, at: helpNow)
@@ -1837,6 +2059,7 @@ public final class DJConnectAppModel: ObservableObject {
     private func reconcileSessionAuthorityTransition(from oldValue: DJConnectSessionRuntime?) {
         if oldValue?.id != activeDJSession?.id ||
             (oldValue?.runtimeState == "active" && activeDJSession?.runtimeState != "active") {
+            clearHorizonMomentReceipt(includingPins: true)
             cancelDisplayConsent()
             stopResponsePlayback(clearText: false)
             resetActivePersonaState()
@@ -1959,14 +2182,17 @@ public final class DJConnectAppModel: ObservableObject {
 
     /// Shared read/presentation admission; retry must not advertise an operation
     /// that the current owner or runtime cannot perform.
-    var canRefreshSessionForecast: Bool {
+    private var forecastPreservedTransportScope: ForecastReadContext?
+    private var hasSessionForecastOwner: Bool {
         canRefreshSessionHistory && isRuntimeCompatible && sessionHistory.hasAuthorizedOwner &&
-            !djSessionIsRecovering && !djSessionLiveUnavailable && haConnectionMode != .offline &&
-            activeDJSession?.runtimeState == "active"
+            !djSessionIsRecovering && !djSessionLiveUnavailable && activeDJSession?.runtimeState == "active"
     }
+    var canRefreshSessionForecast: Bool { hasSessionForecastOwner && haConnectionMode != .offline }
 
     public func visibleSessionForecast(at date: Date) -> DJConnectSessionForecast? {
-        guard canRefreshSessionForecast, let session = activeDJSession, forecastAvailable,
+        guard hasSessionForecastOwner, let session = activeDJSession, forecastAvailable,
+              haConnectionMode != .offline || forecastPreservedTransportScope == ForecastReadContext(
+                scope: ForecastScope(session), ownerEpoch: sessionHistory.responseEpoch, authority: forecastAuthorityGeneration),
               forecastEpoch == sessionHistory.responseEpoch,
               forecastCursor?.sessionID == session.id, forecastScope == ForecastScope(session) else { return nil }
         if forecastCursor?.projection?.current_anchor != nil && session.broadcast.playback?.state != "playing" { return nil }
@@ -2001,10 +2227,21 @@ public final class DJConnectAppModel: ObservableObject {
                   canRefreshSessionHistory, !djSessionIsRecovering, !djSessionLiveUnavailable,
                   readContext.authority == forecastAuthorityGeneration,
                   activeDJSession.map(ForecastScope.init) == scope else { return }
+            forecastPreservedTransportScope = nil
             acceptSessionForecast(projection)
         } catch {
             if Task.isCancelled || error is CancellationError || (error as? URLError)?.code == .cancelled { return }
             guard generation == forecastGeneration, epoch == sessionHistory.responseEpoch else { return }
+            if (error as? DJConnectError)?.isTransientConnectivityFailure == true,
+               readContext.authority == forecastAuthorityGeneration,
+               forecastEpoch == epoch, activeDJSession.map(ForecastScope.init) == scope,
+               hasSessionForecastOwner {
+                forecastPreservedTransportScope = readContext
+                // Keep only the original still-bounded read. No new receipt or
+                // deadline is created; normal source/owner/expiry gates remain.
+                return
+            }
+            forecastPreservedTransportScope = nil
             forecastCursor?.withdraw()
             _ = sessionHistory.withdrawAuthority(for: error)
         }
@@ -2304,7 +2541,7 @@ public final class DJConnectAppModel: ObservableObject {
     /// Visible game palette for the native iPad container safe-area background only.
     @Published var visibleGameMood: String?
     @Published public var isDemoMode = false {
-        didSet { if oldValue != isDemoMode { retireDirectSessionRuntimes(); syncSessionSurfaces() } }
+        didSet { if oldValue != isDemoMode { stopLegacyCast(); retireDirectSessionRuntimes(); syncSessionSurfaces() } }
     }
     @Published public private(set) var isMonkeyTestingMode = false
     @Published public private(set) var isUITestRuntimeFixtureActive = false
@@ -3797,7 +4034,7 @@ public final class DJConnectAppModel: ObservableObject {
     public func markActiveSession() {
         endpointStatusRefreshAt = nil
         isAppInForeground = true
-        refreshWidgetConsentTrial(force: true)
+        refreshWidgetConsent(force: true)
         #if os(iOS) && canImport(WatchConnectivity)
         resumeWatchProxySetupIfNeeded()
         #endif
@@ -3909,6 +4146,7 @@ public final class DJConnectAppModel: ObservableObject {
     }
 
     private func withdrawForegroundPrivateViews(enteringBackground: Bool) {
+        suspendLegacyCastObservation()
         if currentInsightProof != nil { clearCurrentInsightProof(); currentTrackInsight = nil }
         // The camera permission prompt can make the scene briefly inactive.
         // Only an idle QR selection may survive that transition.
@@ -3919,6 +4157,7 @@ public final class DJConnectAppModel: ObservableObject {
         isAppInForeground = false
         confirmedWidgetConsent = nil
         widgetConsentTask?.cancel()
+        retireWidgetFirstKeyTask()
         sessionStartup.reconcile()
         sessionForYou.reconcile()
         directSessionAttemptEpoch = UUID()
@@ -5798,6 +6037,7 @@ public final class DJConnectAppModel: ObservableObject {
     }
     func clearProfileConversationDisplay() { clearAskDJHistoryLocally() }
     func revokeProfileConversationAuthority() {
+        stopLegacyCast()
         profileDJSettings.withdrawAuthority()
         stopResponsePlayback(clearText: false)
         cancelVoiceRecording()
@@ -6467,6 +6707,13 @@ public final class DJConnectAppModel: ObservableObject {
             defer { isLoadingTrackInsight = false }
             await performTrackInsightRefresh(open: open, forceRefresh: forceRefresh)
         }
+    }
+
+    /// Presentation identity only. Pausing does not authorize new analysis,
+    /// but a previously admitted hero may retain the observed track shell.
+    var trackInsightPlaybackPresentationID: String? {
+        guard isAppInForeground, hasActiveNowPlaying, canStartTrackInsightAnalysis else { return nil }
+        return Self.nonBlank(playback?.uri) ?? Self.playbackAutoInsightIdentity(playback)
     }
 
     var visibleTrackInsightPlaybackID: String? {
@@ -8134,7 +8381,7 @@ public final class DJConnectAppModel: ObservableObject {
 
     private func applyPairingAvailabilityFailure(_ error: DJConnectError) {
         switch error {
-        case let .network(message):
+        case let .network(message, _):
             applyConnectionUnavailableState(message: message)
         case let .authStale(_, message):
             recoverFromStalePairing(message: message)
@@ -8264,7 +8511,7 @@ public final class DJConnectAppModel: ObservableObject {
 
     private func applyPairingTransportRejection(_ error: DJConnectError) {
         switch error {
-        case let .network(message):
+        case let .network(message, _):
             pairingStatus = .unpaired
             pairingMessage = userFacingPairingNetworkMessage(from: message)
         case .routeMissing:
@@ -8381,6 +8628,7 @@ public final class DJConnectAppModel: ObservableObject {
         }
         if !Task.isCancelled, request == sessionRequestGeneration {
             acceptSessionSurfaceObservation(sessionID: response.resolvedSession?.id)
+            acceptWidgetTrustSessionObservation(response.resolvedSession)
         }
         sessionForYou.observe(response.forYou, session: response.resolvedSession)
         djSessionErrorMessage = nil
@@ -8596,6 +8844,7 @@ public final class DJConnectAppModel: ObservableObject {
     }
 
     func bindProfileDJSettings(active: Bool) {
+        reconcileLegacyCastScope()
         let owner = profileSettingsOwnerFence.owner(context: profileDJSettingsContext,
             confirmedProfile: sessionHistory.authorizedProfileID)
         if owner != profileDJSettingsBoundOwner { retireDirectSessionRuntimes() }
@@ -9209,6 +9458,7 @@ public final class DJConnectAppModel: ObservableObject {
     }
 
     func activeVoiceOwnerDidChange() {
+        if sessionHistory.authorizedProfileID == nil { suspendLegacyCastObservation() }
         invalidateAskDJHelpObservationContext()
         // This callback is owned by the actual conversation ownerScope change.
         sessionHistory.cancelTextSubmissions()
@@ -9426,6 +9676,7 @@ public final class DJConnectAppModel: ObservableObject {
             sessionForYou.observe(response.forYou, session: response.resolvedSession)
             if !Task.isCancelled, request == sessionRequestGeneration {
                 acceptSessionSurfaceObservation(sessionID: incoming.id)
+                acceptWidgetTrustSessionObservation(incoming)
             }
             djSessionErrorMessage = response.resolvedSession == nil ? localized(key: "ui.session.unavailable") : nil
             startSessionBroadcastIfNeeded()
@@ -10569,7 +10820,7 @@ public final class DJConnectAppModel: ObservableObject {
     func refreshForegroundStateFromPollTimer() async {
         guard isAppInForeground, pairingStatus == .paired, !isDemoMode,
               !isOfflineModeActive, !isRefreshing else { return }
-        refreshWidgetConsentTrial()
+        refreshWidgetConsent()
         // Session polling continues independently of music. Also rearm the
         // bounded status recovery if metadata or a foreground interruption
         // left the backend unavailable without a live recovery task.
@@ -12183,7 +12434,7 @@ public final class DJConnectAppModel: ObservableObject {
             return true
         }
         guard let djConnectError = error as? DJConnectError,
-              case let .network(message) = djConnectError else {
+              case let .network(message, _) = djConnectError else {
             return false
         }
         let normalized = message.lowercased()
@@ -12673,25 +12924,17 @@ public final class DJConnectAppModel: ObservableObject {
 
     var canChooseNativePushConsent: Bool { nativePushConsentPairing != nil }
 
-    private var usesWidgetConsentTrial: Bool {
-        #if DEBUG && os(iOS)
-        UIDevice.current.userInterfaceIdiom == .phone
-            && ProcessInfo.processInfo.arguments.contains("--widget-consent-trial")
-        #else
-        false
-        #endif
-    }
-
     func nativePushAllowed(_ role: DJConnectSurfacePushTaskOwner.Role) -> Bool {
-        if role == .widget, usesWidgetConsentTrial {
+        if role == .widget {
+            if let queued = queuedWidgetEnableIntent, queued.pairing == nativePushConsentPairing { return true }
             return widgetConsentIntent?.pairing == nativePushConsentPairing && widgetConsentIntent?.enabled == true
         }
         return nativePushConsentGeneration(role) != nil
     }
 
     func nativePushConsentGeneration(_ role: DJConnectSurfacePushTaskOwner.Role) -> UUID? {
-        if role == .widget, usesWidgetConsentTrial {
-            guard nativePushAllowed(role), let intent = widgetConsentIntent,
+        if role == .widget {
+            guard nativePushAllowed(role), let intent = widgetConsentIntent, intent.enabled,
                   confirmedWidgetConsent == intent.operationID else { return nil }
             return intent.operationID
         }
@@ -12701,13 +12944,27 @@ public final class DJConnectAppModel: ObservableObject {
     }
 
     func setNativePushAllowed(_ enabled: Bool, for role: DJConnectSurfacePushTaskOwner.Role) {
-        if role == .widget, usesWidgetConsentTrial {
+        if role == .widget {
             guard let pairing = nativePushConsentPairing else { return }
-            confirmedWidgetConsent = nil
+            restoreWidgetConsentIntents(pairing: pairing)
+            if enabled, widgetConsentIntent?.pairing == pairing,
+               widgetConsentIntent?.enabled == true || queuedWidgetEnableIntent?.pairing == pairing { return }
+            confirmedWidgetConsent = nil; completedWidgetFirstKeyOperation = nil
+            retireWidgetFirstKeyTask()
             bindNativePushOwners()
-            saveWidgetConsentIntent(.init(pairing: pairing, enabled: enabled))
+            if enabled {
+                if widgetConsentIntent?.enabled == false {
+                    if queuedWidgetEnableIntent == nil { saveQueuedWidgetEnableIntent(.init(pairing: pairing, enabled: true)) }
+                } else {
+                    guard widgetConsentIntent?.enabled != true else { return }
+                    saveWidgetConsentIntent(.init(pairing: pairing, enabled: true))
+                }
+            } else {
+                saveQueuedWidgetEnableIntent(nil)
+                if widgetConsentIntent?.enabled != false { saveWidgetConsentIntent(.init(pairing: pairing, enabled: false)) }
+            }
             widgetConsentRetryAfter = nil
-            refreshWidgetConsentTrial(force: true)
+            refreshWidgetConsent(force: true)
             return
         }
         if enabled {
@@ -12727,7 +12984,9 @@ public final class DJConnectAppModel: ObservableObject {
     }
 
     private func clearNativePushConsent() {
-        confirmedWidgetConsent = nil
+        retireWidgetFirstKeyTask()
+        confirmedWidgetConsent = nil; completedWidgetFirstKeyOperation = nil
+        saveQueuedWidgetEnableIntent(nil)
         saveWidgetConsentIntent(nil)
         nativeWidgetPushOwner.bind(nil)
         nativeActivityPushOwner.bind(nil)
@@ -12740,33 +12999,62 @@ public final class DJConnectAppModel: ObservableObject {
         defaults.set(intent.flatMap { try? JSONEncoder().encode($0) }, forKey: Self.widgetConsentIntentKey)
     }
 
-    private func refreshWidgetConsentTrial(force: Bool = false) {
-        guard usesWidgetConsentTrial, isAppInForeground, widgetConsentTask == nil,
-              let pairing = nativePushConsentPairing else { return }
+    private func saveQueuedWidgetEnableIntent(_ intent: WidgetConsentIntent?) {
+        queuedWidgetEnableIntent = intent
+        defaults.set(intent.flatMap { try? JSONEncoder().encode($0) }, forKey: Self.widgetReenableIntentKey)
+    }
+    private func restoreWidgetConsentIntents(pairing: String) {
+        if let intent = widgetConsentIntent, intent.pairing != pairing {
+            widgetConsentIntent = nil; queuedWidgetEnableIntent = nil
+            confirmedWidgetConsent = nil; completedWidgetFirstKeyOperation = nil
+        }
         if widgetConsentIntent == nil, let data = defaults.data(forKey: Self.widgetConsentIntentKey),
            let saved = try? JSONDecoder().decode(WidgetConsentIntent.self, from: data), saved.pairing == pairing {
             widgetConsentIntent = saved
         }
+        if queuedWidgetEnableIntent == nil, widgetConsentIntent != nil,
+           let data = defaults.data(forKey: Self.widgetReenableIntentKey),
+           let saved = try? JSONDecoder().decode(WidgetConsentIntent.self, from: data), saved.pairing == pairing,
+           saved.enabled, !saved.confirmed, saved.expectedRevision == nil {
+            queuedWidgetEnableIntent = saved
+        }
+        if let queued = queuedWidgetEnableIntent, queued.operationID == widgetConsentIntent?.operationID { saveQueuedWidgetEnableIntent(nil) }
+    }
+    private func completeWidgetOptOut(_ pairing: String) {
+        if let next = queuedWidgetEnableIntent, next.pairing == pairing {
+            // Preserve the completed withdrawal before this separate, explicit
+            // future opt-in. Never overwrite an unacknowledged opt-out intent.
+            saveWidgetConsentIntent(next); saveQueuedWidgetEnableIntent(nil)
+            widgetConsentRetryAfter = nil
+        } else { saveWidgetConsentIntent(nil) }
+    }
+
+    private func refreshWidgetConsent(force: Bool = false) {
+        guard isAppInForeground, widgetConsentTask == nil,
+              let pairing = nativePushConsentPairing else { return }
+        restoreWidgetConsentIntents(pairing: pairing)
         guard let intent = widgetConsentIntent, intent.pairing == pairing,
               force || (widgetConsentRetryAfter.map { $0 <= Date() } ?? true) else { return }
         widgetConsentRetryAfter = Date().addingTimeInterval(30)
+        let ownerEpoch = sessionHistory.responseEpoch, profileID = sessionHistory.authorizedProfileID
         widgetConsentTask = Task { [weak self] in
             guard let self else { return }
             defer {
                 self.widgetConsentTask = nil
                 if let latest = self.widgetConsentIntent, latest.operationID != intent.operationID,
                    self.widgetConsentRetryAfter == nil {
-                    self.refreshWidgetConsentTrial(force: true)
+                    self.refreshWidgetConsent(force: true)
                 }
             }
-            await self.reconcileWidgetConsent(intent)
+            await self.reconcileWidgetConsent(intent, ownerEpoch: ownerEpoch, profileID: profileID)
         }
     }
 
-    private func reconcileWidgetConsent(_ intent: WidgetConsentIntent) async {
+    private func reconcileWidgetConsent(_ intent: WidgetConsentIntent, ownerEpoch: UUID, profileID: String?) async {
         let current: @MainActor @Sendable () -> Bool = { [weak self] in
             guard let self else { return false }
             return !Task.isCancelled && self.isAppInForeground && self.nativePushConsentPairing == intent.pairing
+                && self.sessionHistory.responseEpoch == ownerEpoch && self.sessionHistory.authorizedProfileID == profileID
                 && self.widgetConsentIntent?.operationID == intent.operationID
         }
         do {
@@ -12785,17 +13073,15 @@ public final class DJConnectAppModel: ObservableObject {
                 latest = initial
             } else {
                 do {
-                    _ = try await client.writeWidgetPushConsent(enabled: pending.enabled, operationID: pending.operationID,
-                                                               expectedRevision: expected, isCurrent: current)
-                } catch DJConnectError.server(statusCode: 409, message: _) {
-                    let observed = try await client.readWidgetPushConsent(isCurrent: current)
-                    guard current(), observed.revision > expected else { return }
-                    // A newer server decision defeats an old opt-in. Opt-out
-                    // stays queued as a fresh, revision-fenced intent.
+                    latest = try await client.confirmWidgetPushConsent(enabled: pending.enabled, operationID: pending.operationID,
+                        expectedRevision: expected, isCurrent: current)
+                } catch is DJConnectClient.WidgetPushConsentSuperseded {
+                    guard current() else { return }
+                    // A later authoritative decision defeats an old opt-in.
+                    // Opt-out stays queued as its own fresh revision-fenced intent.
                     saveWidgetConsentIntent(pending.enabled ? nil : .init(pairing: pending.pairing, enabled: false))
                     return
                 }
-                latest = try await client.readWidgetPushConsent(isCurrent: current)
             }
             guard current() else { return }
             guard latest.revision == expected + 1, latest.enabled == pending.enabled else {
@@ -12807,29 +13093,96 @@ public final class DJConnectAppModel: ObservableObject {
                 return
             }
             if pending.enabled {
-                if confirmedWidgetConsent == pending.operationID { return }
                 pending.confirmed = true
                 saveWidgetConsentIntent(pending)
-                try await client.enrollWidgetFirstKeyForTrial(isCurrent: current)
-                guard current() else { return }
-                let afterEnrollment = try await client.readWidgetPushConsent(isCurrent: current)
-                guard current() else { return }
-                guard afterEnrollment.enabled, afterEnrollment.revision == latest.revision else {
-                    confirmedWidgetConsent = nil
-                    nativeWidgetPushOwner.bind(nil)
-                    saveWidgetConsentIntent(nil)
-                    return
-                }
+                // This is only the independently read consent fact. It grants
+                // no SDK/key restoration, issuer role or native clock rights.
                 confirmedWidgetConsent = pending.operationID
                 bindNativePushOwners()
+                beginWidgetFirstKeyEnrollment(pending, client: client, isCurrent: current)
             } else {
-                saveWidgetConsentIntent(nil)
+                completeWidgetOptOut(pending.pairing)
             }
         } catch {
-            // A missing acknowledgement leaves the exact intent for retry.
-            if current(), confirmedWidgetConsent == intent.operationID {
-                confirmedWidgetConsent = nil
+            // A missing key/SDK outcome is not a denial of the independently
+            // acknowledged consent fact, and is never surface admission.
+            let withdrawal: Bool
+            switch error as? DJConnectError {
+            case .authStale?, .missingToken?, .profile?, .clientTypeMismatch?: withdrawal = true
+            default: withdrawal = false
+            }
+            if current(), withdrawal {
+                confirmedWidgetConsent = nil; completedWidgetFirstKeyOperation = nil
                 nativeWidgetPushOwner.bind(nil)
+            }
+        }
+    }
+
+    private func retireWidgetFirstKeyTask() {
+        widgetFirstKeyTaskGeneration = UUID()
+        widgetFirstKeyTask?.cancel(); widgetFirstKeyTask = nil; widgetFirstKeyTaskOperation = nil
+    }
+    /// Opaque once-journal namespace, not an owner/clock/surface permission.
+    private func widgetTrustSourceReference(_ intent: WidgetConsentIntent) -> String {
+        let fields = [intent.pairing, sessionHistory.authorizedProfileID ?? "", activeDJSession?.id ?? "",
+                      String(intent.expectedRevision ?? -1), intent.operationID.uuidString.lowercased()]
+        return SHA256.hash(data:Data(fields.map { "\($0.utf8.count):\($0)" }.joined().utf8))
+            .map { String(format:"%02x",$0) }.joined()
+    }
+    private func acceptWidgetTrustSessionObservation(_ session: DJConnectSessionRuntime?) {
+        guard !isDemoMode, !isPresentingLiveGuest, isAppInForeground, pairingStatus == .paired,
+              let session, session.runtimeState == "active",
+              let profile = sessionHistory.authorizedProfileID, session.ownerProfileID == profile,
+              let pairing = nativePushConsentPairing else { return }
+        let scope = [pairing,profile,session.id].map { "\($0.utf8.count):\($0)" }.joined()
+        guard widgetLastAcceptedServerSessionScope != scope else { return }
+        widgetLastAcceptedServerSessionScope = scope
+        // Only a newly accepted owner Session triggers this reconciliation.
+        // Cached DTO/render/timer/foreground alone cannot create a new original.
+        if widgetConsentIntent?.pairing == pairing, widgetConsentIntent?.enabled == true {
+            refreshWidgetConsent(force:true)
+        }
+    }
+    private func beginWidgetFirstKeyEnrollment(_ intent: WidgetConsentIntent, client: DJConnectClient,
+        isCurrent: @escaping @MainActor @Sendable () -> Bool) {
+        let sourceReference = widgetTrustSourceReference(intent)
+        guard !isDemoMode, !isPresentingLiveGuest, completedWidgetFirstKeyOperation != sourceReference,
+              widgetFirstKeyTaskOperation != sourceReference, isCurrent() else { return }
+        let originalCurrent = isCurrent, session = activeDJSession?.id
+        let isCurrent: @MainActor @Sendable () -> Bool = { [weak self] in
+            guard let self else { return false }
+            return originalCurrent() && !self.isDemoMode && !self.isPresentingLiveGuest && self.activeDJSession?.id == session && self.widgetTrustSourceReference(intent) == sourceReference
+        }
+        retireWidgetFirstKeyTask()
+        let generation = widgetFirstKeyTaskGeneration
+        widgetFirstKeyTaskOperation = sourceReference
+        widgetFirstKeyTask = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                if self.widgetFirstKeyTaskGeneration == generation {
+                    self.widgetFirstKeyTask = nil; self.widgetFirstKeyTaskOperation = nil
+                }
+            }
+            do {
+                try await client.enrollWidgetFirstKey(sourceReference:sourceReference,isCurrent:isCurrent)
+                guard isCurrent(), self.widgetFirstKeyTaskGeneration == generation else { return }
+                let observed = try await client.readWidgetPushConsent(isCurrent: isCurrent)
+                guard isCurrent(), self.widgetFirstKeyTaskGeneration == generation else { return }
+                guard observed.enabled, observed.revision == (intent.expectedRevision ?? -1) + 1 else {
+                    self.confirmedWidgetConsent = nil; self.completedWidgetFirstKeyOperation = nil
+                    self.nativeWidgetPushOwner.bind(nil); self.saveWidgetConsentIntent(nil)
+                    return
+                }
+                self.completedWidgetFirstKeyOperation = sourceReference
+            } catch {
+                // SDK completion must never hold the pure opt-out writer. Its
+                // original durable phase owns any late key/proof callback.
+                guard isCurrent(), self.widgetFirstKeyTaskGeneration == generation else { return }
+                switch error as? DJConnectError {
+                case .authStale?, .missingToken?, .profile?, .clientTypeMismatch?:
+                    self.confirmedWidgetConsent = nil; self.nativeWidgetPushOwner.bind(nil)
+                default: break
+                }
             }
         }
     }
@@ -12891,6 +13244,7 @@ public final class DJConnectAppModel: ObservableObject {
     /// cached Session at the new origin. Fence queued native uses synchronously,
     /// before any subsequent connection/settings/network work can await.
     private func retireSessionSurfacesForOriginChange(interruptSessionSource: Bool) {
+        stopLegacyCast()
         retireDirectSessionRuntimes()
         sessionSurfaceNativeCustody.withdraw()
         sessionSurfaceActivityTask?.cancel() // Keep serialization behind any in-flight SDK call.
@@ -13133,9 +13487,64 @@ public final class DJConnectAppModel: ObservableObject {
         }
     }
 
+    private struct HorizonMomentReceipt {
+        let preview: DJConnectHorizonMomentPreview
+        let epoch: UUID
+        let playbackGeneration: UUID
+        let sourceURL: String?
+        let deadline: ContinuousClock.Instant
+    }
+    var horizonMomentReadClock = HorizonMomentReadClock()
+    private var horizonMomentPins: [String: ContinuousClock.Instant] = [:]
+    private var horizonMomentExpiryTask: Task<Void, Never>?
+    private func clearHorizonMomentReceipt(includingPins: Bool = false) {
+        horizonMomentExpiryTask?.cancel(); horizonMomentExpiryTask = nil; horizonMomentReceipt = nil
+        if includingPins { horizonMomentPins = [:] }
+    }
+    @Published private var horizonMomentReceipt: HorizonMomentReceipt?
+    private func acceptHorizonMomentReceipt() {
+        let now = horizonMomentReadClock.wallNow(), tick = horizonMomentReadClock.monotonicNow()
+        guard let session = activeDJSession, let preview = session.broadcast.horizonMoment,
+              preview.isVisible(session: session, positionMS: displayedSessionPositionMS(session), at: now),
+              let expiry = preview.expiry else { clearHorizonMomentReceipt(); return }
+        let epoch = sessionHistory.responseEpoch, observation = currentInsightObservation.generation
+        let key = [epoch.uuidString, observation.uuidString, preview.preview_id, preview.expires_at,
+            session.broadcast.playback?.sourceURL ?? ""].joined(separator: "|")
+        let deadline: ContinuousClock.Instant
+        if let pin = horizonMomentPins[key] { deadline = pin }
+        else {
+            guard horizonMomentPins.count < 128 else { clearHorizonMomentReceipt(); return }
+            deadline = tick.advanced(by: .seconds(min(45, max(0, expiry.timeIntervalSince(now)))))
+            horizonMomentPins[key] = deadline
+        }
+        guard tick < deadline else { clearHorizonMomentReceipt(); return }
+        let needsExpiry = horizonMomentReceipt?.deadline != deadline
+        horizonMomentReceipt = .init(preview: preview, epoch: epoch, playbackGeneration: observation,
+            sourceURL: session.broadcast.playback?.sourceURL, deadline: deadline)
+        if needsExpiry {
+            horizonMomentExpiryTask?.cancel()
+            horizonMomentExpiryTask = Task { [weak self] in
+                do { try await ContinuousClock().sleep(until: deadline) } catch { return }
+                guard let self, self.horizonMomentReceipt?.epoch == epoch,
+                      self.horizonMomentReceipt?.deadline == deadline else { return }
+                self.clearHorizonMomentReceipt()
+            }
+        }
+    }
+    func visibleHorizonMoment(at date: Date) -> DJConnectHorizonMomentPreview? {
+        guard !isDemoMode, hasSessionForecastOwner, haConnectionMode != .offline,
+              let receipt = horizonMomentReceipt, receipt.epoch == sessionHistory.responseEpoch,
+              receipt.playbackGeneration == currentInsightObservation.generation, horizonMomentReadClock.monotonicNow() < receipt.deadline,
+              let session = activeDJSession, session.broadcast.horizonMoment == receipt.preview,
+              session.broadcast.playback?.sourceURL == receipt.sourceURL,
+              receipt.preview.isVisible(session: session, positionMS: displayedSessionPositionMS(session), at: date) else { return nil }
+        return receipt.preview
+    }
+
     private func acceptSessionSurfaceObservation(sessionID: String?) {
         guard isAppInForeground, pairingStatus == .paired, !isDemoMode,
               activeDJSession?.id == sessionID else { return }
+        acceptHorizonMomentReceipt()
         // This is existing foreground liveness bookkeeping, not a successor
         // source permission or qualified original cross-domain clock.
         if activeDJSession?.runtimeState == "active", let sessionID {
@@ -14928,6 +15337,7 @@ public final class DJConnectAppModel: ObservableObject {
     }
 
     private func clearAskDJHistoryLocally() {
+        suspendLegacyCastObservation()
         personaReplyScope = nil
         invalidateConversationResultLeases()
         liveConversationPresentations = [:]
@@ -18549,7 +18959,7 @@ public final class DJConnectAppModel: ObservableObject {
             return true
         }
         if let djConnectError = error as? DJConnectError,
-           case let .network(message) = djConnectError {
+           case let .network(message, _) = djConnectError {
             let lowercasedMessage = message.lowercased()
             return lowercasedMessage.contains("cancelled")
                 || lowercasedMessage.contains("canceled")

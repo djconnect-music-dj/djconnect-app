@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import Testing
 @testable import DJConnectCore
 
@@ -314,4 +315,192 @@ extension SurfacePushHTTPTests {
         #expect(SurfacePushHTTPWire.captured.count == 1)
     }
 
+}
+
+extension SurfacePushHTTPTests {
+    @Test(.isolatedClientResources) func selectedWatchWidgetRequestKeepsOwnIdentityAndClosedCanonicalTarget() throws {
+        let raw = try #require(pushHTTPFixture("register")["request_json"] as? [String: Any])
+        let consent = try #require(raw["consent"] as? [String: Bool])
+        let identity = DJConnectIdentity(deviceID: "djconnect-watchos-ABCDEF123456", deviceName: "Watch fixture", clientType: .watchos, firmware: "4.1.0", platform: .watchos)
+        let target = ["instance_id": "watch-own-instance", "app_bundle_id": "dev.djconnect.ios.watch",
+            "extension_bundle_id": "dev.djconnect.ios.watch.complications", "widget_kind": "DJConnectComplication"]
+        func request(_ target: [String: String], version: String = "26.0") -> DJConnectSurfacePushRequest? {
+            .init(identity: identity, sessionID: raw["session_id"] as! String, operationID: raw["operation_id"] as! String,
+                platform: "watchos", osVersion: version, target: target, token: Data(repeating: 1, count: 32),
+                environment: "sandbox", consent: consent, expected: nil)
+        }
+        let selected = try #require(request(target))
+        let body = try #require(JSONSerialization.jsonObject(with: selected.bytes) as? [String: Any])
+        #expect(body["client_type"] as? String == "watchos" && body["platform"] as? String == "watchos")
+        #expect(body["target"] as? [String: String] == target)
+        #expect(request(target, version: "25.0") == nil)
+        var phone = target; phone["app_bundle_id"] = "dev.djconnect.ios"
+        #expect(request(phone) == nil)
+        var alias = target; alias["widget_kind"] = "DJConnectNowPlayingComplication"
+        #expect(request(alias) == nil)
+    }
+}
+
+// Synthetic paired HTTP only: these cases qualify consent sequencing, not
+// App Attest, an issuer/clock grant, native SDK enrollment or provider delivery.
+private final class OrdinaryWidgetConsentWire: URLProtocol, @unchecked Sendable {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var fixtures: [String: OrdinaryWidgetConsentFixture] = [:]
+    static func install(_ fixture: OrdinaryWidgetConsentFixture) { lock.withLock { fixtures[fixture.host] = fixture } }
+    static func remove(_ fixture: OrdinaryWidgetConsentFixture) { _ = lock.withLock { fixtures.removeValue(forKey: fixture.host) } }
+    override class func canInit(with request: URLRequest) -> Bool { request.url?.host?.hasSuffix(".ordinary-widget.test") == true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        guard let host = request.url?.host, let fixture = Self.lock.withLock({ Self.fixtures[host] }) else { return }
+        do {
+            let reply = try fixture.reply(request)
+            let headers = ["Content-Type": "application/json", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff"]
+            client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: reply.0, httpVersion: nil, headerFields: headers)!, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: reply.1); client?.urlProtocolDidFinishLoading(self)
+        } catch { client?.urlProtocol(self, didFailWithError: error) }
+    }
+    override func stopLoading() {}
+}
+private final class OrdinaryWidgetConsentFixture: @unchecked Sendable {
+    let host = UUID().uuidString.lowercased()+".ordinary-widget.test"
+    let scenario: String
+    let operation = UUID()
+    private let lock = NSLock()
+    private var calls: [URLRequest] = []
+    private var live = true
+    init(_ scenario: String) { self.scenario = scenario }
+    var current: Bool { lock.withLock { live } }
+    var requests: [URLRequest] { lock.withLock { calls } }
+    func reply(_ request: URLRequest) throws -> (Int, Data) {
+        var request = request
+        if request.httpBody == nil, let stream = request.httpBodyStream {
+            stream.open(); defer { stream.close() }; var bytes = Data(); var buffer = [UInt8](repeating: 0, count: 1024)
+            while true { let count = stream.read(&buffer, maxLength: buffer.count); if count <= 0 { break }; bytes.append(buffer, count: count); if bytes.count > 4096 { throw DJConnectError.invalidResponse } }
+            request.httpBody = bytes
+        }
+        let count = lock.withLock { calls.append(request); return calls.count }
+        if scenario == "owner", request.httpMethod == "POST" { lock.withLock { live = false } }
+        if scenario == "lost", count == 2 { throw URLError(.networkConnectionLost) }
+        if scenario == "auth", request.httpMethod == "POST" { return (401, Data()) }
+        if scenario == "conflict", request.httpMethod == "POST" { return (409, Data()) }
+        let post = request.httpMethod == "POST"
+        let readback = !post && count > 1
+        var payload: [String: Any] = ["contract_version": 1, "enabled": count > 1, "revision": count == 1 ? 0 : 1]
+        if post { payload["operation_id"] = operation.uuidString.lowercased() }
+        if readback && ["withdrawn", "conflict"].contains(scenario) { payload["enabled"] = false; payload["revision"] = 2 }
+        if readback && scenario == "mismatch" { payload["enabled"] = false }
+        return (200, try JSONSerialization.data(withJSONObject: payload))
+    }
+    func client() -> DJConnectClient {
+        let configuration = URLSessionConfiguration.ephemeral; configuration.protocolClasses = [OrdinaryWidgetConsentWire.self]
+        return DJConnectClient(baseURL: URL(string: "https://"+host)!,
+            identity: .init(deviceID: "djconnect-ios-ABCDEF123456", deviceName: "Synthetic fixture", clientType: .ios, firmware: "4.1.0", platform: .ios),
+            tokenStore: DJConnectInMemoryTokenStore(token: "synthetic-ordinary-device-token"), session: URLSession(configuration: configuration))
+    }
+}
+@Test(.isolatedClientResources, arguments: ["committed", "withdrawn", "mismatch", "conflict", "auth", "owner", "lost"])
+@MainActor func ordinaryWidgetConsentRequiresIndependentCurrentReadback(_ scenario: String) async throws {
+    let fixture = OrdinaryWidgetConsentFixture(scenario)
+    OrdinaryWidgetConsentWire.install(fixture); defer { OrdinaryWidgetConsentWire.remove(fixture) }
+    let client = fixture.client()
+    let current: @MainActor @Sendable () -> Bool = { fixture.current }
+    let initial = try await client.readWidgetPushConsent(isCurrent: current)
+    #expect(!initial.enabled && initial.revision == 0)
+    var confirmed = false
+    do {
+        let ack = try await client.confirmWidgetPushConsent(enabled: true, operationID: fixture.operation,
+            expectedRevision: initial.revision, isCurrent: current)
+        confirmed = ack.enabled && ack.revision == 1
+    } catch { }
+    #expect(confirmed == (scenario == "committed"))
+    if scenario == "lost" {
+        // A lost write reply cannot mint a new operation or effect. Explicit
+        // recovery resubmits the original idempotent intent and verifies GET.
+        let recovered = try await client.confirmWidgetPushConsent(enabled: true, operationID: fixture.operation,
+            expectedRevision: initial.revision, isCurrent: current)
+        #expect(recovered.enabled && recovered.revision == 1)
+    }
+    let calls = fixture.requests
+    #expect(calls.allSatisfy { $0.url?.path == "/api/djconnect/v1/push/native/consent/widgetkit" })
+    #expect(calls.first?.httpMethod == "GET")
+    for call in calls where call.httpMethod == "POST" {
+        let data: Data
+        if let body = call.httpBody { data = body }
+        else if let stream = call.httpBodyStream {
+            stream.open(); defer { stream.close() }; var bytes = Data(); var buffer = [UInt8](repeating: 0, count: 1024)
+            while true { let count = stream.read(&buffer, maxLength: buffer.count); if count <= 0 { break }; bytes.append(buffer, count: count) }
+            data = bytes
+        } else { throw DJConnectError.invalidResponse }
+        let body = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(body["operation_id"] as? String == fixture.operation.uuidString.lowercased())
+        #expect(body["expected_revision"] as? Int == 0)
+    }
+    if scenario == "committed" { #expect(calls.map(\.httpMethod) == ["GET", "POST", "GET"]) }
+}
+
+@Test(.isolatedClientResources, arguments: ["production", "ha-dev", "hash", "extra", "expired"])
+func ordinaryWidgetChallengeBindsExactProductionAudienceAndTranscript(_ mutation: String) throws {
+    // Deliberately synthetic API challenge. A decoder pass is DATA, never an
+    // Apple attestation, enrolled key, signed app tuple or native permission.
+    let now: Int64 = 1_800_000_000_000
+    let operation = "12345678-1234-4234-8234-123456789abc"
+    let audience = mutation == "ha-dev" ? "djc-native-push-ha-dev/1" : "djc-native-push/1"
+    let nonce = String(repeating: "A", count: 43)
+    let expiry = now + (mutation == "expired" ? -1 : 60_000)
+    let identifiers = ["api-installation", "credential", "challenge", "pair-generation"]
+    let digests = (1...4).map { String(repeating: String($0), count: 64) }
+    let transcript: [Any] = ["djc-native-pair-witness/1", audience, "POST", "/v1/push/native/key/register",
+        "widget-first-key", operation, identifiers[0], identifiers[1], identifiers[2], nonce, expiry, 0, identifiers[3]] + digests
+    let hash = Data(SHA256.hash(data: try JSONSerialization.data(withJSONObject: transcript, options: [.withoutEscapingSlashes])))
+    var object: [String: Any] = ["contract_version": 1, "api_audience": audience, "operation_id": operation,
+        "challenge_nonce": nonce, "expires_at_ms": expiry, "expected_key_revision": 0,
+        "client_data_hash_b64": mutation == "hash" ? Data(repeating: 0, count: 32).base64EncodedString() : hash.base64EncodedString(),
+        "api_installation_id": identifiers[0], "install_credential_id": identifiers[1], "challenge_id": identifiers[2], "pairing_generation": identifiers[3],
+        "pair_binding": digests[0], "owner_binding": digests[1], "device_binding": digests[2], "core_key_thumbprint": digests[3]]
+    if mutation == "extra" { object["approved"] = true }
+    var accepted = false
+    do {
+        let challenge = try DJConnectClient.WidgetFirstKeyChallenge.parse(JSONSerialization.data(withJSONObject: object),
+            nowMS: now, requestedUptime: 100, uptime: 101, pairingBinding: Data(repeating: 1, count: 32))
+        #expect(challenge.clientDataHash == hash && challenge.isCurrent(nowMS: now + 1, uptime: 102))
+        accepted = true
+    } catch { }
+    #expect(accepted == (mutation == "production"))
+}
+
+extension SurfacePushHTTPTests {
+    @Test(.isolatedClientResources, arguments: ["prepared", "operation", "session", "extra", "version", "state", "duplicate", "bad-uuid", "cancelled"])
+    func widgetPurposePreparationACKIsClosedMetadataAndNeverStartsContext(_ scenario: String) async throws {
+        let operation = scenario == "bad-uuid" ? "12345678-1234-4234-8234-123456789abc" : "12345678-1234-7234-8234-123456789abc"
+        var reply: [String: Any] = ["contract_version": 1, "state": "prepared", "operation_id": operation, "session_id": "model-original-session"]
+        if scenario == "operation" { reply["operation_id"] = "12345678-1234-7234-8234-123456789abd" }
+        if scenario == "session" { reply["session_id"] = "different-session" }
+        if scenario == "extra" { reply["native_clock_permission"] = true }
+        if scenario == "version" { reply["contract_version"] = 3 }
+        if scenario == "state" { reply["state"] = "registered" }
+        var bytes = try JSONSerialization.data(withJSONObject: reply)
+        if scenario == "duplicate" { bytes = Data(("{\"state\":\"prepared\"," + String(decoding: bytes.dropFirst(), as: UTF8.self)).utf8) }
+        SurfacePushHTTPWire.setup(bytes)
+        var accepted = false
+        do {
+            try await client().prepareNativeWidgetSurface(sessionID: "model-original-session", operationID: operation,
+                isCurrent: { scenario != "cancelled" })
+            accepted = true
+        } catch { }
+        #expect(accepted == (scenario == "prepared"))
+        let calls = SurfacePushHTTPWire.captured
+        #expect(calls.count == (["bad-uuid", "cancelled"].contains(scenario) ? 0 : 1))
+        #expect(calls.allSatisfy { $0.url?.path == "/api/djconnect/v1/push/surface/widget/prepare" && $0.httpMethod == "POST" })
+        if let call = calls.first {
+            let requestBytes = try #require(call.httpBody)
+            let body = try #require(JSONSerialization.jsonObject(with: requestBytes) as? [String: Any])
+            #expect(Set(body.keys) == ["contract_version", "operation_id", "device_id", "client_type", "session_id"])
+            #expect(body["contract_version"] as? Int == 1 && body["operation_id"] as? String == operation)
+            #expect(body["client_type"] as? String == "ios")
+            #expect(call.value(forHTTPHeaderField: "Authorization") == "Bearer paired-fixture-token")
+            #expect(call.value(forHTTPHeaderField: "X-Ambient-Identity") == nil)
+        }
+        // No response path here constructs a context clock, role owner,
+        // registration, native SDK candidate or background-read credential.
+    }
 }

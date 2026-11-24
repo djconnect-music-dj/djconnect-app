@@ -684,6 +684,7 @@ struct NativeSessionMomentsView: View {
                     isPlaying: session.broadcast.playback?.state == "playing" && !artworkIsPaused)
             }
                 .aspectRatio(1, contentMode: .fit)
+                .djConnectBreathingArtwork()
                 // The base cover determines geometry. Neither the native hit
                 // surface nor an initially empty feedback view participates in sizing.
                 .overlay {
@@ -1196,12 +1197,14 @@ private struct SessionMusicProgress: View {
     let position: Int
     let duration: Int
     let isPlaying: Bool
+    var showsEqualizer = true
 
     var body: some View {
         HStack(spacing: 8) {
-            SessionPlaybackEqualizer(isPlaying: isPlaying)
-                .frame(width: 20, height: 20)
-                .accessibilityHidden(true)
+            if showsEqualizer {
+                SessionPlaybackEqualizer(isPlaying: isPlaying)
+                    .frame(width: 20, height: 20).accessibilityHidden(true)
+            }
             ProgressView(value: Double(position), total: Double(max(duration, 1)))
                 .frame(maxWidth: .infinity)
         }
@@ -1240,6 +1243,7 @@ struct SessionPlaybackCardButton: View {
     var requestPresentation: ((CGRect) -> Void)? = nil
     @State private var sourceRect: CGRect = .zero
     @State private var showsPlayback = false
+    @State private var showsInsight = false
     @Environment(\.scenePhase) private var scenePhase
     var canOpenPlayback: Bool { model.canToggleSessionFavorite(session) }
     private var context: [String?] {
@@ -1247,12 +1251,22 @@ struct SessionPlaybackCardButton: View {
          session.broadcast.playback?.title, session.broadcast.playback?.artist]
     }
     var body: some View {
+        HStack(spacing: 8) {
+            Button { showsInsight = true } label: {
+                SessionPlaybackEqualizer(isPlaying: model.playback?.isPlaying == true)
+                    .frame(width: 20, height: 20).frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .djConnectPlainButtonStyle()
+            .disabled(model.visibleTrackInsightPlaybackID == nil)
+            .accessibilityLabel("Track Insight")
+            .accessibilityIdentifier("session-equalizer-open-insight")
         Button {
             if let requestPresentation { requestPresentation(sourceRect) }
             else { showsPlayback.toggle() }
         } label: {
             SessionMusicProgress(position: position, duration: duration,
-                                 isPlaying: model.playback?.isPlaying ?? (session.broadcast.playback?.state == "playing"))
+                                 isPlaying: model.playback?.isPlaying ?? (session.broadcast.playback?.state == "playing"), showsEqualizer: false)
                 .frame(minHeight: 44).contentShape(Rectangle())
         }
         .djConnectPlainButtonStyle()
@@ -1282,7 +1296,21 @@ struct SessionPlaybackCardButton: View {
             .environment(\.djConnectScrollingSurface, false)
             .presentationCompactAdaptation(.popover)
         }
-        .onChange(of: context) { _, _ in showsPlayback = false }
+        }
+        .sheet(isPresented: $showsInsight) {
+            VStack(spacing: 0) {
+                HStack {
+                    Spacer()
+                    Button(DJConnectLocalization.localized(key: "ui.close", language: model.language)) { showsInsight = false }
+                        .accessibilityIdentifier("session-track-insight-close")
+                }.padding()
+                TrackInsightView(model: model)
+            }
+            #if os(macOS)
+            .frame(minWidth: 640, minHeight: 600)
+            #endif
+        }
+        .onChange(of: context) { _, _ in showsPlayback = false; showsInsight = false }
         .onChange(of: canOpenPlayback) { _, allowed in if !allowed { showsPlayback = false } }
         .onChange(of: scenePhase) { _, phase in if phase != .active { showsPlayback = false } }
     }

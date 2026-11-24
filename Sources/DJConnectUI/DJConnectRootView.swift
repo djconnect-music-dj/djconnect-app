@@ -678,6 +678,7 @@ public struct DJConnectRootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @StateObject private var introductionAnchors = SessionIntroductionAnchors()
+    @StateObject private var liveGuest = DJConnectLiveGuestModel()
     @State private var selectedSection = DJConnectSection.djSession
     @State private var openedSavedSession: SavedSessionDestination?
     #if os(macOS)
@@ -693,6 +694,31 @@ public struct DJConnectRootView: View {
     }
 
     public var body: some View {
+        Group {
+            if liveGuest.isPresented {
+                DJConnectLiveGuestView(guest: liveGuest, language: model.language)
+            } else {
+                ordinaryRoot
+            }
+        }
+        .onOpenURL { url in
+            guard !liveGuest.receive(url.absoluteString) else { return }
+            #if !os(macOS)
+            if !model.handleAppNavigationDeepLink(url) { model.handlePairingDeepLink(url) }
+            #endif
+        }
+        .onChange(of: liveGuest.isPresented, initial:true) { _, shown in
+            model.liveGuestPresentationDidChange(shown)
+        }
+        .onChange(of: model.isShowingGuestJoin) { _, shown in
+            if shown { model.isShowingGuestJoin = false; liveGuest.showJoin() }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background { liveGuest.disconnect() }
+        }
+    }
+
+    private var ordinaryRoot: some View {
         ZStack {
             rootCanvas
             Group {
@@ -958,13 +984,6 @@ public struct DJConnectRootView: View {
                 selectedSection = .djSession
             }
         }
-        #if !os(macOS)
-        .onOpenURL { url in
-            if !model.handleAppNavigationDeepLink(url) {
-                model.handlePairingDeepLink(url)
-            }
-        }
-        #endif
         .task(id: model.pairingStatus) {
             await model.refreshProfileDJSettings()
             await model.refreshActiveDJSession()
@@ -1651,6 +1670,9 @@ private struct PairingSheetView: View {
                     pairingSuccess
                 } else {
                     pairingPending
+                    Button(localizedKey(model.language, "ui.live.join")) { model.isShowingGuestJoin = true }
+                        .djConnectButtonStyle(DJConnectButtonStyle(expands: true))
+                        .accessibilityIdentifier("pairing-join-session")
                 }
             }
             .padding(28)
@@ -3030,6 +3052,9 @@ private struct WelcomeView: View {
                             .djConnectButtonStyle(DJConnectButtonStyle(emphasis: isLastStep ? .primary : .tertiary, expands: true))
                             .controlSize(.large)
                             .accessibilityIdentifier("welcome-dismiss-button")
+                            Button(localizedKey(model.language, "ui.live.join")) { model.isShowingGuestJoin = true }
+                                .djConnectButtonStyle(DJConnectButtonStyle(emphasis: .secondary, expands: true))
+                                .accessibilityIdentifier("welcome-join-session")
                         }
                         .frame(maxWidth: .infinity)
                     }
@@ -3539,6 +3564,7 @@ private struct AnimatedAlbumArtworkView: View {
         }
         .aspectRatio(1, contentMode: .fit)
         .frame(maxWidth: maxWidth)
+        .djConnectBreathingArtwork()
         .frame(maxWidth: .infinity, alignment: .center)
     }
 }
@@ -4038,7 +4064,7 @@ struct TrackInsightView: View {
 
     private var playbackVisual: TrackInsight? {
         guard !explicitMoment, let visualPlaybackID,
-              visualPlaybackID == model.visibleTrackInsightPlaybackID,
+              visualPlaybackID == model.trackInsightPlaybackPresentationID,
               let playback = model.playback, let title = playback.trackName else { return nil }
         return TrackInsight(
             title: title,
@@ -4101,7 +4127,7 @@ struct TrackInsightView: View {
                                         isAnimationActive: isAnimationActive && isHeroVisible,
                                         isPinnedSubject: explicitMoment
                                     )
-                                    .id(explicitMoment ? trackInsightHeroRenderID(for: visual) : model.visibleTrackInsightPlaybackID ?? visual.id)
+                                    .id(explicitMoment ? trackInsightHeroRenderID(for: visual) : model.trackInsightPlaybackPresentationID ?? visual.id)
                                     .onAppear { isHeroVisible = true }
                                     .onDisappear { isHeroVisible = false }
                                     .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -4237,10 +4263,10 @@ struct TrackInsightView: View {
         }
         .onAppear {
             isAnimationActive = true
-            if insight != nil { visualPlaybackID = model.visibleTrackInsightPlaybackID }
+            if insight != nil { visualPlaybackID = model.trackInsightPlaybackPresentationID }
         }
         .onChange(of: insight != nil) { _, hasInsight in
-            if hasInsight { visualPlaybackID = model.visibleTrackInsightPlaybackID }
+            if hasInsight { visualPlaybackID = model.trackInsightPlaybackPresentationID }
         }
         .task(id: explicitMoment ? nil : model.visibleTrackInsightPlaybackID) {
             guard !explicitMoment else { return }
@@ -7457,15 +7483,18 @@ private struct TrackInsightHeroScene: View {
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { sceneWidth = $0 }
         .onAppear {
             updateMotionClock()
-            playbackAnchor.update(from: playback, at: Date())
+            playbackAnchor.update(from: playback, at: Date(), uptime: ProcessInfo.processInfo.systemUptime)
         }
         .onChange(of: clockRuns) { updateMotionClock() }
         .onChange(of: motionRate) { updateMotionClock() }
         .onChange(of: playbackSignature) {
-            playbackAnchor.update(from: playback, at: Date())
+            playbackAnchor.update(from: playback, at: Date(), uptime: ProcessInfo.processInfo.systemUptime)
+        }
+        .onChange(of: playback?.progressMS) {
+            playbackAnchor.update(from: playback, at: Date(), uptime: ProcessInfo.processInfo.systemUptime)
         }
         .onChange(of: playback?.isPlaying) {
-            playbackAnchor.update(from: playback, at: Date())
+            playbackAnchor.update(from: playback, at: Date(), uptime: ProcessInfo.processInfo.systemUptime)
         }
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay {
@@ -7698,6 +7727,7 @@ private struct TrackInsightHeroArtwork: View {
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .djConnectBreathingArtwork()
                 .overlay {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .stroke(.white.opacity(0.32), lineWidth: 1)
@@ -7920,34 +7950,13 @@ private struct TrackInsightHeroInfo: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
             }
-            if let progressLabel {
-                Text(progressLabel)
-                    .font(.caption.weight(.bold))
-                    .monospacedDigit()
-                    .foregroundStyle(.white.opacity(0.72))
-                    .padding(.vertical, 5)
-                    .padding(.horizontal, 10)
-                    .background(.white.opacity(0.12), in: Capsule())
-            }
+
         }
         .multilineTextAlignment(.center)
         .padding(.horizontal, 18)
     }
 
-    private var progressLabel: String? {
-        guard let duration = insight.duration, duration > 0 else {
-            return nil
-        }
-        let progress = min(max(insight.progress ?? 0, 0), duration)
-        return "\(formatTime(progress)) / \(formatTime(duration))"
-    }
 
-    private func formatTime(_ seconds: TimeInterval) -> String {
-        let totalSeconds = max(Int(seconds.rounded()), 0)
-        let minutes = totalSeconds / 60
-        let seconds = totalSeconds % 60
-        return "\(minutes):\(seconds < 10 ? "0" : "")\(seconds)"
-    }
 }
 
 #if canImport(MetalKit) && (os(iOS) || os(macOS))
@@ -8374,11 +8383,12 @@ struct TrackVibePlaybackPhase {
     let positionSeconds: TimeInterval
     let energyLift: Double
 
-    init(playback: DJConnectPlayback?, anchor: TrackVibePlaybackAnchor = TrackVibePlaybackAnchor(), date: Date) {
+    init(playback: DJConnectPlayback?, anchor: TrackVibePlaybackAnchor = TrackVibePlaybackAnchor(), date: Date,
+         uptime: TimeInterval = ProcessInfo.processInfo.systemUptime) {
         let durationMS = max(playback?.durationMS ?? 0, 0)
         let progressMS = max(playback?.progressMS ?? 0, 0)
         let durationSeconds = durationMS > 0 ? Double(durationMS) / 1_000 : 240
-        let positionSeconds = anchor.positionSeconds(for: playback, fallbackProgressMS: progressMS, durationSeconds: durationSeconds, at: date)
+        let positionSeconds = anchor.positionSeconds(for: playback, fallbackProgressMS: progressMS, durationSeconds: durationSeconds, at: date, uptime: uptime)
         let progress = durationSeconds > 0 ? min(max(positionSeconds / durationSeconds, 0), 1) : 0
         let phrase = sin(progress * .pi * 10)
         let section = sin(progress * .pi * 2 - .pi / 2) * 0.5 + 0.5
@@ -8407,21 +8417,25 @@ struct TrackVibePlaybackAnchor: Equatable {
     var progressMS: Int = 0
     var durationMS: Int = 0
     var snapshotDate: Date = .distantPast
+    var snapshotUptime: TimeInterval?
     var isPlaying: Bool = false
 
     static func signature(for playback: DJConnectPlayback?) -> String {
+        // Provider item/context identifiers are opaque and case-sensitive.
+        // Only descriptive labels may be normalized for presentation identity.
         [
-            playback?.trackName,
-            playback?.artistName,
+            playback?.uri,
+            playback?.trackName?.lowercased(),
+            playback?.artistName?.lowercased(),
             playback?.contextURI,
             playback?.durationMS.map(String.init)
         ]
-        .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+        .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
         .filter { !$0.isEmpty }
         .joined(separator: "|")
     }
 
-    mutating func update(from playback: DJConnectPlayback?, at date: Date) {
+    mutating func update(from playback: DJConnectPlayback?, at date: Date, uptime: TimeInterval? = nil) {
         let nextSignature = Self.signature(for: playback)
         let nextProgressMS = max(playback?.progressMS ?? 0, 0)
         let nextDurationMS = max(playback?.durationMS ?? 0, 0)
@@ -8430,7 +8444,7 @@ struct TrackVibePlaybackAnchor: Equatable {
             for: playback,
             fallbackProgressMS: progressMS,
             durationSeconds: nextDurationMS > 0 ? Double(nextDurationMS) / 1_000 : 240,
-            at: date
+            at: date, uptime: uptime
         ) * 1_000).rounded())
 
         let didChangeTrack = nextSignature != signature
@@ -8441,6 +8455,7 @@ struct TrackVibePlaybackAnchor: Equatable {
         progressMS = anchoredProgressMS
         durationMS = nextDurationMS
         snapshotDate = date
+        snapshotUptime = uptime.flatMap { $0.isFinite ? $0 : nil }
         isPlaying = nextIsPlaying
     }
 
@@ -8448,11 +8463,16 @@ struct TrackVibePlaybackAnchor: Equatable {
         for playback: DJConnectPlayback?,
         fallbackProgressMS: Int,
         durationSeconds: TimeInterval,
-        at date: Date
+        at date: Date,
+        uptime: TimeInterval? = nil
     ) -> TimeInterval {
         let playbackSignature = Self.signature(for: playback)
         let baseMS = playbackSignature == signature && !signature.isEmpty ? progressMS : max(playback?.progressMS ?? fallbackProgressMS, 0)
-        let elapsed = playback?.isPlaying == true && isPlaying ? max(0, date.timeIntervalSince(snapshotDate)) : 0
+        let clockElapsed: TimeInterval
+        if let snapshotUptime, let uptime, uptime.isFinite {
+            clockElapsed = max(0, uptime - snapshotUptime)
+        } else { clockElapsed = max(0, date.timeIntervalSince(snapshotDate)) }
+        let elapsed = playback?.isPlaying == true && isPlaying ? clockElapsed : 0
         return min(Double(baseMS) / 1_000 + elapsed, durationSeconds)
     }
 }
@@ -9020,6 +9040,9 @@ private struct IdleDJSessionView: View {
                     dimsWhenDisabled: !refreshing && !model.isSchedulingProfileDJChoice && model.profileDJSettings.phase != .saving))
                 .disabled(model.isLoadingDJSession || (!model.isDemoMode && model.pairingStatus != .paired) || !model.canUsePlaybackFeatures || model.isSchedulingProfileDJChoice || (!model.isDemoMode && [.saving, .uncertain].contains(model.profileDJSettings.phase)))
                 .accessibilityIdentifier("session-welcome-start")
+                Button(localizedKey(model.language, "ui.live.join")) { model.isShowingGuestJoin = true }
+                    .djConnectButtonStyle(DJConnectButtonStyle(expands: true))
+                    .accessibilityIdentifier("session-welcome-join")
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "sparkles")
                         .font(.body.weight(.semibold))
@@ -9334,7 +9357,7 @@ struct VibeCastSessionStartDialog: View {
     var body: some View {
         Group {
             if showsDestinations && model.canSelectVibeCastScreen && model.displayConsentState != .revoked {
-                VibeCastDestinationPicker(language: model.language, scansNetwork: !model.isDemoMode) {
+                VibeCastDestinationPicker(model: model, language: model.language, scansNetwork: !model.isDemoMode) {
                     showsDestinations = false
                 }
                 #if os(iOS)
@@ -9497,6 +9520,7 @@ private struct VibeCastDialogHero: View {
 }
 
 private struct VibeCastDestinationPicker: View {
+    @ObservedObject var model: DJConnectAppModel
     let language: String
     let scansNetwork: Bool
     let openScreen: () -> Void
@@ -9516,12 +9540,16 @@ private struct VibeCastDestinationPicker: View {
         .accessibilityIdentifier("vibecast-destination-picker")
         .onChange(of: scenePhase, initial: true) {
             if scansNetwork && scenePhase == .active {
+                #if os(iOS)
+                model.startLegacyCastDiscovery()
+                #else
                 discovery.start()
+                #endif
             } else {
-                discovery.stop()
+                discovery.stop(); model.stopLegacyCastDiscovery()
             }
         }
-        .onDisappear { discovery.stop() }
+        .onDisappear { discovery.stop(); model.stopLegacyCastDiscovery() }
     }
 
     private var card: some View {
@@ -9535,10 +9563,28 @@ private struct VibeCastDestinationPicker: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("vibecast-destination-screen")
+                #if os(iOS)
+                ForEach(model.legacyCastDevices) { device in
+                    Button { model.connectLegacyCast(deviceID: device.id) } label: {
+                        HStack {
+                            destinationRow(device.name, symbol: "tv.badge.wifi", showsChevron: true)
+                            if model.legacyCastConnectingDeviceID == device.id { ProgressView() }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!model.canConnectLegacyCast || model.legacyCastConnectingDeviceID != nil)
+                    .accessibilityIdentifier("vibecast-cast-device-" + device.id)
+                }
+                if model.legacyCastState != .idle && model.legacyCastState != .stopped {
+                    Button(localizedKey(language, "ui.vibecast.cast.stop")) { model.stopLegacyCast() }
+                        .accessibilityIdentifier("vibecast-cast-stop")
+                }
+                #else
                 ForEach(discovery.devices) { device in
                     destinationRow(device.name, symbol: "tv.badge.wifi", showsChevron: false)
                         .accessibilityHint(localizedKey(language, "ui.vibecast.destinations.unavailable"))
                 }
+                #endif
             }
             Text(localizedKey(language, statusKey))
                 .font(.footnote)
@@ -9551,10 +9597,24 @@ private struct VibeCastDestinationPicker: View {
     }
 
     private var statusKey: String {
+        #if os(iOS)
+        if model.legacyCastNeedsConfirmation { return "ui.vibecast.cast.confirm_again" }
+        switch model.legacyCastState {
+        case .connecting: return "ui.vibecast.cast.connecting"
+        case .presentingMoment, .presentingSilence: return "ui.vibecast.cast.presenting"
+        case .receiverReady, .snapshotAccepted: return "ui.vibecast.cast.waiting"
+        case .failed: return "ui.vibecast.cast.failed"
+        case .recovering: return "ui.vibecast.cast.waiting"
+        default: break
+        }
+        if !model.legacyCastDevices.isEmpty { return "ui.vibecast.cast.choose" }
+        return "ui.vibecast.destinations.scanning"
+        #else
         if !discovery.devices.isEmpty { return "ui.vibecast.destinations.unavailable" }
         if discovery.failed { return "ui.vibecast.destinations.network" }
         if discovery.searching { return "ui.vibecast.destinations.scanning" }
         return "ui.vibecast.destinations.empty"
+        #endif
     }
 
     private func destinationRow(_ title: String, symbol: String, showsChevron: Bool) -> some View {
@@ -9667,6 +9727,7 @@ struct VibeCastDisplayConsentForm: View {
     }
     @Environment(\.dismiss) private var dismiss
     @State private var code = ""
+    @State private var dynamicsDraft: Double?
     @State private var didSubmitLookup = false
     @State private var lookupFocusRequest = 0
     @FocusState private var lookupFocused: Bool
@@ -9759,6 +9820,12 @@ struct VibeCastDisplayConsentForm: View {
                 }
                 if model.canSelectVibeCastScreen && model.displayConsentState == .ready {
                     Text(localizedKey(model.language, model.displayConsentExistingShare == nil ? "ui.displayConsent.create" : "ui.displayConsent.existing"))
+                    if model.displayConsentExistingShare == nil {
+                        Toggle("VibeCast Live", isOn: $model.vibeCastLiveEnabled)
+                            .accessibilityIdentifier("vibecast-live-start-toggle")
+                        Text(localizedKey(model.language, "ui.live.host_consent"))
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
                     Button {
                         Task { await model.approveDisplayConsent() }
                     } label: {
@@ -9795,6 +9862,55 @@ struct VibeCastDisplayConsentForm: View {
                     Text(localizedKey(model.language, "ui.displayConsent.status_unknown"))
                         .foregroundStyle(.secondary)
                         .accessibilityIdentifier("display-status-unknown")
+                }
+                TimelineView(.periodic(from: .now, by: 1)) { _ in
+                    if let remaining = model.vibeCastShareRemainingSeconds {
+                        let seconds = max(0, Int(remaining))
+                        Text(String(format: localizedKey(model.language, "ui.displayConsent.remaining"),
+                                    String(format: "%d:%02d", seconds / 3600, (seconds % 3600) / 60)))
+                            .font(.footnote.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("vibecast-session-remaining")
+                    }
+                }
+                if model.isVibeCastSharing {
+                    if let remote = model.vibeCastRemoteState {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(localizedKey(model.language, "ui.live.remote_control")).font(.headline)
+                            Toggle("VibeCast Live", isOn: Binding(get: { remote.policy.information }, set: { value in
+                                Task { await model.refreshVibeCastRemote(live: value) }
+                            }))
+                            .accessibilityIdentifier("vibecast-live-remote-toggle")
+                            Picker(localizedKey(model.language, "ui.live.tv_view"), selection: Binding(get: { remote.view.mode }, set: { value in
+                                Task { await model.refreshVibeCastRemote(mode: value) }
+                            })) {
+                                Text(localizedKey(model.language, "ui.session.flow")).tag("flow")
+                                Text("Vibescape").tag("vibescape")
+                            }
+                            .pickerStyle(.segmented)
+                            .accessibilityIdentifier("vibecast-remote-tv-mode")
+                            if remote.view.mode == "vibescape" {
+                                Slider(value: Binding(get: { dynamicsDraft ?? remote.view.dynamics }, set: { dynamicsDraft = $0 }), in: 0...1) { editing in
+                                    if !editing {
+                                        let value = dynamicsDraft ?? remote.view.dynamics
+                                        dynamicsDraft = nil
+                                        Task { await model.refreshVibeCastRemote(dynamics: value) }
+                                    }
+                                }
+                                .accessibilityLabel(localizedKey(model.language, "ui.vibescape.dynamics"))
+                                .accessibilityIdentifier("vibecast-remote-dynamics")
+                            }
+                        }
+                        .disabled(model.isUpdatingVibeCastRemote || model.stoppingLiveDisplay)
+                    } else {
+                        Button(localizedKey(model.language, "ui.refresh")) { Task { await model.refreshVibeCastRemote() } }
+                            .disabled(model.isUpdatingVibeCastRemote)
+                    }
+                    Button(role: .destructive) { Task { await model.endVibeCastShare() } } label: {
+                        Label(localizedKey(model.language, "ui.live.end_share"), systemImage: "stop.circle")
+                    }
+                    .disabled(model.stoppingLiveDisplay || model.isUpdatingVibeCastRemote)
+                    .accessibilityIdentifier("vibecast-end-entire-share")
                 }
                 if model.displayConsentState == .approved && model.usesLegacyVibeCastStatus {
                     Button(role: .destructive) { Task { await model.revokeDisplayConsent() } } label: {
@@ -13805,10 +13921,6 @@ struct AskDJInputBar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             SessionComposerContext(model: model)
-            Text(DJConnectLocalization.localized(key: "ui.ask_dj.accuracy_notice", language: model.language))
-                .font(.caption).foregroundStyle(.white.opacity(0.8))
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("ask-dj-accuracy-notice")
         // AnyLayout keeps the same native editor mounted during focus changes,
         // preserving first responder, selection and the unsent draft.
         composerLayout {
@@ -17719,7 +17831,7 @@ struct SettingsView: View {
                  let .profile(_, _, message):
                 let trimmed = message?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 return trimmed.isEmpty ? localizedKey(model.language, "ui.music.dna.import.rejected") : trimmed
-            case let .network(message), let .invalidConfiguration(message):
+            case let .network(message, _), let .invalidConfiguration(message):
                 return message
             case .missingToken:
                 return localizedKey(model.language, "appModel.missing.djconnect.bearer.token.reset.pairing.to.set.up")
@@ -17748,7 +17860,7 @@ struct SettingsView: View {
                  let .profile(_, _, message):
                 let trimmed = message?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 return trimmed.isEmpty ? localizedKey(model.language, "ui.ask.dj.history.export.failed") : trimmed
-            case let .network(message), let .invalidConfiguration(message):
+            case let .network(message, _), let .invalidConfiguration(message):
                 return message
             case .missingToken:
                 return localizedKey(model.language, "appModel.missing.djconnect.bearer.token.reset.pairing.to.set.up")

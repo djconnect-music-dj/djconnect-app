@@ -489,3 +489,119 @@ func fullHelpRetainsFourteenPublishedItemsWhenOnlyNineAreCurrentlyAvailable(_ la
             eligibleIDs: available, includeUnavailable: true).isEmpty)
     }
 }
+
+@Test(.isolatedClientResources) @MainActor func visibleHelpUsesGenuineReadsForNinetySecondsWithTenSecondDispatchFloor() async throws {
+    let (catalogue, context, ids) = try fullHelpFixture()
+    let start = ContinuousClock.now
+    var instant = start, reads = 0
+    let model = AskDJHelpCatalogueModel(now: { instant })
+    defer { model.close() }
+    let reader: AskDJHelpCatalogueModel.Reader = { _, _, _, _ in reads += 1; return .init(ids: ids, trackID: context.trackID) }
+    _ = await model.read(catalogue: catalogue, surface: .session, language: "nl", context: { context }, reader: reader)
+    for second in 1...90 {
+        instant = start.advanced(by: .seconds(second))
+        let refreshed = await model.refreshIfVisible(catalogue: catalogue, surface: .session, language: "nl",
+            visible: true, sceneActive: true, context: { context }, reader: reader)
+        #expect(refreshed == (second % 10 == 0))
+        #expect(model.isCurrent && !model.sections.isEmpty)
+    }
+    #expect(reads == 10)
+    for _ in 0..<100 { #expect(model.isCurrent) }
+    #expect(reads == 10, "Rendering is not a new observation or a read dispatch")
+}
+
+@Test(.isolatedClientResources) @MainActor func visibleHelpManualValidationIsImmediateAndDelaysOnlyTheNextAutomaticRead() async throws {
+    let (catalogue, context, ids) = try fullHelpFixture()
+    let start = ContinuousClock.now
+    var instant = start, reads = 0
+    let model = AskDJHelpCatalogueModel(now: { instant }); defer { model.close() }
+    let reader: AskDJHelpCatalogueModel.Reader = { _, _, _, _ in reads += 1; return .init(ids: ids, trackID: context.trackID) }
+    _ = await model.read(catalogue: catalogue, surface: .session, language: "nl", context: { context }, reader: reader)
+    instant = start.advanced(by: .seconds(6))
+    _ = await model.read(catalogue: catalogue, surface: .session, language: "nl", context: { context }, reader: reader)
+    #expect(reads == 2)
+    instant = start.advanced(by: .seconds(10))
+    #expect(await !model.refreshIfVisible(catalogue: catalogue, surface: .session, language: "nl", visible: true, sceneActive: true, context: { context }, reader: reader))
+    #expect(reads == 2)
+    instant = start.advanced(by: .seconds(16))
+    #expect(await model.refreshIfVisible(catalogue: catalogue, surface: .session, language: "nl", visible: true, sceneActive: true, context: { context }, reader: reader))
+    #expect(reads == 3)
+}
+
+@Test(.isolatedClientResources) @MainActor func visibleHelpWithheldNewResponseNeverExtendsOldObservationOrOverlapsAnotherRead() async throws {
+    let (catalogue, context, ids) = try fullHelpFixture()
+    let start = ContinuousClock.now
+    var instant = start, reads = 0
+    let model = AskDJHelpCatalogueModel(now: { instant }); defer { model.close() }
+    _ = await model.read(catalogue: catalogue, surface: .session, language: "nl", context: { context }, reader: { _, _, _, _ in reads += 1; return .init(ids: ids, trackID: context.trackID) })
+    instant = start.advanced(by: .seconds(10))
+    let gate = HelpPendingReadGate()
+    let pending = Task { await model.refreshIfVisible(catalogue: catalogue, surface: .session, language: "nl", visible: true, sceneActive: true,
+        context: { context }, reader: { _, _, _, _ in reads += 1; return await gate.wait() }) }
+    for _ in 0..<1000 { if gate.continuation != nil { break }; await Task.yield() }
+    let reply = try #require(gate.continuation)
+    #expect(model.isCurrent && reads == 2)
+    #expect(await !model.refreshIfVisible(catalogue: catalogue, surface: .session, language: "nl", visible: true, sceneActive: true,
+        context: { context }, reader: { _, _, _, _ in reads += 1; return .init(ids: ids, trackID: context.trackID) }))
+    #expect(await model.read(catalogue: catalogue, surface: .session, language: "nl", context: { context }, reader: { _, _, _, _ in reads += 1; return .init(ids: ids, trackID: context.trackID) }) == nil)
+    instant = start.advanced(by: .seconds(16)); model.retireExpiredObservation()
+    #expect(!model.isCurrent && model.admittedContext == nil && model.busy && reads == 2)
+    reply.resume(returning: .init(ids: ids, trackID: context.trackID))
+    #expect(await pending.value && model.isCurrent)
+    instant = start.advanced(by: .seconds(26)); model.retireExpiredObservation()
+    #expect(!model.isCurrent && reads == 2)
+}
+
+@Test(.isolatedClientResources, arguments: ["hide", "scene", "owner", "track", "session", "epoch"])
+@MainActor func visibleHelpLosesPendingReadWhenPanelSceneOrMaterialContextWithdraws(_ change: String) async throws {
+    let (catalogue, original, ids) = try fullHelpFixture()
+    var context = original
+    let start = ContinuousClock.now; var instant = start
+    let model = AskDJHelpCatalogueModel(now: { instant }); defer { model.close() }
+    _ = await model.read(catalogue: catalogue, surface: .session, language: "nl", context: { context }, reader: { _, _, _, _ in .init(ids: ids, trackID: context.trackID) })
+    instant = start.advanced(by: .seconds(10))
+    let gate = HelpPendingReadGate()
+    let pending = Task { await model.refreshIfVisible(catalogue: catalogue, surface: .session, language: "nl", visible: true, sceneActive: true,
+        context: { context }, reader: { _, _, _, _ in await gate.wait() }) }
+    for _ in 0..<1000 { if gate.continuation != nil { break }; await Task.yield() }
+    let reply = try #require(gate.continuation)
+    if change == "hide" || change == "scene" {
+        _ = await model.refreshIfVisible(catalogue: catalogue, surface: .session, language: "nl", visible: change != "hide", sceneActive: change != "scene", context: { context }, reader: nil)
+    } else {
+        if change == "track" { context.trackID = "another-track" }
+        else if change == "session" { context.sessionID = "another-session" }
+        else { context.ownerEpoch = change + "-replacement" }
+        model.contextChanged(to: context)
+    }
+    reply.resume(returning: .init(ids: ids, trackID: original.trackID))
+    #expect(await !pending.value)
+    #expect(!model.isCurrent && model.sections.isEmpty && !model.allowsVisibleRefresh)
+}
+
+@Test(.isolatedClientResources, arguments: ["timeout", "offline", "auth", "protocol", "tls", "opaque"])
+@MainActor func visibleHelpTransportFailureKeepsOnlyOriginalLeaseAndPermanentFailureStopsAutomaticDispatch(_ kind: String) async throws {
+    let (catalogue, context, ids) = try fullHelpFixture()
+    let start = ContinuousClock.now; var instant = start, reads = 0
+    let model = AskDJHelpCatalogueModel(now: { instant }); defer { model.close() }
+    let good: AskDJHelpCatalogueModel.Reader = { _, _, _, _ in reads += 1; return .init(ids: ids, trackID: context.trackID) }
+    _ = await model.read(catalogue: catalogue, surface: .session, language: "nl", context: { context }, reader: good)
+    instant = start.advanced(by: .seconds(10))
+    let known = kind == "timeout" || kind == "offline"
+    _ = await model.refreshIfVisible(catalogue: catalogue, surface: .session, language: "nl", visible: true, sceneActive: true, context: { context }, reader: { _, _, _, _ in
+        reads += 1
+        switch kind {
+        case "timeout": throw URLError(.timedOut)
+        case "offline": throw DJConnectError.network(message: "Declared offline", code: .notConnectedToInternet)
+        case "auth": throw DJConnectError.server(statusCode: 403, message: nil)
+        case "tls": throw URLError(.serverCertificateUntrusted)
+        case "opaque": throw DJConnectError.network(message: "timeout")
+        default: throw DJConnectError.invalidResponse
+        }
+    })
+    #expect(model.isCurrent == known && model.allowsVisibleRefresh == known)
+    instant = start.advanced(by: .seconds(16)); model.retireExpiredObservation()
+    #expect(!model.isCurrent)
+    instant = start.advanced(by: .seconds(20))
+    let refreshed = await model.refreshIfVisible(catalogue: catalogue, surface: .session, language: "nl", visible: true, sceneActive: true, context: { context }, reader: good)
+    #expect(refreshed == known && reads == (known ? 3 : 2))
+}

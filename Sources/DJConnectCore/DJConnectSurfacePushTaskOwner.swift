@@ -19,7 +19,7 @@ import Foundation
             guard !installation.isEmpty, installation.utf8.count <= 2048,
                   !binding.isEmpty, binding.utf8.count <= 2048,
                   DJConnectSurfacePushCoordinate.identifier(sessionID), DJConnectSurfacePushCoordinate.identifier(deviceID),
-                  ["ios", "macos"].contains(clientType),
+                  ["ios", "macos", "watchos"].contains(clientType),
                   let c = URLComponents(url: origin, resolvingAgainstBaseURL: false),
                   ["http", "https"].contains(c.scheme), c.host?.isEmpty == false,
                   c.user == nil, c.password == nil, c.query == nil, c.fragment == nil,
@@ -41,7 +41,10 @@ import Foundation
             let fields: Set<String> = role == .widget
                 ? ["instance_id", "app_bundle_id", "extension_bundle_id", "widget_kind"]
                 : ["instance_id", "app_bundle_id", "activity_id", "attributes_type"]
-            guard (16...2048).contains(token.count), ["ios", "ipados", "macos"].contains(platform),
+            guard (16...2048).contains(token.count), ["ios", "ipados", "macos", "watchos"].contains(platform),
+                  platform != "watchos" || (role == .widget && target["app_bundle_id"] == "dev.djconnect.ios.watch" &&
+                    target["extension_bundle_id"] == DJConnectWatchWidgetPushToken.extensionBundleID &&
+                    target["widget_kind"] == DJConnectWatchWidgetPushToken.widgetKind),
                   environment.map({ ["sandbox", "production"].contains($0) }) ?? true, Set(target.keys) == fields,
                   target.values.allSatisfy({ !$0.isEmpty && $0.utf8.count <= 200 }) else { return nil }
             self.role = role; self.token = token; self.platform = platform
@@ -372,4 +375,28 @@ import Foundation
                 })
         }
     }
+}
+
+/// Dedicated Watch consumer. Native token custody is separate from Moments;
+/// the production owner's original admission factory remains closed until the
+/// Watch issuer/clock/read purpose has been independently qualified.
+@MainActor public final class DJConnectWatchWidgetPushOwner {
+    private let owner = DJConnectSurfacePushTaskOwner(role: .widget)
+    public init() {}
+    public var phase: DJConnectSurfacePushTaskOwner.Phase { owner.phase }
+    public var observationGeneration: UUID { owner.observationGeneration }
+    public func bind(_ scope: DJConnectSurfacePushTaskOwner.Scope?) {
+        guard let scope, scope.clientType == "watchos", scope.deviceID.hasPrefix("djconnect-watchos-"),
+              scope.consentGeneration != nil else { owner.withdrawLocally(); owner.bind(nil); return }
+        owner.bind(scope)
+    }
+    public func observe(_ candidate: DJConnectSurfacePushTaskOwner.Candidate?) {
+        guard let candidate, candidate.platform == "watchos", candidate.role == .widget else { owner.observe(nil); return }
+        owner.observe(candidate)
+    }
+    public func register(using client: DJConnectClient, observationGeneration: UUID) {
+        guard client.identity.clientType == .watchos else { return }
+        owner.register(using: client, observationGeneration: observationGeneration)
+    }
+    public func withdrawLocally() { owner.withdrawLocally() }
 }

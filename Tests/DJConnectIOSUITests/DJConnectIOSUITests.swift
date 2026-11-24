@@ -5,6 +5,97 @@ import UIKit
 final class DJConnectIOSUITests: XCTestCase {
     private var lastScreenshotPNG: Data?
 
+    /// Explicit physical QA only. Preserves real pairing/preferences, uses no
+    /// demo/fixture arguments and sends no chat, playback or diagnostic upload.
+    func testPhysicalLiveReadOnlySessionAndInsight() throws {
+        guard ProcessInfo.processInfo.environment["DJCONNECT_PHYSICAL_LIVE_QA"] == "1" else {
+            throw XCTSkip("Physical live QA is not explicitly armed")
+        }
+        #if targetEnvironment(simulator)
+        throw XCTSkip("Requires the explicitly selected physical device")
+        #else
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = []
+        app.launch()
+        XCTAssertTrue(app.wait(for:.runningForeground,timeout:20))
+        let noThanks = app.buttons["Nee bedankt"].firstMatch
+        if noThanks.waitForExistence(timeout:4) { noThanks.tap() }
+        func record(_ name:String) {
+            let image = XCTAttachment(screenshot:app.screenshot());image.name = name;image.lifetime = .keepAlways;add(image)
+            let tree = XCTAttachment(string:app.debugDescription);tree.name = name+"-accessibility";tree.lifetime = .keepAlways;add(tree)
+        }
+        let sessionTab = app.buttons["DJ-sessie"].firstMatch
+        if sessionTab.exists && sessionTab.isHittable { sessionTab.tap() }
+        record("physical-real-session-initial")
+        let active = app.descendants(matching:.any)["screen-dj-session"].firstMatch
+        guard active.waitForExistence(timeout:20) else {
+            record("physical-real-session-not-ready")
+            throw XCTSkip("Actual owner Session is not available; no fixture or pairing reset used")
+        }
+        record("physical-real-session-loaded")
+        Thread.sleep(forTimeInterval:18)
+        record("physical-real-session-after18s")
+        let equalizer = app.buttons["session-equalizer-open-insight"].firstMatch
+        guard equalizer.exists && equalizer.isEnabled && equalizer.isHittable else {
+            throw XCTSkip("No actually observed current recording for Insight; Session observations retained")
+        }
+        equalizer.tap()
+        XCTAssertTrue(app.descendants(matching:.any)["screen-track-insight"].waitForExistence(timeout:12))
+        record("physical-real-insight-initial")
+        Thread.sleep(forTimeInterval:20)
+        record("physical-real-insight-after20s")
+        #endif
+    }
+
+    /// Discovery is read-only unless the operator selected one exact SDK ID.
+    func testPhysicalLiveCastOnSelectedDevice() throws {
+        guard ProcessInfo.processInfo.environment["DJCONNECT_PHYSICAL_LIVE_QA"] == "1" else { throw XCTSkip("Physical QA is not armed") }
+        #if targetEnvironment(simulator)
+        throw XCTSkip("Requires the selected physical device")
+        #else
+        continueAfterFailure = false
+        let app = XCUIApplication();app.launchArguments = [];app.launch()
+        XCTAssertTrue(app.wait(for:.runningForeground,timeout:20))
+        let decline = app.buttons["Nee bedankt"].firstMatch
+        if decline.waitForExistence(timeout:3) { decline.tap() }
+        let session = app.buttons["DJ-sessie"].firstMatch
+        if session.exists && session.isHittable { session.tap() }
+        let share = app.buttons["session-handoff-toggle"].firstMatch
+        if !share.exists {
+            let more = app.buttons["session-more-menu"].firstMatch
+            if more.exists && more.isHittable { more.tap() }
+        }
+        guard share.waitForExistence(timeout:15),share.isEnabled else { throw XCTSkip("Actual owner Session sharing is not available") }
+        share.tap()
+        let springboard = XCUIApplication(bundleIdentifier:"com.apple.springboard")
+        let network = springboard.alerts.containing(NSPredicate(format:"label CONTAINS[c] %@","netwerk")).firstMatch
+        if network.waitForExistence(timeout:3) {
+            let allow = network.buttons.matching(NSPredicate(format:"label IN %@",["Sta toe","Toestaan","Allow"])).firstMatch
+            if allow.exists { allow.tap() }
+        }
+        Thread.sleep(forTimeInterval:8)
+        func record(_ name:String) {
+            let image = XCTAttachment(screenshot:app.screenshot());image.name = name;image.lifetime = .keepAlways;add(image)
+            let tree = XCTAttachment(string:app.debugDescription);tree.name = name+"-accessibility";tree.lifetime = .keepAlways;add(tree)
+        }
+        record("physical-Cast-discovery")
+        guard let id = ProcessInfo.processInfo.environment["DJCONNECT_PHYSICAL_CAST_DEVICE_ID"],!id.isEmpty else {
+            throw XCTSkip("Discovery recorded; no exact physical Cast device ID selected")
+        }
+        let target = app.buttons["vibecast-cast-device-"+id].firstMatch
+        XCTAssertTrue(target.waitForExistence(timeout:15));XCTAssertTrue(target.isEnabled);target.tap()
+        let confirmed = app.staticTexts["VibeCast wordt door het scherm weergegeven."].firstMatch
+        XCTAssertTrue(confirmed.waitForExistence(timeout:30),"Receiver must confirm the actual owned handoff")
+        record("physical-Cast-correlated-status")
+        XCUIDevice.shared.press(.home);Thread.sleep(forTimeInterval:18);app.activate()
+        record("physical-Cast-after-background")
+        let stop = app.buttons["vibecast-cast-stop"].firstMatch
+        if stop.waitForExistence(timeout:10) { stop.tap() }
+        record("physical-Cast-owned-stop")
+        #endif
+    }
+
     /// Manual setup for the disposable HA-dev run. A fresh pairing link must
     /// already be pending on the dedicated Dutch simulator.
     func testPrepareOnlineCataloguePairing() throws {
@@ -698,6 +789,45 @@ final class DJConnectIOSUITests: XCTestCase {
 
         XCTAssertTrue(app.descendants(matching: .any)["screen-pairing"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.buttons["pairing-start-demo-button"].exists)
+    }
+
+    func testGuestJoinIsAvailableWithoutPairingAndRequiresExplicitConfirmation() throws {
+        let app = launchApp()
+        let join = app.buttons["pairing-join-session"]
+        XCTAssertTrue(join.waitForExistence(timeout: 8)); join.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["live-guest-root"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["live-guest-confirm"].exists)
+        let link = "djconnect://join#v=1&ha_url=https%3A%2F%2Fha.example.com&issuer_epoch=\(String(repeating: "A", count: 43))&invitation_id=\(String(repeating: "B", count: 32))&invitation_secret=\(String(repeating: "C", count: 43))"
+        app.open(try XCTUnwrap(URL(string: link)))
+        XCTAssertTrue(app.buttons["live-guest-confirm"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.textFields["live-guest-composer"].exists)
+        XCTAssertFalse(app.buttons["session-welcome-start"].exists)
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "VibeCast-Live-join-confirmation"; screenshot.lifetime = .keepAlways; add(screenshot)
+        app.buttons["live-guest-leave"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["screen-pairing"].waitForExistence(timeout: 5))
+    }
+
+    func testPlaybackEqualizerOpensCurrentTrackInsight() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--runtime-fixture=review_demo_active_session", "--screenshot-screen=dj-session", "-AppleLanguages", "(nl)", "-AppleLocale", "nl_NL"]
+        app.launch()
+        let equalizer = app.buttons["session-equalizer-open-insight"]
+        XCTAssertTrue(equalizer.waitForExistence(timeout: 12))
+        XCTAssertFalse(app.descendants(matching: .any)["ask-dj-accuracy-notice"].exists)
+        equalizer.tap()
+        XCTAssertTrue(app.staticTexts["Track Insight (demo)"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["Midnight City"].firstMatch.exists)
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Playback-equalizer-current-TrackInsight"; screenshot.lifetime = .keepAlways; add(screenshot)
+    }
+
+    func testMalformedGuestDeepLinkNeverShowsAdmissionConfirmation() throws {
+        let app = launchApp()
+        app.open(try XCTUnwrap(URL(string: "djconnect://join#v=1&ha_url=https%3A%2F%2Fha.example.com&invitation_secret=invalid")))
+        XCTAssertTrue(app.descendants(matching: .any)["live-guest-root"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["live-guest-confirm"].exists)
+        XCTAssertFalse(app.textFields["live-guest-composer"].exists)
     }
 
     func testPairingAndNestedCameraDialogStayCenteredInsideViewport() {

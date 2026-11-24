@@ -15,6 +15,7 @@ import DJConnectCore
     @Published private(set) var uncertain = false
     @Published private(set) var expired = false
     @Published private var hiddenOfferIDs = Set<String>()
+    private var withdrawnOfferIDs = Set<String>()
     private weak var host: DJConnectAppModel?
     private var captured: Scope?
     private var qualified = false
@@ -66,7 +67,7 @@ import DJConnectCore
             expiryTask?.cancel(); expiryTask = nil
             captured = scope; generation = UUID(); qualified = false; readCompleted = false
             offer = nil; ownedOutputs = []; pendingOutputs = []; outputDeadline = nil; outputInstant = nil; busy = false; uncertain = false; expired = false
-            hiddenOfferIDs = []
+            hiddenOfferIDs = []; withdrawnOfferIDs = []
             wallDeadline = nil; monotonicDeadline = nil; settings = nil; settingsChanged = false
             outputResultSetID = nil; submittedOutputs = []; outputContext = nil
             awaitingOutput = false
@@ -124,7 +125,16 @@ import DJConnectCore
               incoming.isSupported, incoming.session_id == captured.session else { return }
         if let session, Self.settingsData(session) != host?.activeDJSession.flatMap(Self.settingsData) { return }
         if let policy = incoming.refresh_policy, policy.mood_revision != host?.activeDJSession?.moodRevision { return }
+        let sourceWithdrawn = incoming.state == "unavailable" &&
+            ["session_or_source_unavailable", "music_dna_unavailable"].contains(incoming.reason ?? "")
+        let settingsWithdrawn = incoming.reason == "session_settings_changed" && incoming.actions_available == false
         guard !hiddenOfferIDs.contains(incoming.offer_id) else { return }
+        if withdrawnOfferIDs.contains(incoming.offer_id),
+           !(offer?.offer_id == incoming.offer_id && sourceWithdrawn) { return }
+        // A real terminal Core decision retires this original selection. Inert
+        // settings previews may remain; a later source withdrawal still clears
+        // them. Cached/reordered available DTOs cannot restore either choice.
+        if sourceWithdrawn || settingsWithdrawn { withdrawnOfferIDs.insert(incoming.offer_id) }
         if incoming.state == "dismissed" {
             hiddenOfferIDs.insert(incoming.offer_id)
         }

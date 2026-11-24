@@ -56,6 +56,7 @@ public struct DJConnectDisplayClaim: Sendable {
     public enum Share: Sendable {
         /// The caller must obtain an explicit user confirmation for this choice.
         case createTwoHours
+        case createFourHours
         /// Existing-share mode never renews or extends that share's deadline.
         case existing(id: String, generation: Int)
     }
@@ -65,7 +66,7 @@ public struct DJConnectDisplayClaim: Sendable {
     // consent, token, epoch and this original deadline at synchronous dispatch.
     // Constructing bytes grants no dispatch authority and permits no auto-replay.
     func approvalBody(identity: DJConnectIdentity, sessionID: String, currentIssuerEpoch: String,
-                      share: Share, now: Date, uptime: TimeInterval) throws -> Data {
+                      share: Share, language: String? = nil, live: Bool? = nil, now: Date, uptime: TimeInterval) throws -> Data {
         guard isCurrent(now: now, uptime: uptime), currentIssuerEpoch == issuerEpoch,
               [.ios, .macos].contains(identity.clientType), !identity.deviceID.isEmpty, identity.deviceID.utf8.count <= 128,
               identity.deviceID.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) }),
@@ -75,14 +76,22 @@ public struct DJConnectDisplayClaim: Sendable {
               sessionID == sessionID.trimmingCharacters(in: .whitespacesAndNewlines) else {
             throw DJConnectError.invalidResponse
         }
-        let choice: [String: Any]
+        var choice: [String: Any]
         switch share {
         case .createTwoHours:
             choice = ["mode": "create", "consent": true, "lifetime_seconds": 7200]
+        case .createFourHours:
+            choice = ["mode": "create", "consent": true, "lifetime_seconds": 14400]
         case let .existing(id, generation):
+            guard language == nil, live == nil else { throw DJConnectError.invalidResponse }
             guard DJConnectRendezvousQR.canonicalToken(id), generation > 0 else { throw DJConnectError.invalidResponse }
             choice = ["mode": "existing", "share_id": id, "share_generation": generation]
         }
+        if let language {
+            guard ["en", "nl", "de", "fr", "es"].contains(language) else { throw DJConnectError.invalidResponse }
+            choice["language"] = language
+        }
+        if let live { choice["live"] = live }
         return try JSONSerialization.data(withJSONObject: [
             "contract_version": 1, "identity": ["device_id": identity.deviceID, "client_type": identity.clientType.rawValue],
             "session_id": sessionID, "issuer_epoch": issuerEpoch, "claim_id": claimID,

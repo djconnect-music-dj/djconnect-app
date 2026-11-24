@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 /// Read-only, producer-authored intentions. Never a queue or a local Planner.
 public struct DJConnectSessionForecast: Codable, Equatable, Sendable {
@@ -241,5 +242,49 @@ public struct DJConnectForecastQueueGuidance: Equatable, Sendable {
         intro = String(value[..<start]).trimmingCharacters(in: .whitespaces)
         self.tracks = tracks
         note = String(value[noteStart.upperBound...])
+    }
+}
+
+
+/// Temporary owner-only queue preview. It is not a published Moment and has no
+/// by-ID, speech, history or mutation authority.
+public struct DJConnectHorizonMomentPreview: Codable, Equatable, Sendable {
+    public struct Track: Codable, Equatable, Sendable {
+        public let item_id: String
+        public let title: String
+        public let artist: String
+        public let source_url: String
+        public let artwork_url: String?
+    }
+    public let contract_version: Int
+    public let type: String
+    public let preview_id: String
+    public let session_id: String
+    public let current_item_id: String
+    public let text: String
+    public let expires_at: String
+    public let track: Track
+    public var expiry: Date? { DJConnectHistoryEntry.date(expires_at) }
+    public var structurallyValid: Bool {
+        guard contract_version == 1, type == "horizon",
+              preview_id.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil,
+              !session_id.isEmpty, session_id.utf8.count <= 256,
+              !current_item_id.isEmpty, current_item_id.utf8.count <= 256,
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, text.utf8.count <= 4096,
+              !track.title.isEmpty, track.title.utf8.count <= 1024, track.artist.utf8.count <= 1024,
+              track.source_url.range(of: "^https://open\\.spotify\\.com/track/[A-Za-z0-9]{22}$", options: .regularExpression) != nil,
+              expiry != nil else { return false }
+        let spotifyID = String(track.source_url.suffix(22))
+        let expected = SHA256.hash(data: Data(("spotify:track:" + spotifyID).utf8)).prefix(12).map { String(format: "%02x", $0) }.joined()
+        return track.item_id == expected
+    }
+    public func isVisible(session: DJConnectSessionRuntime, positionMS: Int? = nil, at date: Date) -> Bool {
+        guard structurallyValid, session.id == session_id, session.runtimeState == "active",
+              session.broadcast.session.sessionID == session_id, session.broadcast.session.runtimeState == "active",
+              let playback = session.broadcast.playback, playback.state == "playing",
+              playback.itemID == current_item_id, let expiry, date < expiry,
+              let duration = playback.durationMS, let position = positionMS ?? playback.positionMS,
+              duration > 0, position >= 0 else { return false }
+        return duration - position > 0 && duration - position <= 45_000
     }
 }

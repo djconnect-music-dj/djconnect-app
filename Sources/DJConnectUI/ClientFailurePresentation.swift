@@ -50,7 +50,7 @@ struct ClientFailurePresentation: Sendable {
             return .init(code: "route_missing", message: "Ask DJ niet bereikbaar.", diagnostic: "route missing\(message.map { ": \($0)" } ?? "")",
                 insightCode: "route_missing", insightDiagnosticMessage: message, httpStatus: nil,
                 insightCopy: .parsed(message, fallback: "appModel.track.insight.is.not.available.in.this.home.assistant"))
-        case let .network(message):
+        case let .network(message, _):
             return .init(code: "network", message: "Ask DJ niet bereikbaar.", diagnostic: "network: \(message)",
                 insightCode: "network", insightDiagnosticMessage: message, httpStatus: nil,
                 insightCopy: .network(message))

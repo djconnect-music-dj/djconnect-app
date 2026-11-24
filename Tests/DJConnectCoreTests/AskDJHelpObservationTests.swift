@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import DJConnectCore
+@testable import DJConnectUI
 
 private final class HelpObservationWire: URLProtocol, @unchecked Sendable {
     private static let lock = NSLock()
@@ -156,5 +157,54 @@ private func helpBody(_ q: DJConnectAskDJHelpObservation.Request) -> [String: An
             #expect(sent.value(forHTTPHeaderField: "Authorization") == "Bearer original-paired-test-token")
             #expect(sent.value(forHTTPHeaderField: "X-Ambient-Secret") == nil)
         }
+    }
+}
+
+extension HelpObservationHTTPTests {
+    @Test(.isolatedClientResources, arguments: [false, true])
+    func visibleHelpUsesFreshCorrelatedGETsAndRejectsAnOldDTO(_ replayOldDTO: Bool) async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [HelpObservationWire.self]
+        let client = DJConnectClient(baseURL: URL(string: "https://paired.example")!,
+            identity: .init(deviceID: "djconnect-ios-ABCDEF123456", deviceName: "Declared fixture", clientType: .ios, firmware: "4", platform: .ios),
+            tokenStore: DJConnectInMemoryTokenStore(token: "original-paired-test-token"), session: URLSession(configuration: configuration))
+        let catalogue = try #require(DJConnectAskDJCatalogue.bundled)
+        let entries = Array(catalogue.entries.filter { !$0.requires.contains("current_track") }.prefix(3))
+        let descriptorQuery = try DJConnectAskDJHelpObservation.Request(surface: .session, language: "nl", sessionID: "declared-session")
+        var context = DJConnectAskDJCatalogue.Context()
+        context.descriptor = try JSONDecoder().decode(DJConnectAskDJCatalogue.Descriptor.self,
+            from: JSONSerialization.data(withJSONObject: try #require(helpBody(descriptorQuery)["catalogue"])))
+        context.ownerEpoch = "declared-owner"; context.sessionID = "declared-session"
+        for entry in catalogue.entries {
+            for flag in entry.requires { context.flags[flag] = true }
+            for (key, value) in entry.contracts { context.contracts[key] = value }
+        }
+        let originalContext = context
+        let start = ContinuousClock.now; var instant = start
+        let model = AskDJHelpCatalogueModel(now: { instant }); defer { model.close() }
+        var firstBytes: Data?, identifiers: [String] = [], requests: [URLRequest] = []
+        let reader: AskDJHelpCatalogueModel.Reader = { _, surface, language, _ in
+            let query = try DJConnectAskDJHelpObservation.Request(surface: surface, language: language, sessionID: originalContext.sessionID)
+            identifiers.append(query.id)
+            var body = helpBody(query); body["eligible_entry_ids"] = entries.map(\.id)
+            let fresh = try JSONSerialization.data(withJSONObject: body)
+            let bytes = replayOldDTO ? (firstBytes ?? fresh) : fresh
+            firstBytes = firstBytes ?? fresh
+            HelpObservationWire.setup(bytes, invalidate: false)
+            defer { requests += HelpObservationWire.captured }
+            let observation = try await client.askDJHelpObservation(query, catalogue: catalogue, isCurrent: { true })
+            return .init(ids: observation.eligibleIDs, trackID: observation.trackID)
+        }
+        _ = await model.read(catalogue: catalogue, surface: .session, language: "nl", context: { originalContext }, reader: reader)
+        #expect(model.isCurrent)
+        for second in stride(from: 10, through: 90, by: 10) {
+            instant = start.advanced(by: .seconds(second))
+            _ = await model.refreshIfVisible(catalogue: catalogue, surface: .session, language: "nl", visible: true, sceneActive: true,
+                context: { originalContext }, reader: reader)
+            #expect(model.isCurrent == !replayOldDTO)
+        }
+        #expect(requests.count == (replayOldDTO ? 2 : 10))
+        #expect(Set(identifiers).count == identifiers.count)
+        #expect(requests.allSatisfy { $0.httpMethod == "GET" && $0.httpBody == nil && $0.url?.path == "/api/djconnect/v1/ask_dj/help-context" })
     }
 }

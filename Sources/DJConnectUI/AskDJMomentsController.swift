@@ -23,6 +23,7 @@ import DJConnectCore
     @Published private(set) var loading = false
     @Published private(set) var checkingCancellation = false
     @Published private(set) var outcomeUnknown = false
+    @Published private(set) var canChooseAgain = false
     private var now: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
     private weak var model: DJConnectAppModel?
     private var testClient: DJConnectClient?
@@ -65,6 +66,7 @@ import DJConnectCore
         model?.prepareRequestedMomentPresentation()
         scope = captured; inventory = nil; accepted = nil; request = nil; handle = nil; item = nil
         terminalAccepted = false; noticeText = nil; pendingText = nil; checkingCancellation = false; outcomeUnknown = false
+        canChooseAgain = false
         presentation.choose(); let generation = generation
         loading = true
         requestTask = Task { [weak self] in
@@ -114,9 +116,13 @@ import DJConnectCore
         }
     }
     func checkStatus() {
-        guard valid, operationID != nil, !terminalAccepted else { return }
+        guard valid, operationID != nil, !terminalAccepted, !canChooseAgain else { return }
         let generation = generation
         startStatusPolling(generation: generation)
+    }
+    func chooseAgain() {
+        guard valid, presentation.phase == .notice, canChooseAgain, !outcomeUnknown else { return }
+        close(); open() // Inventory read only; a fresh request still needs a deliberate selection.
     }
     private func startStatusPolling(generation: UUID) {
         statusPollTask?.cancel()
@@ -168,6 +174,7 @@ import DJConnectCore
         }
         guard !terminalAccepted else { return }
         outcomeUnknown = false
+        canChooseAgain = false
         if response.state != .pending { checkingCancellation = false }
         switch response.state {
         case .accepted:
@@ -188,7 +195,8 @@ import DJConnectCore
         case .cancelled:
             noticeText = response.message ?? text("cancelled"); presentation.notice(generation: generation)
         case .notFound, .temporarilyUnavailable, .denied:
-            noticeText = response.message ?? text(response.state == .denied ? "denied" : "no_result")
+            canChooseAgain = true
+            noticeText = response.message ?? text(response.state == .denied ? "denied" : response.state == .temporarilyUnavailable ? "temporary" : "no_result")
             presentation.notice(generation: generation)
         case .acceptedResultUnavailable: break
         }
@@ -231,6 +239,7 @@ import DJConnectCore
         let old = accepted?.moment
         requestTask?.cancel(); requestTask = nil; statusPollTask?.cancel(); statusPollTask = nil; acceptedStatusTask?.cancel(); acceptedStatusTask = nil; presentation.dismiss(); accepted = nil; inventory = nil; pendingText = nil
         scope = nil; noticeText = nil; checkingCancellation = false
+        canChooseAgain = false
         if let old { model?.stopRequestedMomentSpeech(old) }
     }
     func tick() {
