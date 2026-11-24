@@ -35,7 +35,7 @@ func personaMarkRemainsWithinSquareAndWideIconBounds(size: CGFloat) {
             DJConnectFeatureSymbols.image(DJConnectFeatureSymbols.djSession)
             DJConnectFeatureSymbols.image("music.note")
             Text("Statisch menu / verhoogd contrast").font(.caption)
-            DJPersonaGraphic(colors: [.blue, .purple, .pink], highContrast: true, opaque: true)
+            DJPersonaGraphic(colors: [.blue, .purple, .pink], highContrast: true)
                 .frame(width: 80, height: 80)
         }
     }
@@ -151,7 +151,7 @@ func personaMarkRemainsWithinSquareAndWideIconBounds(size: CGFloat) {
     let preview = HStack(spacing: 16) {
         ForEach(DJPersonaActivity.allCases, id: \.rawValue) { activity in
             VStack {
-                DJPersonaGraphic(colors: [.blue, .purple, .pink], highContrast: false, opaque: false,
+                DJPersonaGraphic(colors: [.blue, .purple, .pink], highContrast: false,
                                  activity: activity).frame(width: 80, height: 80)
                 Text(activity.rawValue).font(.caption)
             }
@@ -205,18 +205,21 @@ func personaMarkRemainsWithinSquareAndWideIconBounds(size: CGFloat) {
 }
 
 #if os(macOS)
-@Test(.isolatedClientResources) @MainActor func personaOpaqueBackingCoversOuterHeadsetOnBrightMood() throws {
+@Test(.isolatedClientResources, arguments: [false, true])
+@MainActor func personaArtworkLeavesTheCardVisibleBetweenStrokes(highContrast: Bool) throws {
     for activity in DJPersonaActivity.allCases {
-        let view = DJPersonaGraphic(colors: [.pink, .purple], highContrast: false, opaque: true,
+        let view = DJPersonaGraphic(colors: [.pink, .purple], highContrast: highContrast,
                                     activity: activity)
-            .frame(width: 200, height: 200).background(Color(red: 0.7, green: 0.3, blue: 0.9))
+            .frame(width: 200, height: 200)
         let renderer = ImageRenderer(content: view)
         renderer.scale = 1
-        let tiff = try #require(renderer.nsImage?.tiffRepresentation)
-        let rep = try #require(NSBitmapImageRep(data: tiff))
-        // Inside the full-size backing, outside both central disc and headset.
-        let pixel = try #require(rep.colorAt(x: 10, y: 100)?.usingColorSpace(.deviceRGB))
-        #expect(pixel.redComponent < 0.05 && pixel.greenComponent < 0.05 && pixel.blueComponent < 0.05)
+        let rep = NSBitmapImageRep(cgImage: try #require(renderer.cgImage))
+        for (x, y) in [(10, 100), (100, 39), (64, 106)] {
+            let pixel = try #require(rep.colorAt(x: x, y: y))
+            #expect(pixel.alphaComponent == 0, "\(activity): clear at \(x), \(y)")
+        }
+        let ring = try #require(rep.colorAt(x: 100, y: 162))
+        #expect(ring.alphaComponent > 0.95)
     }
 }
 #endif

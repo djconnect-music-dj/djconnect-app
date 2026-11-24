@@ -42,6 +42,11 @@ final class DJConnectIOSUITests: XCTestCase {
         }
         equalizer.tap()
         XCTAssertTrue(app.descendants(matching:.any)["screen-track-insight"].waitForExistence(timeout:12))
+        XCTAssertTrue(app.buttons["Track Insight"].firstMatch.isSelected,
+                      "Equalizer must select the existing page")
+        XCTAssertFalse(app.buttons["session-track-insight-close"].exists,
+                       "No separate Insight modal may be created")
+        XCTAssertEqual(app.sheets.count, 0)
         record("physical-real-insight-initial")
         Thread.sleep(forTimeInterval:20)
         record("physical-real-insight-after20s")
@@ -817,6 +822,9 @@ final class DJConnectIOSUITests: XCTestCase {
         XCTAssertFalse(app.descendants(matching: .any)["ask-dj-accuracy-notice"].exists)
         equalizer.tap()
         XCTAssertTrue(app.staticTexts["Track Insight (demo)"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.buttons["Track Insight"].firstMatch.isSelected)
+        XCTAssertFalse(app.buttons["session-track-insight-close"].exists)
+        XCTAssertEqual(app.sheets.count, 0)
         XCTAssertTrue(app.staticTexts["Midnight City"].firstMatch.exists)
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "Playback-equalizer-current-TrackInsight"; screenshot.lifetime = .keepAlways; add(screenshot)

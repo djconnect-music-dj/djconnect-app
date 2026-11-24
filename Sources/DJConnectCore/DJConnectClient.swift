@@ -330,6 +330,52 @@ public final class DJConnectClient: Sendable {
         return data
     }
 
+    public struct CastScreenClaim: Decodable, Sendable {
+        public let code: String
+        let claim_id: String
+        let browser_generation: String
+        let issuer_epoch: String
+        fileprivate let success: Bool
+        fileprivate let contract_version: Int
+    }
+
+    public func launchCastScreen(
+        receiverID: UUID, sessionID: String, expectedInstallationID: String,
+        isCurrent: @escaping @MainActor @Sendable () -> Bool
+    ) async throws -> CastScreenClaim {
+        guard identity.clientType == .macos, DJConnectHybridTransport.trustedOrigin(baseURL), await isCurrent(),
+              !Task.isCancelled, !sessionID.isEmpty, !expectedInstallationID.isEmpty else { throw DJConnectError.invalidResponse }
+        let originalToken = try loadedToken()
+        let ownerIdentity = ["device_id": identity.deviceID, "client_type": identity.clientType.rawValue]
+        let ownerBody = try JSONSerialization.data(withJSONObject: ["contract_version": 1, "identity": ownerIdentity])
+        try await validateSelectedDisplayInstallation(ownerBody: ownerBody, originalToken: originalToken,
+            expectedInstallationID: expectedInstallationID, pairedLocalOrigin: nil, isCurrent: isCurrent)
+        var request = try authenticatedRequest(path: Self.apiV1Path("cast/owner/launch"))
+        request.httpMethod = "POST"
+        request.timeoutInterval = 40
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "contract_version": 1, "identity": ownerIdentity, "session_id": sessionID,
+            "receiver_id": receiverID.uuidString.replacingOccurrences(of: "-", with: "").lowercased(),
+        ])
+        let data = try await sessionArtworkTransport.prepare(request, forCastLaunch: true, isCurrent: {
+            isCurrent() && (try? self.tokenStore.loadToken()) == originalToken
+        })
+        try Task.checkCancellation()
+        guard await isCurrent(), try loadedToken() == originalToken, data.count <= 4096 else {
+            throw DJConnectError.invalidResponse
+        }
+        let claim = try JSONDecoder().decode(CastScreenClaim.self, from: data)
+        guard claim.success, claim.contract_version == 1, claim.code.utf8.count == 6,
+              claim.code.utf8.allSatisfy({ (48...57).contains($0) }),
+              DJConnectRendezvousQR.canonicalToken(claim.claim_id),
+              DJConnectRendezvousQR.canonicalToken(claim.browser_generation),
+              DJConnectRendezvousQR.canonicalToken(claim.issuer_epoch) else {
+            throw DJConnectError.invalidResponse
+        }
+        return claim
+    }
+
     public struct WidgetPushConsent: Sendable, Decodable {
         public let enabled: Bool
         public let revision: Int64
@@ -1221,10 +1267,10 @@ public final class DJConnectClient: Sendable {
         let capability: Capability = try await decodedResponse(
             for: sessionHistoryReadRequest(route: "capabilities"), using: sessionProjectionSession)
         guard capability.success, capability.capabilities["music_canvas"] == true,
-              capability.contract_versions["music_canvas"] == 1 else { throw DJConnectError.invalidResponse }
+              capability.contract_versions["music_canvas"] == 1 else { throw DJConnectCanvasReadFailure.notOffered }
         let snapshot: DJConnectCanvasSnapshot = try await decodedResponse(
             for: canvasRequest("read", body: canvasIdentity()), using: sessionProjectionSession)
-        guard snapshot.isValid else { throw DJConnectError.invalidResponse }
+        guard snapshot.isValid else { throw DJConnectCanvasReadFailure.invalidSnapshot }
         return snapshot
     }
 

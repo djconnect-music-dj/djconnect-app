@@ -1219,9 +1219,19 @@ public final class DJConnectAppModel: ObservableObject {
         displayConsentState = revokeUncertain ? .revokeUncertain : uncertain ? .uncertain : .unavailable
     }
     func resolveDisplayConsent(code: String) async {
+        await prepareDisplayClaim(code: code, receiverID: nil)
+    }
+
+    func resolveCastScreen(receiverID: UUID) async -> Bool {
+        await prepareDisplayClaim(code: nil, receiverID: receiverID)
+        return displayConsentState == .ready
+    }
+
+    private func prepareDisplayClaim(code: String?, receiverID: UUID?) async {
         guard canResolveDisplayConsent else { cancelDisplayConsent(); return }
         guard canSelectVibeCastScreen else { return }
         cancelDisplayConsent()
+        if receiverID != nil { vibeCastLiveEnabled = false }
         guard let destination = captureDisplayConsentDestination() else { return }
         let session = destination.session, profile = destination.profile, installation = destination.installation
         let operation = UUID(); displayConsentOperation = operation
@@ -1231,7 +1241,7 @@ public final class DJConnectAppModel: ObservableObject {
             installation: installation, epoch: epoch, connection: connection, scope: scope)
         displayConsentOwner = owner
         displayConsentState = .resolving
-        await resolveDisplayConsentFlow(code: code, session: session, installation: installation,
+        await resolveDisplayConsentFlow(code: code, receiverID: receiverID, session: session, installation: installation,
             operation: operation, owner: owner)
     }
     private func captureDisplayConsentDestination() -> (session: DJConnectSessionRuntime, profile: String, installation: String)? {
@@ -1259,7 +1269,7 @@ public final class DJConnectAppModel: ObservableObject {
             sessionBroadcastGeneration == connection
     }
 
-    private func resolveDisplayConsentFlow(code: String, session: DJConnectSessionRuntime, installation: String,
+    private func resolveDisplayConsentFlow(code: String?, receiverID: UUID?, session: DJConnectSessionRuntime, installation: String,
         operation: UUID, owner: @escaping @MainActor @Sendable () -> Bool) async {
         do {
             // The display owner endpoints require secure ingress. Ordinary
@@ -1269,7 +1279,15 @@ public final class DJConnectAppModel: ObservableObject {
             let flow = try DJConnectDisplayConsentSession(client: client, installationID: installation,
                 sessionID: session.id, pairedLocalOrigin: Self.normalizedHomeAssistantURL(from: localHomeAssistantURL()), isCurrent: owner)
             displayConsentFlow = flow
-            try await flow.resolve(code: code)
+            if let receiverID {
+                let claim = try await client.launchCastScreen(receiverID: receiverID, sessionID: session.id,
+                    expectedInstallationID: installation, isCurrent: owner)
+                try await flow.resolve(code: claim.code, castClaim: claim)
+            } else if let code {
+                try await flow.resolve(code: code)
+            } else {
+                throw DJConnectError.invalidResponse
+            }
             guard owner(), !Task.isCancelled else { throw CancellationError() }
             displayConsentExistingShare = flow.existingShare
             displayConsentState = flow.state
@@ -2151,6 +2169,31 @@ public final class DJConnectAppModel: ObservableObject {
         let authority: UUID
     }
     private var forecastReadContext: ForecastReadContext?
+    private struct ForecastAutomaticReadFence: Equatable {
+        let scope: ForecastScope
+        let ownerEpoch: UUID
+    }
+    private var forecastAutomaticReadDenial: ForecastAutomaticReadFence?
+    private struct ForecastOwnedRead {
+        let id: UUID
+        let context: ForecastReadContext
+        let task: Task<Void, Never>
+    }
+    private var forecastOwnedRead: ForecastOwnedRead?
+    private var forecastAutomaticReadFence: ForecastAutomaticReadFence? {
+        activeDJSession.map { .init(scope: ForecastScope($0), ownerEpoch: sessionHistory.responseEpoch) }
+    }
+    var permitsAutomaticSessionForecastRead: Bool {
+        canRefreshSessionForecast && forecastAutomaticReadFence != forecastAutomaticReadDenial
+    }
+    var sessionForecastNextReadDelay: TimeInterval {
+        if forecastOwnedRead != nil { return 1 }
+        guard let projection = forecastCursor?.projection, ["ready", "limited"].contains(projection.state) else { return 8 }
+        let wallRemaining = forecastCursor?.projection?.valid_until
+            .flatMap(DJConnectSessionForecast.timestamp)?.timeIntervalSinceNow
+        let remaining = [forecastCursor?.remainingLifetime, wallRemaining].compactMap { $0 }.min()
+        return SessionForecastReadCadence.delay(originalRemaining: remaining)
+    }
     private var forecastEpoch: UUID? { didSet { if oldValue != forecastEpoch { invalidateAskDJHelpObservationContext() } } }
     private var forecastExpiryTask: Task<Void, Never>?
     struct ForecastScope: Equatable {
@@ -2200,7 +2243,41 @@ public final class DJConnectAppModel: ObservableObject {
                                        playbackSource: session.broadcast.playback?.sourceURL, at: date)
     }
 
-    public func refreshSessionForecast() async {
+    public func refreshSessionForecast(automatic: Bool = false) async {
+        guard canRefreshSessionForecast, let session = activeDJSession,
+              !automatic || permitsAutomaticSessionForecastRead else { return }
+        let requested = ForecastReadContext(scope: ForecastScope(session), ownerEpoch: sessionHistory.responseEpoch,
+                                           authority: forecastAuthorityGeneration)
+        func stillCurrent() -> Bool {
+            activeDJSession.map(ForecastScope.init) == requested.scope &&
+                sessionHistory.responseEpoch == requested.ownerEpoch && forecastAuthorityGeneration == requested.authority
+        }
+        while let existing = forecastOwnedRead {
+            if existing.context == requested {
+                await existing.task.value
+                return
+            }
+            // Cancel the original HTTP chain before a changed context starts.
+            // A suspended obsolete request must neither block nor own a successor.
+            existing.task.cancel()
+            await existing.task.value
+            if forecastOwnedRead?.id == existing.id { forecastOwnedRead = nil }
+            guard !Task.isCancelled, stillCurrent(), canRefreshSessionForecast else { return }
+        }
+        guard !Task.isCancelled, stillCurrent() else { return }
+        let id = UUID()
+        let task = Task { [weak self] in
+            guard let self, !Task.isCancelled, stillCurrent() else { return }
+            await self.performSessionForecastRead()
+        }
+        forecastOwnedRead = .init(id: id, context: requested, task: task)
+        await withTaskCancellationHandler(operation: { await task.value }, onCancel: { task.cancel() })
+        if forecastOwnedRead?.id == id { forecastOwnedRead = nil }
+    }
+
+    func cancelVisibleSessionForecastRead() { forecastOwnedRead?.task.cancel() }
+
+    private func performSessionForecastRead() async {
         guard canRefreshSessionForecast, let session = activeDJSession else { return }
         let scope = ForecastScope(session)
         let epoch = sessionHistory.responseEpoch
@@ -2221,7 +2298,10 @@ public final class DJConnectAppModel: ObservableObject {
                   readContext.authority == forecastAuthorityGeneration,
                   activeDJSession.map(ForecastScope.init) == scope else { return }
             forecastAvailable = caps.forecastAvailable
-            guard forecastAvailable else { forecastCursor?.withdraw(); return }
+            guard forecastAvailable else {
+                forecastAutomaticReadDenial = .init(scope: scope, ownerEpoch: epoch)
+                forecastCursor?.withdraw(); return
+            }
             let projection = try await withHomeAssistantClient { try await $0.sessionForecast(sessionID: session.id) }
             guard !Task.isCancelled, generation == forecastGeneration, epoch == sessionHistory.responseEpoch,
                   canRefreshSessionHistory, !djSessionIsRecovering, !djSessionLiveUnavailable,
@@ -2242,6 +2322,7 @@ public final class DJConnectAppModel: ObservableObject {
                 return
             }
             forecastPreservedTransportScope = nil
+            forecastAutomaticReadDenial = .init(scope: scope, ownerEpoch: epoch)
             forecastCursor?.withdraw()
             _ = sessionHistory.withdrawAuthority(for: error)
         }
@@ -2250,6 +2331,14 @@ public final class DJConnectAppModel: ObservableObject {
     private func acceptSessionForecast(_ incoming: DJConnectSessionForecast?, invalidatesPendingReads: Bool = false) {
         let previousRevision = forecastCursor?.revisionFloor ?? -1
         forecastCursor?.receive(incoming)
+        if incoming?.state == "withdrawn" || (invalidatesPendingReads && forecastCursor?.projection == nil) {
+            forecastAutomaticReadDenial = forecastAutomaticReadFence
+        } else if let incoming, ["ready", "limited"].contains(incoming.state),
+                  let cursor = forecastCursor, cursor.revisionFloor > previousRevision, cursor.projection != nil {
+            // A genuinely newer, admitted Core observation may supply its own
+            // original lease. Equal/replayed data never clears a denial fence.
+            forecastAutomaticReadDenial = nil
+        }
         if invalidatesPendingReads, forecastCursor?.projection == nil {
             // A newer live denial also revokes owner reads already in flight.
             // Keep the cursor's revision floor; this is not transport recovery.
@@ -2275,6 +2364,7 @@ public final class DJConnectAppModel: ObservableObject {
     }
 
     private func clearSessionForecast() {
+        forecastOwnedRead?.task.cancel()
         forecastExpiryTask?.cancel(); forecastExpiryTask = nil
         forecastGeneration = UUID(); forecastAuthorityGeneration = UUID(); forecastReadContext = nil
         forecastLoading = false; forecastAvailable = false; forecastEpoch = nil; forecastScope = nil
@@ -6969,6 +7059,17 @@ public final class DJConnectAppModel: ObservableObject {
         askDJErrorMessage = nil
         updateAskDJMessageStatus(id: message.id, status: .sending)
         submitAskDJText(text, userMessageID: message.id, clientMessageID: message.clientMessageID ?? UUID().uuidString)
+    }
+
+    /// Existing page navigation only. The tapped current recording does not
+    /// authorize analysis, playback, or a separate modal root.
+    public func navigateToCurrentTrackInsight(sessionID: String, playbackItemID: String?, sourceURL: String?) {
+        guard isAppInForeground, activeDJSession?.id == sessionID,
+              activeDJSession?.runtimeState == "active", trackInsightPlaybackPresentationID != nil,
+              activeDJSession?.broadcast.playback?.itemID == playbackItemID,
+              activeDJSession?.broadcast.playback?.sourceURL == sourceURL else { return }
+        dismissMomentTrackInsight()
+        trackInsightNavigationRequestID = UUID()
     }
 
     public func openTrackInsight() {
@@ -18826,6 +18927,22 @@ public final class DJConnectAppModel: ObservableObject {
         logger.info("\(message, privacy: .public)")
         appendPersistentDiagnosticLogLine(message)
         #endif
+    }
+
+    /// Fixed read categories only. Never log Canvas bindings, targets or payloads.
+    func recordCanvasReadFailure(_ error: Error) {
+        let reason: String
+        if let error = error as? DJConnectCanvasReadFailure {
+            reason = error == .notOffered ? "not_offered" : "invalid_snapshot"
+        } else if let error = error as? DJConnectError {
+            switch error {
+            case .network: reason = "network"
+            case .authStale, .missingToken: reason = "authentication"
+            case .server: reason = "server"
+            default: reason = "protocol_or_context"
+            }
+        } else { reason = "unknown" }
+        log(.warning, "Music Canvas read failed reason=\(reason)")
     }
 
     /// Fixed state names and bounded durations only; never conversation or owner data.

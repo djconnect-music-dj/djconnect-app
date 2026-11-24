@@ -150,18 +150,20 @@ struct SessionForecastContent: View {
         let recovering: Bool
         let unavailable: Bool
         let phase: ScenePhase
+        var automaticReadPermitted = true
     }
     var contextKey: RefreshContext {
         .init(scope: model.sessionForecastRefreshScope, ownerEpoch: history.responseEpoch, ownerReady: history.hasAuthorizedOwner,
               authority: model.forecastAuthorityGeneration, recovering: model.djSessionIsRecovering,
-              unavailable: model.djSessionLiveUnavailable, phase: scenePhase)
+              unavailable: model.djSessionLiveUnavailable, phase: scenePhase,
+              automaticReadPermitted: model.permitsAutomaticSessionForecastRead)
     }
     // The task starts after the first paint. Idle for a new admitted context is
     // still pending, not a backend denial. Reset on mounting a new Horizon view.
     struct ReadProgress {
         var completedContext: RefreshContext?
         func showsLoading(context: RefreshContext, canRead: Bool, readInFlight: Bool) -> Bool {
-            readInFlight || (context.phase == .active && canRead && completedContext != context)
+            readInFlight || (context.phase == .active && context.automaticReadPermitted && canRead && completedContext != context)
         }
     }
     private var showsLoading: Bool {
@@ -187,10 +189,28 @@ struct SessionForecastContent: View {
                     Text(text("demo.horizon.notice")).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                     SessionForecastTextView(sections: demoSections, language: model.language)
                 } else if scenePhase == .active, let projection = model.visibleSessionForecast(at: clock.date) {
-                    ForEach(Array(projection.imagery.enumerated()), id: \.offset) { _, image in
-                        SessionForecastArtwork(model: model, projection: projection, artwork: image)
+                    ForEach(projection.sections) { section in
+                        if section.id == "current" {
+                            if let session = model.activeDJSession,
+                               let current = SessionHorizonNowMetadata(sessionID: session.id,
+                                   playback: session.broadcast.playback, forecast: projection) {
+                                SessionHorizonTrackContent(heading: section.title, mood: session.selectedMood,
+                                    language: model.language, title: current.title, artist: current.artist, intro: nil,
+                                    artworkURL: model.resolvedArtworkURL(current.artworkURL.flatMap { URL(string: $0) }),
+                                    sourceURL: current.sourceURL, showsDJAvatar: false)
+                                    .accessibilityIdentifier("session-horizon-now")
+                            } else {
+                                // Keep authored text when current metadata cannot
+                                // be joined; never parse it into substitute facts.
+                                SessionForecastTextView(sections: [section], language: model.language)
+                            }
+                            if let session = model.activeDJSession {
+                                SessionHorizonMomentCard(model: model, session: session)
+                            }
+                        } else {
+                            SessionForecastTextView(sections: [section], language: model.language)
+                        }
                     }
-                    SessionForecastTextView(projection: projection, language: model.language)
                 } else {
                     Text(text(showsLoading ? "ui.session.forecast.loading" : "ui.session.forecast.unavailable"))
                         .fixedSize(horizontal: false, vertical: true)
@@ -205,14 +225,16 @@ struct SessionForecastContent: View {
                 .scrollTargetLayout()
         }
         .accessibilityIdentifier("session-forecast-panel")
+        .onDisappear { model.cancelVisibleSessionForecastRead() }
         .task(id: contextKey) {
             let context = contextKey
-            guard context.phase == .active else { return }
+            guard context.phase == .active, context.automaticReadPermitted else { return }
             while !Task.isCancelled {
-                await model.refreshSessionForecast()
+                await model.refreshSessionForecast(automatic: true)
                 guard !Task.isCancelled, contextKey == context else { return }
                 readProgress.completedContext = context
-                do { try await Task.sleep(for: .seconds(30)) } catch { return }
+                guard model.permitsAutomaticSessionForecastRead else { return }
+                do { try await Task.sleep(for: .seconds(model.sessionForecastNextReadDelay)) } catch { return }
             }
         }
     }
@@ -373,5 +395,36 @@ private struct SessionForecastArtwork: View {
             } catch { /* Optional art failure never suppresses authored text. */ }
         }
         .onDisappear { generation = UUID(); pixels = nil; loadedKey = nil }
+    }
+}
+
+/// Scheduling only: the input is the cursor's ORIGINAL remaining lease. This
+/// cannot change the cursor or grant a new observation/permission.
+enum SessionForecastReadCadence {
+    static func delay(originalRemaining: TimeInterval?) -> TimeInterval {
+        guard let remaining = originalRemaining, remaining.isFinite else { return 8 }
+        return min(8, max(1, remaining - 1))
+    }
+}
+
+/// Matching DATA only. The caller must first admit the forecast through the
+/// existing owner/Session/source/epoch/deadline gate.
+struct SessionHorizonNowMetadata {
+    let title: String
+    let artist: String
+    let artworkURL: String?
+    let sourceURL: URL
+    init?(sessionID: String, playback: DJConnectSessionPlayback?, forecast: DJConnectSessionForecast) {
+        guard forecast.session_id == sessionID, let anchor = forecast.current_anchor, let playback,
+              playback.state == "playing", playback.itemID == anchor.item_id,
+              playback.sourceURL == anchor.source_url,
+              let title = playback.title, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let artist = playback.artist, !artist.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let source = URLComponents(string: anchor.source_url), source.scheme == "https",
+              source.host == "open.spotify.com", source.port == nil, source.user == nil, source.password == nil,
+              source.query == nil, source.fragment == nil,
+              source.path.range(of: #"^/track/[A-Za-z0-9]{22}$"#, options: .regularExpression) != nil,
+              let sourceURL = source.url else { return nil }
+        self.title = title; self.artist = artist; artworkURL = playback.artworkURL; self.sourceURL = sourceURL
     }
 }

@@ -1,0 +1,266 @@
+{
+  "schema_version": 1,
+  "scope": "GENUINE_HA_DEV_E725_PURE_GET_ORIGINAL_TIMES_REVISIONS_WITH_NONFUNCTIONAL_REDACTED_CONTENT",
+  "clock_origin": "ACTUAL_HA_CONTAINER_PYTHON_MONOTONIC_NOT_APPLE_NATIVE_CLOCK_OR_PERMISSION",
+  "redaction": "Secrets remain in HA custody. Session/item IDs and text replaced; image leases removed. Original HTTP status, revisions, states, issued_at/valid_until and request/response clocks unchanged. No raw private content retained. Fixture v2 uses explicitly MODEL structural section IDs and a nonfunctional Spotify-format A*22 link, so native publicLink parsing is exercised without exposing actual music URLs. These MODEL fields are not producer identity/permission evidence.",
+  "samples": [
+    {
+      "request_c0_monotonic_seconds": 266621.595243759,
+      "response_c1_monotonic_seconds": 266621.600340676,
+      "request_wall_utc": "2026-11-24T10:34:52.894323+00:00",
+      "response_wall_utc": "2026-11-24T10:34:52.899419+00:00",
+      "http": 200,
+      "redacted_response": {
+        "success": true,
+        "contract_version": 1,
+        "session_id": "fixture-session",
+        "forecast": {
+          "contract_version": 1,
+          "revision": 232,
+          "state": "ready",
+          "issued_at": "2026-11-24T10:34:40.709949+00:00",
+          "valid_until": "2026-11-24T10:35:10.562191+00:00",
+          "nominal_window_seconds": 900,
+          "supported_window_seconds": 900,
+          "session_id": "fixture-session",
+          "summary": "NONFUNCTIONAL REDACTED original summary",
+          "imagery": [],
+          "current_anchor": {
+            "item_id": "fixture-item",
+            "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+          },
+          "sections": [
+            {
+              "id": "current",
+              "title": "NONFUNCTIONAL REDACTED title",
+              "claim_type": "current",
+              "text": "NONFUNCTIONAL REDACTED text",
+              "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+            },
+            {
+              "id": "guidance",
+              "title": "NONFUNCTIONAL REDACTED title",
+              "claim_type": "intention",
+              "text": "NONFUNCTIONAL REDACTED text"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request_c0_monotonic_seconds": 266624.601842219,
+      "response_c1_monotonic_seconds": 266624.614199844,
+      "request_wall_utc": "2026-11-24T10:34:55.900930+00:00",
+      "response_wall_utc": "2026-11-24T10:34:55.913281+00:00",
+      "http": 200,
+      "redacted_response": {
+        "success": true,
+        "contract_version": 1,
+        "session_id": "fixture-session",
+        "forecast": {
+          "contract_version": 1,
+          "revision": 232,
+          "state": "ready",
+          "issued_at": "2026-11-24T10:34:40.709949+00:00",
+          "valid_until": "2026-11-24T10:35:10.562191+00:00",
+          "nominal_window_seconds": 900,
+          "supported_window_seconds": 900,
+          "session_id": "fixture-session",
+          "summary": "NONFUNCTIONAL REDACTED original summary",
+          "imagery": [],
+          "current_anchor": {
+            "item_id": "fixture-item",
+            "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+          },
+          "sections": [
+            {
+              "id": "current",
+              "title": "NONFUNCTIONAL REDACTED title",
+              "claim_type": "current",
+              "text": "NONFUNCTIONAL REDACTED text",
+              "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+            },
+            {
+              "id": "guidance",
+              "title": "NONFUNCTIONAL REDACTED title",
+              "claim_type": "intention",
+              "text": "NONFUNCTIONAL REDACTED text"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request_c0_monotonic_seconds": 266627.624367637,
+      "response_c1_monotonic_seconds": 266627.635913971,
+      "request_wall_utc": "2026-11-24T10:34:58.923454+00:00",
+      "response_wall_utc": "2026-11-24T10:34:58.934993+00:00",
+      "http": 200,
+      "redacted_response": {
+        "success": true,
+        "contract_version": 1,
+        "session_id": "fixture-session",
+        "forecast": {
+          "contract_version": 1,
+          "revision": 232,
+          "state": "ready",
+          "issued_at": "2026-11-24T10:34:40.709949+00:00",
+          "valid_until": "2026-11-24T10:35:10.562191+00:00",
+          "nominal_window_seconds": 900,
+          "supported_window_seconds": 900,
+          "session_id": "fixture-session",
+          "summary": "NONFUNCTIONAL REDACTED original summary",
+          "imagery": [],
+          "current_anchor": {
+            "item_id": "fixture-item",
+            "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+          },
+          "sections": [
+            {
+              "id": "current",
+              "title": "NONFUNCTIONAL REDACTED title",
+              "claim_type": "current",
+              "text": "NONFUNCTIONAL REDACTED text",
+              "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+            },
+            {
+              "id": "guidance",
+              "title": "NONFUNCTIONAL REDACTED title",
+              "claim_type": "intention",
+              "text": "NONFUNCTIONAL REDACTED text"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request_c0_monotonic_seconds": 266630.640184722,
+      "response_c1_monotonic_seconds": 266630.649158972,
+      "request_wall_utc": "2026-11-24T10:35:01.939270+00:00",
+      "response_wall_utc": "2026-11-24T10:35:01.948239+00:00",
+      "http": 200,
+      "redacted_response": {
+        "success": true,
+        "contract_version": 1,
+        "session_id": "fixture-session",
+        "forecast": {
+          "contract_version": 1,
+          "revision": 232,
+          "state": "ready",
+          "issued_at": "2026-11-24T10:34:40.709949+00:00",
+          "valid_until": "2026-11-24T10:35:10.562191+00:00",
+          "nominal_window_seconds": 900,
+          "supported_window_seconds": 900,
+          "session_id": "fixture-session",
+          "summary": "NONFUNCTIONAL REDACTED original summary",
+          "imagery": [],
+          "current_anchor": {
+            "item_id": "fixture-item",
+            "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+          },
+          "sections": [
+            {
+              "id": "current",
+              "title": "NONFUNCTIONAL REDACTED title",
+              "claim_type": "current",
+              "text": "NONFUNCTIONAL REDACTED text",
+              "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+            },
+            {
+              "id": "guidance",
+              "title": "NONFUNCTIONAL REDACTED title",
+              "claim_type": "intention",
+              "text": "NONFUNCTIONAL REDACTED text"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request_c0_monotonic_seconds": 266633.652810307,
+      "response_c1_monotonic_seconds": 266633.661101432,
+      "request_wall_utc": "2026-11-24T10:35:04.951898+00:00",
+      "response_wall_utc": "2026-11-24T10:35:04.960181+00:00",
+      "http": 200,
+      "redacted_response": {
+        "success": true,
+        "contract_version": 1,
+        "session_id": "fixture-session",
+        "forecast": {
+          "contract_version": 1,
+          "revision": 232,
+          "state": "ready",
+          "issued_at": "2026-11-24T10:34:40.709949+00:00",
+          "valid_until": "2026-11-24T10:35:10.562191+00:00",
+          "nominal_window_seconds": 900,
+          "supported_window_seconds": 900,
+          "session_id": "fixture-session",
+          "summary": "NONFUNCTIONAL REDACTED original summary",
+          "imagery": [],
+          "current_anchor": {
+            "item_id": "fixture-item",
+            "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+          },
+          "sections": [
+            {
+              "id": "current",
+              "title": "NONFUNCTIONAL REDACTED title",
+              "claim_type": "current",
+              "text": "NONFUNCTIONAL REDACTED text",
+              "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+            },
+            {
+              "id": "guidance",
+              "title": "NONFUNCTIONAL REDACTED title",
+              "claim_type": "intention",
+              "text": "NONFUNCTIONAL REDACTED text"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request_c0_monotonic_seconds": 266636.6617486,
+      "response_c1_monotonic_seconds": 266636.6652016,
+      "request_wall_utc": "2026-11-24T10:35:07.960831+00:00",
+      "response_wall_utc": "2026-11-24T10:35:07.964278+00:00",
+      "http": 200,
+      "redacted_response": {
+        "success": true,
+        "contract_version": 1,
+        "session_id": "fixture-session",
+        "forecast": {
+          "contract_version": 1,
+          "revision": 235,
+          "state": "ready",
+          "issued_at": "2026-11-24T10:35:07.756250+00:00",
+          "valid_until": "2026-11-24T10:35:10.561421+00:00",
+          "nominal_window_seconds": 900,
+          "supported_window_seconds": 900,
+          "session_id": "fixture-session",
+          "summary": "NONFUNCTIONAL REDACTED original summary",
+          "imagery": [],
+          "current_anchor": {
+            "item_id": "fixture-item",
+            "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+          },
+          "sections": [
+            {
+              "id": "current",
+              "title": "NONFUNCTIONAL REDACTED title",
+              "claim_type": "current",
+              "text": "NONFUNCTIONAL REDACTED text",
+              "source_url": "https://open.spotify.com/track/AAAAAAAAAAAAAAAAAAAAAA"
+            },
+            {
+              "id": "guidance",
+              "title": "NONFUNCTIONAL REDACTED title",
+              "claim_type": "intention",
+              "text": "NONFUNCTIONAL REDACTED text"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,5 +1,11 @@
 import Foundation
 
+/// Local read classification only; no new backend wire or Canvas authority.
+public enum DJConnectCanvasReadFailure: Error, Equatable, Sendable {
+    case notOffered
+    case invalidSnapshot
+}
+
 public struct DJConnectCanvasPreferences: Codable, Equatable, Sendable {
     public var enabled: Bool
     public var selected_targets: [String]

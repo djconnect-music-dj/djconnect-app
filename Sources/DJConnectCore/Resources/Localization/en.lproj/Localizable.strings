@@ -1926,3 +1926,7 @@
 "ui.vibecast.cast.waiting" = "Waiting for confirmation from the screen…";
 "ui.vibecast.cast.failed" = "Could not connect. Try again.";
 "ui.vibecast.cast.choose" = "Choose your Google Cast screen.";
+
+"ui.canvas.not_offered" = "This Home Assistant does not currently offer Music Canvas.";
+
+"ui.session.forecast.up_next" = "Up next";

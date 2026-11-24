@@ -35,9 +35,10 @@ Mood only selects the existing confirmed Session palette. Unknown or recovering/
 unavailable state uses neutral brand colors. No artwork-derived mood, local Mood
 setting or additional Persona is created. The native graphic has one localized
 VoiceOver identity; it does not claim to listen, think or speak. It is static, so
-Reduce Motion and low-power mode need no repeating timer. Reduce Transparency
-uses an opaque core/no glow; increased contrast uses white geometry. Menu uses
-monochrome template rendering at its native size.
+Reduce Motion and low-power mode need no repeating timer. The headset and
+waveform leave the underlying card visible between strokes in every display
+mode. Increased contrast uses white geometry. Menu uses monochrome template
+rendering at its native size.
 
 ## Not yet admitted / still OPEN
 

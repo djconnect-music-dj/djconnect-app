@@ -101,7 +101,7 @@ import CryptoKit
     }
 
     /// Lookup is a pure read and cannot create a share. One lookup per intent.
-    public func resolve(code: String) async throws {
+    public func resolve(code: String, castClaim: DJConnectClient.CastScreenClaim? = nil) async throws {
         guard state == .idle, current(), code.utf8.count == 6,
               code.utf8.allSatisfy({ (48...57).contains($0) }) else { throw DJConnectError.invalidResponse }
         state = .resolving
@@ -117,6 +117,10 @@ import CryptoKit
             })
             let claim = try DJConnectDisplayClaim.parse(data, code: code, expectedIssuerEpoch: context.issuerEpoch,
                 requestedAt: requested, requestedUptime: requestedTick, now: Date(), uptime: ProcessInfo.processInfo.systemUptime)
+            if let castClaim {
+                guard claim.issuerEpoch == castClaim.issuer_epoch, claim.claimID == castClaim.claim_id,
+                      claim.browserGeneration == castClaim.browser_generation else { throw DJConnectError.invalidResponse }
+            }
             guard current(), state == .resolving else { throw DJConnectError.invalidResponse }
             route = context.displayEntryURL; existingShare = offered; resolvedClaim = claim; state = .ready
         } catch {

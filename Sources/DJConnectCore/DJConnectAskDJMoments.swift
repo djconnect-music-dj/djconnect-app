@@ -71,18 +71,51 @@ public enum DJConnectAskDJMoments {
             (!available || (reason == nil && momentType.map { bounded($0) } == true))
         }
     }
+    /// Header facts captured by the same Core inventory, never Now Playing
+    /// fallbacks or action labels. Absence means the fact is unknown.
+    public struct SubjectContext: Codable, Equatable, Sendable {
+        public let subjectReference: String
+        public let trackTitle: String?
+        public let artist: String?
+        public let album: String?
+        enum CodingKeys: String, CodingKey {
+            case subjectReference = "subject_ref", trackTitle = "track_title", artist, album
+        }
+        var isValid: Bool {
+            bounded(subjectReference, maximum: 512) &&
+                [trackTitle, artist, album].allSatisfy { value in
+                    value.map { bounded($0, maximum: 2048) && $0.unicodeScalars.count <= 512 } ?? true
+                }
+        }
+    }
     public struct Inventory: Codable, Equatable, Sendable {
         public let success: Bool
         public let contractVersion: Int
         public let sessionID, language, title: String
         public let types: [Item]
-        enum CodingKeys: String, CodingKey { case success, language, title, types; case contractVersion = "contract_version", sessionID = "session_id" }
+        public let subjectContext: SubjectContext?
+        enum CodingKeys: String, CodingKey {
+            case success, language, title, types
+            case contractVersion = "contract_version", sessionID = "session_id", subjectContext = "subject_context"
+        }
         public func admits(session: String, capability: Capability) -> Bool {
             success && contractVersion == 1 && sessionID == session && bounded(session) && languages.contains(language) &&
             title == "Ask DJ: Moments" && types.count == capability.typeIDs.count &&
-            Set(types.map(\.typeID)) == Set(capability.typeIDs) && Set(types.map(\.order)).count == types.count && types.allSatisfy(\.isValid)
+            Set(types.map(\.typeID)) == Set(capability.typeIDs) && Set(types.map(\.order)).count == types.count && types.allSatisfy(\.isValid) &&
+            (subjectContext.map { context in context.isValid && types.allSatisfy { $0.subject.reference == context.subjectReference } } ?? true)
         }
         public var orderedTypes: [Item] { types.sorted { $0.order < $1.order } }
+        public var visibleTypes: [Item] {
+            orderedTypes.filter { item in
+                if item.available { return true }
+                switch item.reason {
+                case "subject_evidence_unavailable", "capability_unavailable", "producer_unavailable":
+                    return false
+                default:
+                    return true
+                }
+            }
+        }
     }
     public struct Request: Codable, Equatable, Sendable {
         public let contractVersion = 1

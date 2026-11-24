@@ -47,7 +47,7 @@ func musicCanvasLocalizesTheEntirePanel(language: String) {
     for key in ["open", "description", "enabled", "screens", "provider_required",
                 "composition", "matte", "cadence", "cadence.track", "cadence.900",
                 "cadence.1800", "cadence.3600", "forget", "cleanup_remote",
-                "state.delivered_unknown", "uncertain", "tv_permission"] {
+                "state.delivered_unknown", "uncertain", "tv_permission", "not_offered"] {
         let full = "ui.canvas." + key
         let value = DJConnectLocalization.localized(key: full, language: language)
         #expect(!value.isEmpty && value != full)
@@ -142,6 +142,8 @@ func musicCanvasMissingCapabilityCannotStartAnUnqualifiedRead() async throws {
     do {
         _ = try await wire.client().musicCanvas()
         Issue.record("Missing capability accepted")
-    } catch {}
+    } catch {
+        #expect((error as? DJConnectCanvasReadFailure) == .notOffered)
+    }
     #expect(CanvasWire.lock.withLock { wire.requests.count } == 1)
 }

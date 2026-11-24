@@ -1926,3 +1926,7 @@
 "ui.vibecast.cast.waiting" = "Wachten op bevestiging van het scherm…";
 "ui.vibecast.cast.failed" = "Verbinden is niet gelukt. Probeer het opnieuw.";
 "ui.vibecast.cast.choose" = "Kies je Google Cast-scherm.";
+
+"ui.canvas.not_offered" = "Deze Home Assistant biedt Music Canvas nu niet aan.";
+
+"ui.session.forecast.up_next" = "Hierna";
