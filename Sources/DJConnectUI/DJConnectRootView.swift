@@ -9631,7 +9631,7 @@ private struct VibeCastDestinationPicker: View {
             VStack(spacing: 4) {
                 Button { openScreen(false) } label: {
                     destinationRow(localizedKey(language, "ui.vibecast.destinations.screen"),
-                                   symbol: "tv.badge.wifi", showsChevron: true)
+                                   showsChevron: true) { Image(systemName: "tv.badge.wifi") }
                 }
                 .buttonStyle(.plain)
                 .disabled(castTarget != nil)
@@ -9640,7 +9640,7 @@ private struct VibeCastDestinationPicker: View {
                 ForEach(model.legacyCastDevices) { device in
                     Button { model.connectLegacyCast(deviceID: device.id) } label: {
                         HStack {
-                            destinationRow(device.name, symbol: "tv.badge.wifi", showsChevron: true)
+                            destinationRow(device.name, showsChevron: true) { GoogleCastDeviceGlyph() }
                             if model.legacyCastConnectingDeviceID == device.id { ProgressView() }
                         }
                     }
@@ -9659,7 +9659,7 @@ private struct VibeCastDestinationPicker: View {
                         castTarget = device.receiverID
                     } label: {
                         HStack {
-                            destinationRow(device.name, symbol: "tv.badge.wifi", showsChevron: true)
+                            destinationRow(device.name, showsChevron: true) { GoogleCastDeviceGlyph() }
                             if let castTarget, castTarget == device.receiverID { ProgressView() }
                         }
                     }
@@ -9705,9 +9705,10 @@ private struct VibeCastDestinationPicker: View {
         #endif
     }
 
-    private func destinationRow(_ title: String, symbol: String, showsChevron: Bool) -> some View {
+    private func destinationRow<Icon: View>(_ title: String, showsChevron: Bool,
+                                            @ViewBuilder icon: () -> Icon) -> some View {
         HStack(spacing: 12) {
-            Label(title, systemImage: symbol)
+            Label { Text(title) } icon: { icon().frame(width: 20).accessibilityHidden(true) }
             Spacer()
             if showsChevron { Image(systemName: "chevron.right").font(.footnote.weight(.semibold)) }
         }
@@ -9715,6 +9716,30 @@ private struct VibeCastDestinationPicker: View {
         .frame(minHeight: 44)
         .background(.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
         .contentShape(Rectangle())
+    }
+}
+
+private struct GoogleCastDeviceGlyph: View {
+    var body: some View {
+        Path { path in
+            path.move(to: CGPoint(x: 1, y: 4))
+            path.addLine(to: CGPoint(x: 1, y: 2))
+            path.addQuadCurve(to: CGPoint(x: 2, y: 1), control: CGPoint(x: 1, y: 1))
+            path.addLine(to: CGPoint(x: 17, y: 1))
+            path.addQuadCurve(to: CGPoint(x: 18, y: 2), control: CGPoint(x: 18, y: 1))
+            path.addLine(to: CGPoint(x: 18, y: 12))
+            path.addQuadCurve(to: CGPoint(x: 17, y: 13), control: CGPoint(x: 18, y: 13))
+            path.addLine(to: CGPoint(x: 11, y: 13))
+
+            path.move(to: CGPoint(x: 1, y: 6))
+            path.addQuadCurve(to: CGPoint(x: 8, y: 13), control: CGPoint(x: 8, y: 6))
+            path.move(to: CGPoint(x: 1, y: 9.5))
+            path.addQuadCurve(to: CGPoint(x: 4.5, y: 13), control: CGPoint(x: 4.5, y: 9.5))
+            path.move(to: CGPoint(x: 1, y: 13))
+            path.addLine(to: CGPoint(x: 1.5, y: 13))
+        }
+        .stroke(style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+        .frame(width: 19, height: 14)
     }
 }
 
