@@ -324,12 +324,14 @@ import Testing
         .init(installation: "test-installation", binding: "test-binding", session: "test-session",
               settingsGeneration: "test-generation", settingsRevision: revision)
     }
-    private func waitFor(_ condition: () -> Bool) async throws {
-        for _ in 0..<400 {
-            if condition() { return }
+    private func waitFor(timeout: Duration = .seconds(2),
+                         _ condition: () -> Bool) async throws {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        while !condition(), clock.now < deadline {
             try await Task.sleep(for: .milliseconds(5))
         }
-        #expect(condition(), "Timed out waiting for isolated AppModel route")
+        try #require(condition(), "Timed out waiting for isolated AppModel route")
     }
     @Test(.isolatedClientResources) func actualHTTPAndLocalDisconnectRoutesCannotReconfirmFromCachedSessionBookkeeping() async throws {
         try await appModel { model, _ in
@@ -432,14 +434,14 @@ import Testing
             wire.holdSessionResponses(); wire.holdSettingsResponses()
             let old = Task { await model.refreshProfileDJSettings() }
             defer { old.cancel(); wire.releasePending() }
-            try await waitFor { wire.pendingSettingsCount == 1 }
+            try await waitFor(timeout: .seconds(8)) { wire.pendingSettingsCount == 1 }
             var current = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(original)) as? [String: Any])
             current["as_of"] = "2026-10-31T12:00:01Z"
             wire.setSettingsResponse(try JSONSerialization.data(withJSONObject: current))
             model.markInactiveSession(); model.markActiveSession()
-            try await waitFor { wire.pendingSettingsCount == 2 }
+            try await waitFor(timeout: .seconds(8)) { wire.pendingSettingsCount == 2 }
             wire.releaseSettings(at: 1)
-            try await waitFor { model.profileDJSettings.response?.as_of == "2026-10-31T12:00:01Z" }
+            try await waitFor(timeout: .seconds(8)) { model.profileDJSettings.response?.as_of == "2026-10-31T12:00:01Z" }
             let accepted = model.profileDJSettings.response
             wire.releaseSettings(at: 0, failing: oldFails)
             await old.value
