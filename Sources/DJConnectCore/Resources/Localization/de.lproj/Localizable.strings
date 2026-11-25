@@ -1456,7 +1456,7 @@
 "ui.session.forecast.title" = "Horizon · ca. 15 Min.";
 "ui.session.forecast.notice" = "Eine Richtung für die kommenden Minuten. Musik und Beiträge können sich ändern.";
 "ui.session.forecast.loading" = "Horizon wird geladen…";
-"ui.session.forecast.unavailable" = "Horizon ist derzeit nicht verfügbar.";
+"ui.session.forecast.empty" = "Kein Horizont";
 "ui.session.forecast.source" = "Quelle";
 "ui.session.forecast.claim.current" = "Läuft gerade";
 "ui.session.forecast.claim.intention" = "Vorhaben";

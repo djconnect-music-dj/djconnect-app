@@ -1456,7 +1456,7 @@
 "ui.session.forecast.title" = "Horizon · ±15 min";
 "ui.session.forecast.notice" = "Een richting voor de komende minuten. Muziek en bijdragen kunnen veranderen.";
 "ui.session.forecast.loading" = "Horizon laden…";
-"ui.session.forecast.unavailable" = "Horizon is nu niet beschikbaar.";
+"ui.session.forecast.empty" = "Geen horizon";
 "ui.session.forecast.source" = "Bron";
 "ui.session.forecast.claim.current" = "Speelt nu";
 "ui.session.forecast.claim.intention" = "Voornemen";
