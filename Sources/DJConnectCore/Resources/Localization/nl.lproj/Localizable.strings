@@ -1849,6 +1849,8 @@
 "ui.canvas.landscape" = "Liggend";
 "ui.canvas.tv_permission" = "Sta de verbinding met DJConnect toe op je televisie.";
 "ui.canvas.screen_setup" = "Vul alleen de ontbrekende gegevens van je scherm in.";
+"ui.canvas.switchbot_13_portrait" = "13,3 inch staand · 1200 × 1600";
+"ui.canvas.switchbot_ha_setup" = "Stel deze fotolijst in Home Assistant in met de DJConnect-actie ‘SwitchBot-fotolijst instellen’.";
 "ui.canvas.connect" = "Scherm toevoegen";
 "ui.canvas.override" = "Voor dit scherm";
 "ui.canvas.inherit" = "Gebruik gezamenlijke keuze";

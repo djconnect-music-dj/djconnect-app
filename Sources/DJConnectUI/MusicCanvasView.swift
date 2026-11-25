@@ -140,6 +140,9 @@ struct MusicCanvasView: View {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(target.name).multilineTextAlignment(.leading)
                             Text(status(target.state)).font(.caption).foregroundStyle(.secondary)
+                            if target.adapter == "switchbot", needsScreenGeometry(target), !snapshot.can_manage_devices {
+                                Text(text("switchbot_ha_setup")).font(.caption).foregroundStyle(.secondary)
+                            }
                         }
                         Spacer(minLength: 0)
                     }
@@ -231,6 +234,10 @@ struct MusicCanvasView: View {
         .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
     }
 
+    private func needsScreenGeometry(_ target: DJConnectCanvasTarget) -> Bool {
+        target.screen.width == nil || target.screen.height == nil || target.screen.orientation == nil
+    }
+
     private func targetSettings(_ target: DJConnectCanvasTarget, snapshot: DJConnectCanvasSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(status(target.state)).font(.caption).foregroundStyle(.secondary)
@@ -238,7 +245,17 @@ struct MusicCanvasView: View {
                 Image(decorative: preview.image, scale: 1).resizable().scaledToFit()
             }
             if snapshot.can_manage_devices,
-               target.state == "canvas_manual_takeover" || target.state != "ready" && !target.preview_available {
+               target.state == "canvas_manual_takeover" || target.state == "discovered" || needsScreenGeometry(target) {
+                if target.adapter == "switchbot", target.screen.width == nil,
+                   target.screen.height == nil, target.screen.orientation == nil {
+                    Button(text("switchbot_13_portrait")) {
+                        width = "1200"
+                        height = "1600"
+                        orientation = "portrait"
+                    }
+                    .djConnectButtonStyle(DJConnectButtonStyle())
+                    .accessibilityIdentifier("music-canvas-switchbot-13-portrait")
+                }
                 if target.screen.width == nil {
                     settingRow(text("width")) {
                         TextField(text("width"), text: $width).labelsHidden().multilineTextAlignment(.trailing)

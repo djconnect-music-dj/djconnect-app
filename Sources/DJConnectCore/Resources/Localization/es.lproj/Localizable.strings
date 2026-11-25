@@ -1849,6 +1849,8 @@
 "ui.canvas.landscape" = "Horizontal";
 "ui.canvas.tv_permission" = "Permite la conexión con DJConnect en tu televisor.";
 "ui.canvas.screen_setup" = "Introduce solo los datos de pantalla que faltan.";
+"ui.canvas.switchbot_13_portrait" = "13,3 pulgadas en vertical · 1200 × 1600";
+"ui.canvas.switchbot_ha_setup" = "Configura este marco en Home Assistant con la acción de DJConnect «Configurar un marco SwitchBot».";
 "ui.canvas.connect" = "Añadir pantalla";
 "ui.canvas.override" = "Para esta pantalla";
 "ui.canvas.inherit" = "Usar ajuste común";

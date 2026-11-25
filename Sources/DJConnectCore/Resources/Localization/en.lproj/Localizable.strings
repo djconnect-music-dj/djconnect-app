@@ -1849,6 +1849,8 @@
 "ui.canvas.landscape" = "Landscape";
 "ui.canvas.tv_permission" = "Allow DJConnect to connect on your television.";
 "ui.canvas.screen_setup" = "Enter only the missing screen details.";
+"ui.canvas.switchbot_13_portrait" = "13.3-inch portrait · 1200 × 1600";
+"ui.canvas.switchbot_ha_setup" = "Set up this frame in Home Assistant using the DJConnect SwitchBot setup action.";
 "ui.canvas.connect" = "Add screen";
 "ui.canvas.override" = "For this screen";
 "ui.canvas.inherit" = "Use shared setting";
