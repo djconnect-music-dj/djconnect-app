@@ -2,13 +2,11 @@ import Foundation
 @preconcurrency import Metal
 import simd
 
-/// One shared pass and two cached pipelines: procedural solid fields and bounded
-/// filament points. No CPU meshes, image/video inputs, frame cache or compilation
-/// while dragging/changing character. Resources belong only to the visible view.
+/// One shared pass for procedural worlds, with no CPU meshes or image/video inputs.
+/// Resources belong to the visible view and stay cached while changing character.
 final class VibeScapeMetalEngine {
     private let queue: MTLCommandQueue
     private let solidPipeline: MTLRenderPipelineState
-    private let bloomPipeline: MTLRenderPipelineState
     private let permits = DispatchSemaphore(value: 3)
     private struct SceneUniforms {
         var composition: SIMD4<Float>
@@ -48,14 +46,6 @@ final class VibeScapeMetalEngine {
         solid.fragmentFunction = library.makeFunction(name: "vibeScapeFragment")
         solid.colorAttachments[0].pixelFormat = .bgra8Unorm
         solidPipeline = try device.makeRenderPipelineState(descriptor: solid)
-        let bloom = MTLRenderPipelineDescriptor()
-        bloom.vertexFunction = library.makeFunction(name: "vibeScapeBloomVertex")
-        bloom.fragmentFunction = library.makeFunction(name: "vibeScapeBloomFragment")
-        let attachment = bloom.colorAttachments[0]!
-        attachment.pixelFormat = .bgra8Unorm; attachment.isBlendingEnabled = true
-        attachment.sourceRGBBlendFactor = .one; attachment.destinationRGBBlendFactor = .one
-        attachment.sourceAlphaBlendFactor = .zero; attachment.destinationAlphaBlendFactor = .one
-        bloomPipeline = try device.makeRenderPipelineState(descriptor: bloom)
     }
     enum Failure: Error { case unavailable }
     func encode(texture: MTLTexture, scene: VibeScapeScene, clock: Float,
@@ -105,14 +95,6 @@ final class VibeScapeMetalEngine {
         encoder.setRenderPipelineState(solidPipeline)
         encoder.setFragmentBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 0)
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
-        if frame.weights.w > 0.0005 {
-            encoder.setRenderPipelineState(bloomPipeline)
-            encoder.setVertexBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 0)
-            encoder.setFragmentBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 0)
-            // Quality changes sampling only. Dynamics modulates the same bounded
-            // sculpture continuously; it never grows an unbounded particle list.
-            encoder.drawPrimitives(type: .point, vertexStart: 0, vertexCount: reducedSampling ? 7680 : 12288)
-        }
         encoder.endEncoding()
         command.addCompletedHandler { [permits] _ in permits.signal() }
         return command

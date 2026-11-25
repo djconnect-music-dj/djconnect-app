@@ -205,6 +205,35 @@ static float3 renderSolid(float2 uv,constant SceneUniforms &u,constant Uniforms 
     col*=0.68+0.32*exp(-dot(uv,uv)*0.23);
     return pow(max(col/(col+0.65),float3(0)),float3(1.0/2.2));
 }
+static float3 renderFestivalLasers(float2 uv, constant Uniforms &g) {
+    constant SceneUniforms &scene = g.festival;
+    float2 size = g.resolutionTime.xy;
+    // Mirror the original VibeCast fan in top-origin screen coordinates.
+    float2 pixel = float2(uv.x, 1.0 - uv.y) * size;
+    float2 origin = float2(0.5, 0.72) * size;
+    float dynamics = scene.shape.w;
+    float time = g.phases.w * 0.20;
+    float3 palette[] = {scene.paletteMotion.xyz, scene.secondary.xyz, scene.accent.xyz};
+    float3 color = float3(8.0, 11.0, 25.0) / 255.0;
+    for (int index = 0; index < 7; index++) {
+        float phase = time + float(index) * 6.2831853 / 7.0;
+        float swing = sin(phase);
+        float2 glowCenter = float2(0.5 + (0.18 + 0.28 * dynamics) * swing,
+                                  0.5 + (0.16 + 0.24 * dynamics) * cos(phase * 0.8)) * size;
+        float glow = max(0.0, 1.0 - distance(pixel, glowCenter) / (size.x * 0.43));
+        float2 end = glowCenter + float2(swing * 0.3, -0.4) * size;
+        float2 ray = end - origin;
+        float along = clamp(dot(pixel - origin, ray) / max(dot(ray, ray), 1.0), 0.0, 1.0);
+        float beam = 1.0 - smoothstep(0.4, 1.3, distance(pixel, origin + along * ray));
+        float3 tint = palette[index % 3];
+        color += (1.0 - color) * tint * glow * (119.0 / 255.0);
+        color += (1.0 - color) * tint * beam * (136.0 / 255.0);
+    }
+    float2 centered = (uv * 2 - 1) * float2(size.x / size.y, 1.0);
+    color += (1.0 - color) * scene.accent.xyz * abs(combinedImpulse(centered, g));
+    return color;
+}
+
 fragment float4 vibeScapeFragment(VertexOut in [[stage_in]],constant Uniforms &g [[buffer(0)]]) {
     float2 uv=(in.uv*2-1)*float2(g.resolutionTime.x/g.resolutionTime.y,1);
     float neutral=max(0.0,1-dot(g.weights,float4(1)));
@@ -212,52 +241,6 @@ fragment float4 vibeScapeFragment(VertexOut in [[stage_in]],constant Uniforms &g
     if(g.weights.x>0.0005)col+=renderSolid(uv,g.home,g,g.phases.x,0)*g.weights.x;
     if(g.weights.y>0.0005)col+=renderSolid(uv,g.radio,g,g.phases.y,1)*g.weights.y;
     if(g.weights.z>0.0005)col+=renderSolid(uv,g.club,g,g.phases.z,2)*g.weights.z;
-    if(g.weights.w>0.0005)col+=mix(g.festival.paletteMotion.xyz,g.festival.secondary.xyz,0.5)*0.008*g.weights.w;
+    if(g.weights.w>0.0005)col+=renderFestivalLasers(in.uv,g)*g.weights.w;
     return float4(col,1);
-}
-struct BloomOut {
-    float4 position [[position]];
-    float size [[point_size]];
-    float4 color;
-};
-vertex BloomOut vibeScapeBloomVertex(uint vertexID [[vertex_id]],constant Uniforms &g [[buffer(0)]]) {
-    // Reduced sampling spans the same complete sculpture, rather than dropping
-    // its last strands or changing the user's chosen complexity.
-    uint id=g.resolutionTime.w>0.5?vertexID:uint(float(vertexID)*(12288.0/7680.0));
-    constant SceneUniforms &u=g.festival;
-    uint strand=id/256;float index=float(id%256)/256.0;
-    float t=g.phases.w,seed=u.composition.x*6.2831853;
-    float angle=6.2831853*fract(index+t*0.016*(strand%2==0?1.0:-1.0));
-    float f=float(strand),offset=f*0.1308997+seed;
-    float bloom=0.5+0.5*sin(3*angle+offset*0.6+t*0.08);
-    float radius=0.42+(0.48+0.50*bloom)*u.style.w;
-    float3 p=float3(cos(angle)*radius,sin(angle)*radius,0.32*sin(2*angle+offset+t*0.11));
-    p.z+=(0.10+0.22*u.shape.z)*sin(3*angle-t*0.09+offset)*u.style.x;
-    p=rotZ(rotY(rotX(p,0.25+0.22*sin(offset)),offset*0.35+sin(t*0.13)*0.12*u.style.y),offset*0.6);
-    float column=smoothstep(0.25,0.85,u.composition.x);
-    float3 spiral=float3(cos(angle*2+offset)*(0.35+0.3*bloom)*u.style.w,
-        (index-0.5)*2.6, sin(angle*2+offset)*(0.35+0.3*bloom));
-    spiral=rotZ(spiral,(u.composition.z-0.5)*1.5);
-    p=mix(p,spiral,column);
-    p.y+=0.12*sin(angle+offset+t*0.17)*u.style.w;
-    p=rotY(p,t*0.06+0.15*sin(t*0.1)*u.style.y);
-    float aspect=g.resolutionTime.x/g.resolutionTime.y;
-    float eye=3.65+u.shape.x*0.65+max(0.0,u.style.w-1.0)*1.5+max(0.0,0.75/aspect-1)*1.8;
-    float depth=max(1.0,eye-p.z),scale=2.6/depth;
-    float contact=abs(combinedImpulse(p.xy*scale,g));
-    p.xy+=float2(sin(angle+offset),cos(angle+offset))*contact*0.18;
-    float3 color=mix(u.paletteMotion.xyz,u.secondary.xyz,0.5+0.5*sin(angle+offset));
-    color=mix(color,u.accent.xyz,0.25+0.20*cos(offset+angle*2));
-    // Main strands remain coherent at every bias; extra woven detail fades in.
-    float detail=strand<24?1.0:smoothstep(0.52,1.65,u.style.z)*0.72;
-    float glint=(id%37==0)?1.0:0.0;
-    float ends=smoothstep(0.0,0.04,index)*(1-smoothstep(0.96,1.0,index));
-    float alpha=(0.85+glint*0.30+contact*1.2)*detail*(0.65+0.35*scale)*g.weights.w*ends;
-    float pixelScale=clamp(g.resolutionTime.y/640.0,0.6,2.0);
-    float size=(glint>0.5?11.0:4.0+2.0*u.shape.y)*pixelScale*(0.7+0.3*scale)*(1+contact*1.5);
-    return {float4(p.x*scale/aspect,p.y*scale,depth/12,1),size,float4(color,alpha)};
-}
-fragment float4 vibeScapeBloomFragment(BloomOut in [[stage_in]],float2 pc [[point_coord]]) {
-    float2 q=pc*2-1;float falloff=exp(-dot(q,q)*4.5);
-    return float4(in.color.rgb*in.color.a*falloff,0);
 }
