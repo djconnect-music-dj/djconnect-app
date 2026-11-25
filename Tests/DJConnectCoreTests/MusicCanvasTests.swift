@@ -27,13 +27,22 @@ private func canvasFixture() throws -> Data {
     #expect(preferences.presentation(for: frame).matte == "off")
     #expect(!preferences.presentation(for: frame).show_track_title)
     #expect(preferences.presentation(for: tv).show_track_title)
-    preferences.updatePresentation(for: tv) { $0.matte = "matching" }
+    preferences.updatePresentation(for: tv) {
+        $0.matte = "matching"
+        $0.composition = "full"
+        $0.cadence = "track"
+    }
     let data = try JSONEncoder().encode(preferences)
     let saved = try JSONDecoder().decode(DJConnectCanvasPreferences.self, from: data)
     #expect(saved.isValid)
     #expect(saved.presentation_overrides?.keys.contains(frame.id) == false)
     #expect(saved.presentation(for: tv).matte == "matching")
     #expect(saved.presentation(for: tv).show_track_title)
+    #expect(saved.presentation(for: tv).composition == "full")
+    #expect(saved.presentation(for: tv).cadence == "track")
+    #expect(saved.presentation(for: frame).composition == nil)
+    #expect(saved.presentation(for: frame).cadence == nil)
+    #expect(snapshot.per_screen_composition_and_cadence == nil)
 }
 
 @Test(arguments: ["cadence", "composition", "matte", "cadence_overrides"])
