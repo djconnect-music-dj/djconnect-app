@@ -1454,7 +1454,7 @@
 "ui.session.forecast.flow" = "Flow";
 "ui.session.forecast.tab" = "Horizon";
 "ui.session.forecast.title" = "Horizon · aprox. 15 min";
-"ui.session.forecast.notice" = "Una orientación para los próximos minutos. La música y las intervenciones pueden cambiar.";
+"ui.session.forecast.notice" = "Una orientación para los próximos minutos.";
 "ui.session.forecast.loading" = "Cargando Horizon…";
 "ui.session.forecast.empty" = "Sin horizonte";
 "ui.session.forecast.source" = "Fuente";
