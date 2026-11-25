@@ -1744,7 +1744,11 @@ private struct PairingSheetView: View {
                     pairingSuccess
                 } else {
                     pairingPending
-                    Button(localizedKey(model.language, "ui.live.join")) { model.isShowingGuestJoin = true }
+                    Button {
+                        model.isShowingGuestJoin = true
+                    } label: {
+                        VibeCastPartyJoinLabel(title: localizedKey(model.language, "ui.live.join"))
+                    }
                         .djConnectButtonStyle(DJConnectButtonStyle(expands: true))
                         .accessibilityIdentifier("pairing-join-session")
                 }
@@ -3152,7 +3156,11 @@ private struct WelcomeView: View {
                             .djConnectButtonStyle(DJConnectButtonStyle(emphasis: isLastStep ? .primary : .tertiary, expands: true))
                             .controlSize(.large)
                             .accessibilityIdentifier("welcome-dismiss-button")
-                            Button(localizedKey(model.language, "ui.live.join")) { model.isShowingGuestJoin = true }
+                            Button {
+                                model.isShowingGuestJoin = true
+                            } label: {
+                                VibeCastPartyJoinLabel(title: localizedKey(model.language, "ui.live.join"))
+                            }
                                 .djConnectButtonStyle(DJConnectButtonStyle(emphasis: .secondary, expands: true))
                                 .accessibilityIdentifier("welcome-join-session")
                         }
@@ -9138,7 +9146,15 @@ private struct IdleDJSessionView: View {
                     dimsWhenDisabled: !refreshing && !model.isSchedulingProfileDJChoice && model.profileDJSettings.phase != .saving))
                 .disabled(model.isLoadingDJSession || (!model.isDemoMode && model.pairingStatus != .paired) || !model.canUsePlaybackFeatures || model.isSchedulingProfileDJChoice || (!model.isDemoMode && [.saving, .uncertain].contains(model.profileDJSettings.phase)))
                 .accessibilityIdentifier("session-welcome-start")
-                Button(localizedKey(model.language, "ui.live.join")) { model.isShowingGuestJoin = true }
+                Text(localizedKey(model.language, "ui.session.welcome.join_separator"))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+                Button {
+                    model.isShowingGuestJoin = true
+                } label: {
+                    VibeCastPartyJoinLabel(title: localizedKey(model.language, "ui.live.join"))
+                }
                     .djConnectButtonStyle(DJConnectButtonStyle(expands: true))
                     .accessibilityIdentifier("session-welcome-join")
                 HStack(alignment: .top, spacing: 8) {

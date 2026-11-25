@@ -1878,7 +1878,8 @@
 
 "ui.displayConsent.remaining" = "Resterende sessietijd: %@";
 
-"ui.live.join" = "Deelnemen aan sessie (gastmodus)";
+"ui.live.join" = "Deelnemen aan VibeCast Party";
+"ui.session.welcome.join_separator" = "of";
 
 "ui.live.leave" = "Gastsessie verlaten";
 
@@ -1886,7 +1887,7 @@
 
 "ui.live.not_connected" = "Niet verbonden met een gastsessie";
 
-"ui.live.join_instructions" = "Scan de actuele QR-code op de tv met je telefooncamera. Bevestig hier om deel te nemen aan VibeCast Live.";
+"ui.live.join_instructions" = "Scan de actuele QR-code op de tv met je telefooncamera. Bevestig hier om deel te nemen aan VibeCast Party.";
 
 "ui.live.invitation_link" = "Uitnodigingslink";
 

@@ -2,6 +2,38 @@ import SwiftUI
 import DJConnectCore
 import ImageIO
 
+private let vibeCastPartyTitle = "VibeCast Party"
+
+struct VibeCastPartyMark: View {
+    let size: CGFloat
+
+    var body: some View {
+        ZStack {
+            DJPersonaMark(includesWaveform: false)
+                .fill(.white)
+            Image(systemName: "party.popper.fill")
+                .font(.system(size: size * 23 / 86, weight: .semibold))
+                .foregroundStyle(.white)
+                .offset(y: size * 2 / 86)
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
+    }
+}
+
+struct VibeCastPartyJoinLabel: View {
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            VibeCastPartyMark(size: 28)
+            Text(title)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
 struct DJConnectLiveGuestJoinView: View {
     @ObservedObject var guest: DJConnectLiveGuestModel
     let language: String
@@ -19,10 +51,14 @@ struct DJConnectLiveGuestJoinView: View {
     }
 
     var body: some View {
-        DJConnectGlassDialogSurface(title: "VibeCast Live", systemImage: "qrcode.viewfinder") {
+        DJConnectGlassDialogSurface(title: vibeCastPartyTitle, icon: VibeCastPartyMark(size: 86)) {
             VStack(spacing: 14) {
                 if guest.invitation != nil {
-                    Button(text("ui.live.join")) { Task { await guest.join() } }
+                    Button {
+                        Task { await guest.join() }
+                    } label: {
+                        VibeCastPartyJoinLabel(title: text("ui.live.join"))
+                    }
                         .djConnectButtonStyle(DJConnectButtonStyle(emphasis: .primary, expands: true))
                         .disabled(guest.isBusy)
                         .accessibilityIdentifier("live-guest-confirm")
@@ -105,7 +141,7 @@ struct DJConnectLiveGuestView: View {
     var body: some View {
         NavigationStack {
             joinedContent
-            .navigationTitle("VibeCast Live")
+            .navigationTitle(vibeCastPartyTitle)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button { guest.disconnect() } label: {
@@ -130,7 +166,7 @@ struct DJConnectLiveGuestView: View {
             .background(DJConnectCanvasBackground())
             .sheet(isPresented: $showsHelp) {
                 VStack(alignment: .leading, spacing: 20) {
-                    Text("VibeCast Live").font(.title2.bold())
+                    Text(vibeCastPartyTitle).font(.title2.bold())
                     Text(text(guest.requestSongsAllowed ? "ui.live.help" : "ui.live.help_information_only"))
                     Text(text("ui.ask_dj.accuracy_notice")).font(.caption).foregroundStyle(.secondary)
                     Button(text("ui.close")) { showsHelp = false }
