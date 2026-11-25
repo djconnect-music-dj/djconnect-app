@@ -1883,7 +1883,8 @@
 "ui.live.join" = "Join VibeCast Party";
 "ui.session.welcome.join_separator" = "or";
 
-"ui.live.leave" = "Leave joined session";
+"ui.live.leave" = "Leave VibeCast Party";
+"ui.live.leave_confirmation" = "Leave VibeCast Party?";
 
 "ui.live.connected" = "Connected to guest session";
 

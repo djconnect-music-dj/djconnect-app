@@ -1883,7 +1883,8 @@
 "ui.live.join" = "Unirse a VibeCast Party";
 "ui.session.welcome.join_separator" = "o";
 
-"ui.live.leave" = "Salir de la sesión de invitado";
+"ui.live.leave" = "Salir de VibeCast Party";
+"ui.live.leave_confirmation" = "¿Salir de VibeCast Party?";
 
 "ui.live.connected" = "Conectado a la sesión de invitado";
 
