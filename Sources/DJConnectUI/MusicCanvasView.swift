@@ -23,6 +23,17 @@ struct MusicCanvasView: View {
     @State private var orientation = "portrait"
     @State private var preview: DJConnectSessionArtworkImage?
 
+    private struct PreviewRequest: Equatable {
+        let targetID: String
+        let revision: String?
+        let scope: String
+    }
+
+    private var previewRequest: PreviewRequest? {
+        guard let selected, selected.preview_available, current(scope) else { return nil }
+        return PreviewRequest(targetID: selected.id, revision: selected.preview_revision, scope: scope)
+    }
+
     private var scope: String {
         Self.scope(for: model, scenePhase: scenePhase)
     }
@@ -42,6 +53,7 @@ struct MusicCanvasView: View {
 
     var body: some View {
         let loadScope = scope
+        let request = previewRequest
         let settingsTitle = DJConnectLocalization.localized(key: "ui.settings", language: model.language)
         DJConnectGlassDialogSurface(
             title: selected == nil ? "Music Canvas" : settingsTitle,
@@ -88,6 +100,7 @@ struct MusicCanvasView: View {
             }
         }
         .accessibilityIdentifier(selected == nil ? "music-canvas-popup" : "music-canvas-settings-page")
+        .task(id: request) { await loadPreview(request) }
         .task(id: loadScope) {
             guard !Task.isCancelled, scope == loadScope else { return }
             snapshot = nil; selected = nil; preview = nil; notice = nil
@@ -149,7 +162,6 @@ struct MusicCanvasView: View {
                         selected = target
                         cleanupRemote = false; allowRemaining = false
                         width = ""; height = ""; orientation = "portrait"; preview = nil
-                        if target.preview_available { loadPreview(target.id) }
                     } label: {
                         Image(systemName: "chevron.forward")
                             .font(.subheadline.weight(.semibold))
@@ -390,17 +402,24 @@ struct MusicCanvasView: View {
             await refresh(captured)
         }
     }
-    private func loadPreview(_ target: String) {
-        let captured = scope
-        Task {
+    private func loadPreview(_ request: PreviewRequest?) async {
+        guard !Task.isCancelled, previewRequest == request else { return }
+        preview = nil
+        guard let request else { return }
+        while !Task.isCancelled, previewRequest == request {
             do {
-                let bytes = try await model.withHomeAssistantClient { try await $0.musicCanvasPreview(targetID: target) }
-                guard current(captured), selected?.id == target else { return }
+                let bytes = try await model.withHomeAssistantClient(notifiesTransportFailure: false) {
+                    try await $0.musicCanvasPreview(targetID: request.targetID)
+                }
+                guard !Task.isCancelled, previewRequest == request else { return }
                 preview = bytes
+                if request.revision != nil { return }
             } catch {
-                guard current(captured), selected?.id == target else { return }
+                guard !Task.isCancelled, previewRequest == request else { return }
                 preview = nil
             }
+            // Older Core versions have no revision to invalidate the preview.
+            try? await Task.sleep(for: .seconds(request.revision == nil ? 15 : 5))
         }
     }
 }

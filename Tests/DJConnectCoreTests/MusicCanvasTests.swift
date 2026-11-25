@@ -45,6 +45,22 @@ private func canvasFixture() throws -> Data {
     #expect(snapshot.per_screen_composition_and_cadence == nil)
 }
 
+@Test func musicCanvasPreviewRevisionIsOptionalAndRequiresAnAvailablePreview() throws {
+    var raw = try #require(JSONSerialization.jsonObject(with: canvasFixture()) as? [String: Any])
+    var targets = try #require(raw["targets"] as? [[String: Any]])
+    let revision = String(repeating: "a", count: 64)
+    targets[0]["preview_revision"] = revision
+    for available in [true, false] {
+        targets[0]["preview_available"] = available
+        raw["targets"] = targets
+        let snapshot = try JSONDecoder().decode(DJConnectCanvasSnapshot.self,
+            from: JSONSerialization.data(withJSONObject: raw))
+        #expect(snapshot.targets[0].preview_revision == revision)
+        #expect(snapshot.targets[1].preview_revision == nil)
+        #expect(snapshot.isValid == available)
+    }
+}
+
 @Test(arguments: ["cadence", "composition", "matte", "cadence_overrides"])
 func musicCanvasRejectsMalformedPreferences(field: String) throws {
     var raw = try #require(JSONSerialization.jsonObject(with: canvasFixture()) as? [String: Any])
