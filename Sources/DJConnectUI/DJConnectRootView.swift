@@ -10050,9 +10050,13 @@ struct VibeCastDisplayConsentForm: View {
                 }
                 TimelineView(.periodic(from: .now, by: 1)) { _ in
                     if let remaining = model.vibeCastShareRemainingSeconds {
-                        let seconds = max(0, Int(remaining))
-                        Text(String(format: localizedKey(model.language, "ui.displayConsent.remaining"),
-                                    String(format: "%d:%02d", seconds / 3600, (seconds % 3600) / 60)))
+                        let locale = Locale(identifier: DJConnectLocalization.supportedLanguageCode(model.language))
+                        let duration = Duration.seconds(max(0, Int(remaining)) / 60 * 60)
+                        let remainingText = duration.formatted(
+                            .units(allowed: [.hours, .minutes], width: .wide, zeroValueUnits: .hide)
+                                .locale(locale)
+                        )
+                        Text(localizedKey(model.language, "ui.displayConsent.remaining", arguments: remainingText))
                             .font(.footnote.monospacedDigit())
                             .foregroundStyle(.secondary)
                             .accessibilityIdentifier("vibecast-session-remaining")
