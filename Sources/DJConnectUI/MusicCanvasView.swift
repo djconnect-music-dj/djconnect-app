@@ -243,6 +243,20 @@ struct MusicCanvasView: View {
                 matteSetting(style.matte) { value in
                     change { $0.updatePresentation(for: target) { $0.matte = value } }
                 }
+                if snapshot.per_screen_matte_size == true, style.matte != "off" {
+                    settingRow(text("matte_size")) {
+                        Picker(text("matte_size"), selection: Binding(get: { style.matte_size ?? "medium" }, set: { value in
+                            change { $0.updatePresentation(for: target) { $0.matte_size = value } }
+                        })) {
+                            ForEach(DJConnectCanvasPresentation.matteSizes, id: \.self) { size in
+                                Text(text("matte_size." + size)).tag(size)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        .accessibilityIdentifier("music-canvas-matte-size-" + target.id)
+                    }
+                }
                 trackTitleSetting(style.show_track_title, identifier: "music-canvas-show-track-title-" + target.id) { enabled in
                     change { $0.updatePresentation(for: target) { $0.show_track_title = enabled } }
                 }

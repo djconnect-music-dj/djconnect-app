@@ -11,7 +11,9 @@ public struct DJConnectCanvasPresentation: Codable, Equatable, Sendable {
     public var show_track_title: Bool
     public var composition: String?
     public var cadence: String?
+    public var matte_size: String?
 
+    public static let matteSizes = ["small", "medium", "large"]
     public static let mattes = ["off", "matching", "contrast"]
 }
 
@@ -53,6 +55,7 @@ public struct DJConnectCanvasPreferences: Codable, Equatable, Sendable {
             DJConnectCanvasPresentation.mattes.contains(style.matte)
                 && (style.composition.map(Self.compositions.contains) ?? true)
                 && (style.cadence.map(Self.cadences.contains) ?? true)
+                && (style.matte_size.map(DJConnectCanvasPresentation.matteSizes.contains) ?? true)
         } ?? true)
     }
     public static let compositions = ["central", "free", "full"]
@@ -92,6 +95,7 @@ public struct DJConnectCanvasSnapshot: Decodable, Equatable, Sendable {
     public let image_generation_available: Bool
     public let can_manage_devices: Bool
     public let per_screen_composition_and_cadence: Bool?
+    public let per_screen_matte_size: Bool?
     public var isValid: Bool {
         success && contract_version == 1 && binding.count == 64 &&
         binding.allSatisfy({ $0.isHexDigit && $0.isASCII }) && revision >= 0 &&

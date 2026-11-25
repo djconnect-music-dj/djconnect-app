@@ -1828,6 +1828,10 @@
 "ui.canvas.free" = "Libre";
 "ui.canvas.full" = "Pantalla completa";
 "ui.canvas.matte" = "Paspartú";
+"ui.canvas.matte_size" = "Grosor del paspartú";
+"ui.canvas.matte_size.small" = "Estrecho";
+"ui.canvas.matte_size.medium" = "Mediano";
+"ui.canvas.matte_size.large" = "Ancho";
 "ui.canvas.off" = "Desactivado";
 "ui.canvas.matching" = "A juego";
 "ui.canvas.contrast" = "En contraste";
