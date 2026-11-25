@@ -22,6 +22,16 @@ struct VibeCastPartyMark: View {
     }
 }
 
+private struct VibeCastPartyHero: View {
+    private let size: CGFloat = 86
+
+    var body: some View {
+        DJConnectHeroShine(artwork: djConnectIconGradient
+            .frame(width: size, height: size)
+            .mask(VibeCastPartyMark(size: size)))
+    }
+}
+
 struct VibeCastPartyJoinLabel: View {
     let title: String
 
@@ -50,7 +60,7 @@ struct DJConnectLiveGuestJoinView: View {
     }
 
     var body: some View {
-        DJConnectGlassDialogSurface(title: vibeCastPartyTitle, icon: partyHero) {
+        DJConnectGlassDialogSurface(title: vibeCastPartyTitle, icon: VibeCastPartyHero()) {
             VStack(spacing: 14) {
                 if guest.invitation != nil {
                     Button {
@@ -101,11 +111,6 @@ struct DJConnectLiveGuestJoinView: View {
             }
         }
         #endif
-    }
-
-    private var partyHero: some View {
-        let mark = VibeCastPartyMark(size: 86)
-        return DJConnectHeroShine(artwork: djConnectIconGradient.frame(width: 86, height: 86).mask(mark))
     }
 
     #if os(macOS)
@@ -220,7 +225,7 @@ struct DJConnectLiveGuestView: View {
     private var leaveConfirmation: some View {
         DJConnectGlassDialogSurface(
             title: text("ui.live.leave_confirmation"),
-            icon: DJConnectHeroGlyph(systemImage: "stop.fill")
+            icon: VibeCastPartyHero()
         ) {
             VStack(spacing: 12) {
                 Button(text("ui.live.leave")) {
