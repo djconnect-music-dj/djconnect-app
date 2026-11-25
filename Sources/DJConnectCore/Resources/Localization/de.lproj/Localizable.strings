@@ -1849,6 +1849,8 @@
 "ui.canvas.landscape" = "Querformat";
 "ui.canvas.tv_permission" = "Erlaube die Verbindung mit DJConnect auf deinem Fernseher.";
 "ui.canvas.screen_setup" = "Ergänze nur die fehlenden Bildschirmdaten.";
+"ui.canvas.switchbot_13_portrait" = "13,3 Zoll Hochformat · 1200 × 1600";
+"ui.canvas.switchbot_ha_setup" = "Richte diesen Rahmen in Home Assistant mit der DJConnect-Aktion „SwitchBot-Rahmen einrichten“ ein.";
 "ui.canvas.connect" = "Bildschirm hinzufügen";
 "ui.canvas.override" = "Für diesen Bildschirm";
 "ui.canvas.inherit" = "Gemeinsame Einstellung verwenden";
