@@ -250,6 +250,35 @@ final class DJConnectMacUITests: XCTestCase {
         try saveMomentScreenshot(app, "mac-05-player-no-session")
     }
 
+    func testSessionComposerStaysSingleLineAndNarrowerThanContribution() throws {
+        let app = launchReviewDemoApp(fixture: "review_demo_active_session")
+        defer { app.terminate() }
+
+        let input = app.descendants(matching: .any)["ask-dj-composer-input"].firstMatch
+        let send = app.buttons["ask-dj-composer-send"]
+        let contribution = app.descendants(matching: .any)["session-current-moment"].firstMatch
+        guard input.waitForExistence(timeout: 10), send.exists, contribution.waitForExistence(timeout: 5) else {
+            return XCTFail("The active session must show the composer and a contribution")
+        }
+
+        let inputFrame = input.frame
+        let sendFrame = send.frame
+        XCTAssertLessThan(abs(inputFrame.midY - sendFrame.midY), 8)
+        XCTAssertGreaterThan(inputFrame.minX - 12, contribution.frame.minX)
+        XCTAssertLessThan(sendFrame.maxX + 12, contribution.frame.maxX)
+
+        input.click()
+        app.typeText("Dit langere concept moet ook tijdens het typen op één regel blijven staan in de Ask DJ-balk.")
+        XCTAssertEqual(input.frame.height, inputFrame.height, accuracy: 2)
+        XCTAssertEqual(input.frame.minY, inputFrame.minY, accuracy: 2)
+        XCTAssertEqual(send.frame.midY, sendFrame.midY, accuracy: 2)
+
+        app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.40)).click()
+        XCTAssertEqual(input.frame.minY, inputFrame.minY, accuracy: 2)
+        XCTAssertEqual(input.frame.height, inputFrame.height, accuracy: 2)
+        XCTAssertEqual(send.frame.midY, sendFrame.midY, accuracy: 2)
+    }
+
     func testReviewDemoSessionAvatarLayoutFavoriteAndArtworkControls() throws {
         let app = launchReviewDemoApp(fixture: "review_demo_active_session")
         defer { app.terminate() }

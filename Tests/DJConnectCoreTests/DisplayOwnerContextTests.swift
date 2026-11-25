@@ -47,6 +47,8 @@ func rendezvousOwnerRouteRejectsUntrustedDestinations(url: String) throws {
     let link = "djconnect://join#v=1&ha_url=https%3A%2F%2Fha.example.com&issuer_epoch=\(epoch)&invitation_id=\(id)&invitation_secret=\(secret)"
     let invitation = try DJConnectGuestInvitation.parse(link)
     #expect(invitation.origin.absoluteString == "https://ha.example.com")
+    let publicQR = link.replacingOccurrences(of: "djconnect://join#", with: "https://vibecast.tv/join#")
+    #expect(try DJConnectGuestInvitation.parse(publicQR) == invitation)
     let body = try #require(JSONSerialization.jsonObject(with: invitation.redemptionBody()) as? [String: Any])
     #expect(Set(body.keys) == ["contract_version", "issuer_epoch", "invitation_id", "invitation_secret"])
     for invalid in [link + "&v=1", link + "&guest_token=forbidden", link.replacingOccurrences(of: "https%3A", with: "http%3A"),
@@ -56,5 +58,18 @@ func rendezvousOwnerRouteRejectsUntrustedDestinations(url: String) throws {
                     link.replacingOccurrences(of: "invitation_id=\(id)", with: "invitation_id=short"),
                     link.replacingOccurrences(of: "join#", with: "join?source=owner#")] {
         #expect(throws: (any Error).self) { try DJConnectGuestInvitation.parse(invalid) }
+    }
+}
+
+@Test func nativeGuestTVCodeRequiresAPlainHTTPSOrigin() throws {
+    let invitation = try DJConnectGuestInvitation.manualCode("abcd-efgh-jklm", address: "ha.example.com")
+    #expect(invitation.origin.absoluteString == "https://ha.example.com")
+    let body = try #require(JSONSerialization.jsonObject(with: invitation.redemptionBody()) as? [String: Any])
+    #expect(body["code"] as? String == "ABCDEFGHJKLM")
+    #expect(Set(body.keys) == ["contract_version", "code"])
+    for address in ["http://ha.example.com", "ha.example.com/private", "user@ha.example.com", "ha.example.com#fragment"] {
+        #expect(throws: (any Error).self) {
+            try DJConnectGuestInvitation.manualCode("abcd-efgh-jklm", address: address)
+        }
     }
 }

@@ -13,6 +13,7 @@ public struct DJConnectCanvasPreferences: Codable, Equatable, Sendable {
     public var matte: String
     public var cadence: String
     public var cadence_overrides: [String: String]
+    public var show_track_title: Bool?
 
     public var isValid: Bool {
         ["central", "free", "full"].contains(composition) &&

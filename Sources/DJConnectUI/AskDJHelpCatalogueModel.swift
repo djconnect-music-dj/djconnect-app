@@ -62,12 +62,19 @@ import DJConnectCore
     func read(catalogue: DJConnectAskDJCatalogue?, surface: DJConnectAskDJCatalogue.Surface,
               language: String, context: @escaping @MainActor () -> DJConnectAskDJCatalogue.Context,
               reader: Reader?, retainingCurrent: Bool = false) async -> [DJConnectAskDJCatalogue.CatalogueSection]? {
-        if readTask != nil { return nil }
+        guard !Task.isCancelled else { return nil }
         let original = context()
+        if retainingCurrent || originalContext == original {
+            guard readTask == nil else { return nil }
+        }
         if retainingCurrent {
             guard allowsVisibleRefresh, originalContext == original else { return nil }
             generation = UUID()
-        } else { close() }
+        } else {
+            // A newly visible context can start its task before SwiftUI delivers
+            // the change callback. Retire the old read before starting the new one.
+            close()
+        }
         guard let catalogue, let reader else { return nil }
         let captured = generation, limit = now().advanced(by: .seconds(15))
         originalContext = original; automaticRead = retainingCurrent; busy = true

@@ -153,6 +153,10 @@ public final class DJConnectHATransportManager: Sendable {
                 // The shared coordinator owns reconciliation. Never re-enter a closure
                 // and allocate a second intent after an uncertain/receipt-only result.
                 throw hybrid
+            } catch let rejection as DJConnectCanvasReadFailure {
+                // Canvas can decline a read after receiving a response from Home Assistant.
+                modeReporter?(candidate.mode, baseURL)
+                throw rejection
             } catch let rejection as DJConnectProfileDJSettingsFailure {
                 modeReporter?(candidate.mode, baseURL)
                 throw rejection // Reachable owner rejection, never a route failure/replay.

@@ -800,7 +800,8 @@ final class DJConnectIOSUITests: XCTestCase {
         let app = launchApp()
         let join = app.buttons["pairing-join-session"]
         XCTAssertTrue(join.waitForExistence(timeout: 8)); join.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["live-guest-root"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["live-guest-join"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["live-guest-scan"].exists)
         XCTAssertFalse(app.buttons["live-guest-confirm"].exists)
         let link = "djconnect://join#v=1&ha_url=https%3A%2F%2Fha.example.com&issuer_epoch=\(String(repeating: "A", count: 43))&invitation_id=\(String(repeating: "B", count: 32))&invitation_secret=\(String(repeating: "C", count: 43))"
         app.open(try XCTUnwrap(URL(string: link)))
@@ -833,7 +834,7 @@ final class DJConnectIOSUITests: XCTestCase {
     func testMalformedGuestDeepLinkNeverShowsAdmissionConfirmation() throws {
         let app = launchApp()
         app.open(try XCTUnwrap(URL(string: "djconnect://join#v=1&ha_url=https%3A%2F%2Fha.example.com&invitation_secret=invalid")))
-        XCTAssertTrue(app.descendants(matching: .any)["live-guest-root"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["live-guest-join"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["live-guest-confirm"].exists)
         XCTAssertFalse(app.textFields["live-guest-composer"].exists)
     }

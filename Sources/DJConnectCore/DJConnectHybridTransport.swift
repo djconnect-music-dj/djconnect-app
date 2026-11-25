@@ -331,6 +331,7 @@ public actor DJConnectHybridTransport {
         if ["GET", "HEAD"].contains(request.httpMethod ?? "GET") { return true }
         let path = request.url?.path ?? ""
         if ["/status", "/music_dna/profile", "/session/history/open"].contains(where: path.hasSuffix) { return true }
+        if request.httpMethod == "POST", path.hasSuffix("/api/djconnect/v1/music_canvas/read") { return true }
         if path.hasSuffix("/command"), let data = request.httpBody,
            let body = try? JSONDecoder().decode(HybridObject.self, from: data), let name = body["command"]?.hybridString {
             return canReplayLegacyCommand(name)

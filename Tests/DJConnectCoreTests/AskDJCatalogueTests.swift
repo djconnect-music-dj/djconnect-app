@@ -198,9 +198,9 @@ private func fullHelpFixture() throws -> (DJConnectAskDJCatalogue, DJConnectAskD
     for _ in 0..<1000 { if gate.continuation != nil { break }; await Task.yield() }
     let continuation = try #require(gate.continuation)
     context.ownerEpoch = "new-owner"
-    model.contextChanged(to: context)
     let fresh = await model.read(catalogue: catalogue, surface: .askDJ, language: "en", context: { context }, reader: { _, _, _, _ in .init(ids: ids, trackID: context.trackID) })
     #expect(fresh?.isEmpty == false)
+    model.contextChanged(to: context) // The SwiftUI callback can arrive after the new task starts.
     continuation.resume(returning: .init(ids: ids, trackID: original.trackID))
     let retired = await old.value
     #expect(retired == nil && !model.sections.isEmpty && model.admittedContext?.ownerEpoch == "new-owner")

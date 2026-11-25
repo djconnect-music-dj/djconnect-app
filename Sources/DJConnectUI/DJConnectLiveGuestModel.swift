@@ -166,11 +166,24 @@ import DJConnectCore
     func showJoin() { disconnect(); isPresented = true }
 
     @discardableResult func receive(_ raw: String) -> Bool {
-        guard let url = URLComponents(string: raw), url.scheme == "djconnect", url.host == "join" else { return false }
+        guard DJConnectGuestInvitation.recognizes(raw) else { return false }
         disconnect(); isPresented = true
         do { invitation = try DJConnectGuestInvitation.parse(raw); statusKey = nil }
         catch { statusKey = "ui.live.invalid_invitation" }
         return true
+    }
+
+    func receiveScan(_ raw: String) {
+        if !receive(raw) { statusKey = "ui.live.invalid_invitation" }
+    }
+
+    func receiveCode(_ code: String, address: String) {
+        do {
+            invitation = try DJConnectGuestInvitation.manualCode(code, address: address)
+            statusKey = nil
+        } catch {
+            statusKey = "ui.live.invalid_invitation"
+        }
     }
 
     func join() async {
@@ -181,9 +194,11 @@ import DJConnectCore
         isBusy = true
         defer { if generation == original { isBusy = false } }
         do {
-            let data = try await client.send(.redeem, body: invitation.redemptionBody(), bearer: nil)
+            let action: DJConnectGuestTransport.Action = invitation.usesManualCode ? .redeemCode : .redeem
+            let data = try await client.send(action, body: invitation.redemptionBody(), bearer: nil)
             let received = try JSONDecoder().decode(Grant.self, from: data)
-            guard generation == original, received.issuer_epoch == invitation.issuerEpoch,
+            guard generation == original,
+                  (invitation.issuerEpoch.map { $0 == received.issuer_epoch } ?? true),
                   !received.guest_id.isEmpty, received.guest_id.utf8.count <= 128,
                   received.guest_token.hasPrefix("djcg_"), received.capabilities.isGuestOnly,
                   received.lease_expires_in.isFinite, received.lease_expires_in > 0, received.lease_expires_in <= 60,
