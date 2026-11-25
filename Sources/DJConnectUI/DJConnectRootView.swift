@@ -10128,7 +10128,7 @@ struct VibeCastDisplayConsentForm: View {
             steps: [(localizedKey(model.language, "ui.off"), 0), (localizedKey(model.language, "ui.on"), 1)],
             selectedIndex: enabled ? 1 : 0,
             language: model.language,
-            glyphs: ["bubble.left", "bubble.left.and.bubble.right"],
+            glyphs: ["", "party.popper.fill"],
             titleOverride: "Party Mode",
             optionIDs: [identifier + "-off", identifier + "-on"],
             sessionTheme: choiceTheme,
@@ -13963,15 +13963,22 @@ struct SessionGlassChoiceSelector: View {
     @ViewBuilder private var optionButtons: some View {
         let buttons = HStack(spacing: 4) {
                 ForEach(steps.indices, id: \.self) { index in
+                    let glyph = glyphs[safe: index] ?? "sparkles"
                     Button { DJConnectHaptics.selection(); onSelect(index) } label: {
                         Group {
                             if showsOptionLabels {
-                                Label(steps[index].label, systemImage: glyphs[safe: index] ?? "sparkles")
-                                    .font(.headline)
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.75)
+                                Group {
+                                    if glyph.isEmpty {
+                                        Text(steps[index].label)
+                                    } else {
+                                        Label(steps[index].label, systemImage: glyph)
+                                    }
+                                }
+                                .font(.headline)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
                             } else {
-                                Image(systemName: glyphs[safe: index] ?? "sparkles")
+                                Image(systemName: glyph)
                                     .font(.title3.weight(.semibold))
                                     // Equal intrinsic width keeps allocation independent of the symbol.
                                     .frame(width: 24, height: 28)
