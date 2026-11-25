@@ -6,6 +6,13 @@ public enum DJConnectCanvasReadFailure: Error, Equatable, Sendable {
     case invalidSnapshot
 }
 
+public struct DJConnectCanvasPresentation: Codable, Equatable, Sendable {
+    public var matte: String
+    public var show_track_title: Bool
+
+    public static let mattes = ["off", "matching", "contrast"]
+}
+
 public struct DJConnectCanvasPreferences: Codable, Equatable, Sendable {
     public var enabled: Bool
     public var selected_targets: [String]
@@ -14,14 +21,33 @@ public struct DJConnectCanvasPreferences: Codable, Equatable, Sendable {
     public var cadence: String
     public var cadence_overrides: [String: String]
     public var show_track_title: Bool?
+    public var presentation_overrides: [String: DJConnectCanvasPresentation]?
+
+    public func presentation(for target: DJConnectCanvasTarget) -> DJConnectCanvasPresentation {
+        if let style = presentation_overrides?[target.id] { return style }
+        if target.adapter == "switchbot" {
+            return DJConnectCanvasPresentation(matte: "off", show_track_title: false)
+        }
+        return DJConnectCanvasPresentation(matte: matte, show_track_title: show_track_title ?? false)
+    }
+
+    public mutating func updatePresentation(
+        for target: DJConnectCanvasTarget, _ update: (inout DJConnectCanvasPresentation) -> Void
+    ) {
+        guard presentation_overrides != nil else { return }
+        var style = presentation(for: target)
+        update(&style)
+        presentation_overrides?[target.id] = style
+    }
 
     public var isValid: Bool {
         ["central", "free", "full"].contains(composition) &&
-        ["off", "matching", "contrast"].contains(matte) &&
+        DJConnectCanvasPresentation.mattes.contains(matte) &&
         Self.cadences.contains(cadence) && selected_targets.count <= 16 &&
         Set(selected_targets).count == selected_targets.count &&
         Set(cadence_overrides.keys).isSubset(of: Set(selected_targets)) &&
-        cadence_overrides.values.allSatisfy(Self.cadences.contains)
+        cadence_overrides.values.allSatisfy(Self.cadences.contains) &&
+        (presentation_overrides?.values.allSatisfy { DJConnectCanvasPresentation.mattes.contains($0.matte) } ?? true)
     }
     public static let cadences = ["track", "900", "1800", "3600"]
 }
@@ -63,6 +89,7 @@ public struct DJConnectCanvasSnapshot: Decodable, Equatable, Sendable {
         binding.allSatisfy({ $0.isHexDigit && $0.isASCII }) && revision >= 0 &&
         preferences.isValid && targets.count <= 64 && Set(targets.map(\.id)).count == targets.count &&
         Set(preferences.selected_targets).isSubset(of: Set(targets.map(\.id))) &&
+        (preferences.presentation_overrides.map { Set($0.keys).isSubset(of: Set(targets.map(\.id))) } ?? true) &&
         targets.allSatisfy { target in
             ["samsung", "switchbot"].contains(target.adapter) &&
             !target.id.isEmpty && target.id.utf8.count <= 128 &&

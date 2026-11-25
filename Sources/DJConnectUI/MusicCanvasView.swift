@@ -170,22 +170,14 @@ struct MusicCanvasView: View {
                 .pickerStyle(.menu)
                 .labelsHidden()
             }
-            settingRow(text("matte")) {
-                Picker(text("matte"), selection: Binding(get: { snapshot.preferences.matte }, set: { value in
+            if snapshot.preferences.presentation_overrides == nil {
+                matteSetting(snapshot.preferences.matte) { value in
                     change { $0.matte = value }
-                })) {
-                    ForEach(["off", "matching", "contrast"], id: \.self) { Text(text($0)).tag($0) }
                 }
-                .pickerStyle(.menu)
-                .labelsHidden()
-            }
-            if let showTitle = snapshot.preferences.show_track_title {
-                settingRow(text("show_track_title")) {
-                    Toggle(text("show_track_title"), isOn: Binding(get: { showTitle }, set: { enabled in
+                if let showTitle = snapshot.preferences.show_track_title {
+                    trackTitleSetting(showTitle, identifier: "music-canvas-show-track-title") { enabled in
                         change { $0.show_track_title = enabled }
-                    }))
-                    .labelsHidden()
-                    .accessibilityIdentifier("music-canvas-show-track-title")
+                    }
                 }
             }
             settingRow(text("cadence")) {
@@ -238,11 +230,40 @@ struct MusicCanvasView: View {
         target.screen.width == nil || target.screen.height == nil || target.screen.orientation == nil
     }
 
+    private func matteSetting(_ matte: String, update: @escaping @MainActor @Sendable (String) -> Void) -> some View {
+        settingRow(text("matte")) {
+            Picker(text("matte"), selection: Binding(get: { matte }, set: update)) {
+                ForEach(DJConnectCanvasPresentation.mattes, id: \.self) { Text(text($0)).tag($0) }
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+        }
+    }
+
+    private func trackTitleSetting(
+        _ enabled: Bool, identifier: String, update: @escaping @MainActor @Sendable (Bool) -> Void
+    ) -> some View {
+        settingRow(text("show_track_title")) {
+            Toggle(text("show_track_title"), isOn: Binding(get: { enabled }, set: update))
+                .labelsHidden()
+                .accessibilityIdentifier(identifier)
+        }
+    }
+
     private func targetSettings(_ target: DJConnectCanvasTarget, snapshot: DJConnectCanvasSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(status(target.state)).font(.caption).foregroundStyle(.secondary)
             if target.preview_available, selected?.id == target.id, let preview {
                 Image(decorative: preview.image, scale: 1).resizable().scaledToFit()
+            }
+            if snapshot.preferences.presentation_overrides != nil {
+                let style = snapshot.preferences.presentation(for: target)
+                matteSetting(style.matte) { value in
+                    change { $0.updatePresentation(for: target) { $0.matte = value } }
+                }
+                trackTitleSetting(style.show_track_title, identifier: "music-canvas-show-track-title-" + target.id) { enabled in
+                    change { $0.updatePresentation(for: target) { $0.show_track_title = enabled } }
+                }
             }
             if snapshot.can_manage_devices,
                target.state == "canvas_manual_takeover" || target.state == "discovered" || needsScreenGeometry(target) {
