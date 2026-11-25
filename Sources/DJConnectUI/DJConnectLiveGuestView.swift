@@ -203,11 +203,6 @@ struct DJConnectLiveGuestView: View {
                 .font(.headline)
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 8)
-            Image(systemName: "person.2.wave.2.fill")
-                .font(.subheadline)
-                .foregroundStyle(.white.opacity(0.78))
-                .accessibilityLabel(text("ui.live.connected"))
-                .accessibilityIdentifier("live-guest-connection")
             Button { confirmsLeaving = true } label: {
                 Image(systemName: "stop.fill")
                     .font(.subheadline.weight(.semibold))
@@ -228,11 +223,11 @@ struct DJConnectLiveGuestView: View {
             icon: DJConnectHeroGlyph(systemImage: "stop.fill")
         ) {
             VStack(spacing: 12) {
-                Button(text("ui.live.leave"), role: .destructive) {
+                Button(text("ui.live.leave")) {
                     confirmsLeaving = false
                     guest.disconnect()
                 }
-                .djConnectButtonStyle(DJConnectButtonStyle(emphasis: .destructive, expands: true))
+                .djConnectButtonStyle(DJConnectButtonStyle(emphasis: .destructive, expands: true, usesDestructiveGlass: true))
                 .accessibilityIdentifier("live-guest-confirm-leave")
 
                 Button(text("ui.cancel"), role: .cancel) { confirmsLeaving = false }
