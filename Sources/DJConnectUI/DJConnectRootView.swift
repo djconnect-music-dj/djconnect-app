@@ -769,10 +769,7 @@ public struct DJConnectRootView: View {
                 DJConnectLiveGuestView(guest: liveGuest, language: model.language)
             } else {
                 ordinaryRoot
-                    .djConnectPopup(isPresented: Binding(
-                        get: { liveGuest.isPresented && !liveGuest.isJoined },
-                        set: { if !$0 && !liveGuest.isJoined { liveGuest.disconnect() } }
-                    )) {
+                    .djConnectPopup(isPresented: guestJoinBinding(above: nil)) {
                         DJConnectLiveGuestJoinView(guest: liveGuest, language: model.language)
                     }
             }
@@ -1052,6 +1049,9 @@ public struct DJConnectRootView: View {
         }
         .djConnectPopup(item: rootSheetBinding) { sheet in
             rootSheetView(sheet)
+                .djConnectPopup(isPresented: guestJoinBinding(above: sheet)) {
+                    DJConnectLiveGuestJoinView(guest: liveGuest, language: model.language)
+                }
         }
         .onChange(of: model.shouldShowPairingScreen) {
             if model.shouldShowPairingScreen {
@@ -1356,6 +1356,17 @@ public struct DJConnectRootView: View {
         case .more, .games, .settings, .logs, .about, .legal, .privacy:
             return false
         }
+    }
+
+    private func guestJoinBinding(above sheet: DJConnectRootSheet?) -> Binding<Bool> {
+        Binding(
+            get: { activeRootSheet == sheet && liveGuest.isPresented && !liveGuest.isJoined },
+            set: { shown in
+                if !shown && activeRootSheet == sheet && !liveGuest.isJoined {
+                    liveGuest.disconnect()
+                }
+            }
+        )
     }
 
     private var rootSheetBinding: Binding<DJConnectRootSheet?> {
@@ -1743,14 +1754,13 @@ private struct PairingSheetView: View {
                 if model.isShowingPairingSuccess {
                     pairingSuccess
                 } else {
-                    pairingPending
-                    Button {
-                        model.isShowingGuestJoin = true
-                    } label: {
-                        VibeCastPartyJoinLabel(title: localizedKey(model.language, "ui.live.join"))
+                    if model.pairingFlowTarget != .appleWatch {
+                        unpairedSessionOptions
                     }
-                        .djConnectButtonStyle(DJConnectButtonStyle(expands: true))
-                        .accessibilityIdentifier("pairing-join-session")
+                    pairingPending
+                    if model.pairingFlowTarget == .appleWatch {
+                        pairingGuestJoinButton
+                    }
                 }
             }
             .padding(28)
@@ -1853,6 +1863,37 @@ private struct PairingSheetView: View {
         UIApplication.shared.open(url)
     }
     #endif
+
+    private var pairingGuestJoinButton: some View {
+        Button {
+            model.isShowingGuestJoin = true
+        } label: {
+            VibeCastPartyJoinLabel(title: localizedKey(model.language, "ui.live.join"))
+        }
+        .djConnectButtonStyle(DJConnectButtonStyle(expands: true))
+        .controlSize(.large)
+        .accessibilityIdentifier("pairing-join-session")
+    }
+
+    private var unpairedSessionOptions: some View {
+        VStack(spacing: 8) {
+            pairingGuestJoinButton
+
+            Text(localizedKey(model.language, "ui.session.welcome.join_separator"))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            Button {
+                model.startDemoMode()
+            } label: {
+                Label(localizedKey(model.language, "ui.start.demo.mode"), systemImage: "play.circle")
+                    .frame(maxWidth: .infinity)
+            }
+            .djConnectButtonStyle(DJConnectButtonStyle(emphasis: .secondary, expands: true))
+            .controlSize(.large)
+            .accessibilityIdentifier("pairing-start-demo-button")
+        }
+    }
 
     private var pairingPending: some View {
         VStack(spacing: 16) {
@@ -2029,21 +2070,6 @@ private struct PairingSheetView: View {
                     (model.pairingFlowTarget == .appleWatch && model.canRestartAppleWatchPairing))
                 .accessibilityIdentifier("pairing-submit-button")
 
-            }
-
-            if model.pairingFlowTarget != .appleWatch {
-                Button {
-                    model.startDemoMode()
-                } label: {
-                    Label(
-                        localizedKey(model.language, "ui.start.demo.mode"),
-                        systemImage: "play.circle"
-                    )
-                    .frame(maxWidth: .infinity)
-                }
-                .djConnectButtonStyle(DJConnectButtonStyle(emphasis: .secondary, expands: true))
-                .controlSize(.large)
-                .accessibilityIdentifier("pairing-start-demo-button")
             }
 
             #if os(iOS)

@@ -796,10 +796,28 @@ final class DJConnectIOSUITests: XCTestCase {
         XCTAssertTrue(app.buttons["pairing-start-demo-button"].exists)
     }
 
+    func testFirstRunWelcomeCanOpenGuestJoinAndReturnToWelcome() {
+        let app = launchFirstRunApp()
+        let join = app.buttons["welcome-join-session"]
+        XCTAssertTrue(join.waitForExistence(timeout: 8))
+        join.tap()
+
+        let guestSheet = app.descendants(matching: .any)["live-guest-join"]
+        XCTAssertTrue(guestSheet.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["live-guest-scan"].exists)
+        app.buttons["live-guest-leave"].tap()
+        XCTAssertTrue(guestSheet.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(join.isHittable)
+    }
+
     func testGuestJoinIsAvailableWithoutPairingAndRequiresExplicitConfirmation() throws {
         let app = launchApp()
         let join = app.buttons["pairing-join-session"]
-        XCTAssertTrue(join.waitForExistence(timeout: 8)); join.tap()
+        let demo = app.buttons["pairing-start-demo-button"]
+        XCTAssertTrue(join.waitForExistence(timeout: 8))
+        XCTAssertTrue(demo.isHittable)
+        XCTAssertLessThan(join.frame.midY, demo.frame.midY)
+        join.tap()
         XCTAssertTrue(app.descendants(matching: .any)["live-guest-join"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["live-guest-scan"].exists)
         XCTAssertFalse(app.buttons["live-guest-confirm"].exists)
@@ -812,6 +830,7 @@ final class DJConnectIOSUITests: XCTestCase {
         screenshot.name = "VibeCast-Live-join-confirmation"; screenshot.lifetime = .keepAlways; add(screenshot)
         app.buttons["live-guest-leave"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["screen-pairing"].waitForExistence(timeout: 5))
+        XCTAssertTrue(demo.isHittable)
     }
 
     func testPlaybackEqualizerOpensCurrentTrackInsight() throws {
