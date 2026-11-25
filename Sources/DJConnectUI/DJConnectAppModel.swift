@@ -1215,7 +1215,6 @@ public final class DJConnectAppModel: ObservableObject {
     func prepareDisplayConsentPresentation() {
         refreshDisplayConsentPresentation()
         if !blocksVibeCastScreenSelection { vibeCastLiveEnabled = false; resetDisplayConsent() }
-        Task { await refreshVibeCastRemote() }
     }
 
     func dismissDisplayConsentPresentation() {
