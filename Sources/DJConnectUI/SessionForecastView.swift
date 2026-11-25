@@ -22,14 +22,16 @@ extension DJConnectAppModel {
 struct SessionForecastTextView: View {
     let sections: [DJConnectSessionForecast.Section]
     let language: String
+    let showsSourceLinks: Bool
 
     init(projection: DJConnectSessionForecast, language: String) {
         self.init(sections: projection.sections, language: language)
     }
 
-    init(sections: [DJConnectSessionForecast.Section], language: String) {
+    init(sections: [DJConnectSessionForecast.Section], language: String, showsSourceLinks: Bool = true) {
         self.sections = sections
         self.language = language
+        self.showsSourceLinks = showsSourceLinks
     }
 
     private func text(_ key: String) -> String { DJConnectLocalization.localized(key: key, language: language) }
@@ -53,7 +55,7 @@ struct SessionForecastTextView: View {
                         .foregroundStyle(.white)
                         .fixedSize(horizontal: false, vertical: true)
                         .textSelection(.enabled)
-                    if section.id != "current", let source = section.source_url.flatMap(URL.init(string:)) {
+                    if showsSourceLinks, section.id != "current", let source = section.source_url.flatMap(URL.init(string:)) {
                         Link(destination: source) {
                             Text(text("ui.session.forecast.source")).underline().foregroundStyle(.white)
                         }.frame(minHeight: 44)
@@ -139,7 +141,8 @@ struct SessionForecastContent: View {
     }
     private func text(_ key: String) -> String { DJConnectLocalization.localized(key: key, language: model.language) }
     private var deadlines: [Date] {
-        [model.forecastCursor?.projection?.valid_until.flatMap(DJConnectSessionForecast.timestamp)].compactMap { $0 }
+        [model.forecastCursor?.projection?.valid_until.flatMap(DJConnectSessionForecast.timestamp),
+         model.forecastTrackHandoffDeadline, model.previousForecastDirectionDeadline].compactMap { $0 }
             + (model.forecastCursor?.projection?.imagery.compactMap { DJConnectSessionForecast.timestamp($0.expires_at) } ?? [])
     }
     struct RefreshContext: Equatable {
@@ -188,7 +191,8 @@ struct SessionForecastContent: View {
                 if model.isDemoMode {
                     Text(text("demo.horizon.notice")).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                     SessionForecastTextView(sections: demoSections, language: model.language)
-                } else if scenePhase == .active, let projection = model.visibleSessionForecast(at: clock.date) {
+                } else if scenePhase == .active, let projection = model.visibleSessionForecast(at: clock.date),
+                          !projection.sections.isEmpty || !model.isForecastTrackHandoffPending(at: clock.date) {
                     ForEach(projection.sections) { section in
                         if section.id == "current" {
                             if let session = model.activeDJSession,
@@ -212,14 +216,21 @@ struct SessionForecastContent: View {
                         }
                     }
                 } else {
-                    Text(text(showsLoading ? "ui.session.forecast.loading" : "ui.session.forecast.unavailable"))
+                    let handoffPending = scenePhase == .active && model.isForecastTrackHandoffPending(at: clock.date)
+                    let loading = showsLoading || handoffPending
+                    Text(text(loading ? "ui.session.forecast.loading" : "ui.session.forecast.unavailable"))
                         .fixedSize(horizontal: false, vertical: true)
-                    Button(text("ui.refresh.page")) { Task { await model.refreshSessionForecast() } }
-                        .buttonStyle(.plain)
-                        .font(.callout)
-                        .foregroundStyle(.white.opacity(0.78))
-                        .frame(minHeight: 44, alignment: .leading)
-                        .disabled(showsLoading || !model.canRefreshSessionForecast)
+                    let previous = handoffPending ? model.previousForecastDirection(at: clock.date) : []
+                    if !previous.isEmpty {
+                        SessionForecastTextView(sections: previous, language: model.language, showsSourceLinks: false)
+                    } else if !handoffPending {
+                        Button(text("ui.refresh.page")) { Task { await model.refreshSessionForecast() } }
+                            .buttonStyle(.plain)
+                            .font(.callout)
+                            .foregroundStyle(.white.opacity(0.78))
+                            .frame(minHeight: 44, alignment: .leading)
+                            .disabled(loading || !model.canRefreshSessionForecast)
+                    }
                 }
             }.padding(.horizontal, 20).padding(.bottom, 16)
                 .scrollTargetLayout()

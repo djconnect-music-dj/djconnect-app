@@ -17,6 +17,7 @@ public protocol DJConnectGuestTransporting: Sendable {
 public final class DJConnectGuestTransport: DJConnectGuestTransporting, @unchecked Sendable {
     public enum Action: String, Sendable {
         case redeem, renew, leave, context, ask, request
+        case redeemCode = "redeem-code"
         case emotion, artwork
         case requestStatus = "request/status"
     }
@@ -37,7 +38,7 @@ public final class DJConnectGuestTransport: DJConnectGuestTransporting, @uncheck
     /// No automatic application retry. In particular a lost redemption never mints again.
     public func send(_ action: Action, body: Data, bearer: String? = nil) async throws -> Data {
         guard body.count <= 8192 else { throw Failure.invalidResponse }
-        if action == .redeem {
+        if action == .redeem || action == .redeemCode {
             guard bearer == nil else { throw Failure.invalidResponse }
         } else {
             guard let bearer, bearer.hasPrefix("djcg_"), bearer.utf8.count <= 256,
@@ -49,6 +50,7 @@ public final class DJConnectGuestTransport: DJConnectGuestTransporting, @uncheck
         request.httpMethod = "POST"; request.httpBody = body
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("no-store", forHTTPHeaderField: "Cache-Control")
+        request.setValue(origin.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")), forHTTPHeaderField: "Origin")
         if let bearer { request.setValue("Bearer " + bearer, forHTTPHeaderField: "Authorization") }
         let (bytes, response) = try await session.bytes(for: request)
         guard let http = response as? HTTPURLResponse,

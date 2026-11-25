@@ -187,6 +187,7 @@ enum DJConnectCardAppearance {
     static let currentDJInset: CGFloat = 16
     static let currentDJAvatarSize: CGFloat = 80
     static let cornerRadius: CGFloat = 32
+    static let artworkInset: CGFloat = 8
     static var searchFocusGradient: LinearGradient {
         LinearGradient(colors: [Color.white.opacity(0.92), Color(red: 0.16, green: 0.56, blue: 1.0), djConnectAccent],
                        startPoint: .topLeading, endPoint: .bottomTrailing)
@@ -212,13 +213,23 @@ private struct DJConnectCardOutline: ViewModifier {
 }
 let djConnectCardSpacing: CGFloat = 16
 let djConnectListContentMaxWidth: CGFloat = 1_000
-private let djConnectScreenHorizontalPadding = djConnectCardSpacing
+let djConnectScreenHorizontalPadding = djConnectCardSpacing
+let djConnectListViewportMaxWidth = djConnectListContentMaxWidth + 2 * djConnectScreenHorizontalPadding
 let djConnectScreenVerticalPadding = djConnectCardSpacing
 private let djConnectContentMaxWidth: CGFloat = 760
 private let djConnectCompactContentMaxWidth: CGFloat = 640
 private let djConnectMacDetailContentMaxWidth: CGFloat = 1_680
 private let djConnectMacDetailHorizontalPadding: CGFloat = djConnectScreenHorizontalPadding
 private let djConnectMacDetailVerticalPadding: CGFloat = djConnectScreenVerticalPadding
+
+@MainActor func djConnectListViewportLimit(for viewport: CGSize) -> CGFloat? {
+    #if os(macOS)
+    djConnectListViewportMaxWidth
+    #else
+    UIDevice.current.userInterfaceIdiom == .pad && viewport.width > viewport.height
+        ? djConnectListViewportMaxWidth : nil
+    #endif
+}
 
 private enum DJConnectRootSheet: String, Identifiable {
     case updateRequired
@@ -665,30 +676,27 @@ enum DJConnectSection: Hashable {
     case legal
     case privacy
 
-    #if os(macOS)
     var usesConstrainedDetail: Bool {
         switch self {
-        case .games, .musicDNA, .discovery:
+        case .games:
             false
         default:
             true
         }
     }
 
-    func detailWidth(in availableWidth: CGFloat) -> CGFloat {
+    func detailWidth(in availableWidth: CGFloat, maximum: CGFloat? = djConnectListViewportMaxWidth) -> CGFloat {
         // Keep both existing list gutters outside the shared content width.
-        usesConstrainedDetail
-            ? min(availableWidth, djConnectListContentMaxWidth + 2 * djConnectScreenHorizontalPadding)
-            : availableWidth
+        guard usesConstrainedDetail, let maximum else { return availableWidth }
+        return min(availableWidth, maximum)
     }
-    #endif
 }
 
 private extension EnvironmentValues {
     @Entry var djConnectDetailOwnsBackground = false
 }
 
-/// The screen can also appear outside the Mac detail, for example in a sheet.
+/// Screens can also appear outside the shared detail viewport, for example in a sheet.
 struct DJConnectMainScreenBackground: View {
     var mood: String? = nil
     @Environment(\.djConnectDetailOwnsBackground) private var detailOwnsBackground
@@ -704,21 +712,22 @@ struct DJConnectMainScreenBackground: View {
     }
 }
 
-#if os(macOS)
-struct DJConnectMacDetailViewport<Content: View>: View {
+struct DJConnectDetailViewport<Content: View>: View {
     let section: DJConnectSection
     let mood: String?
     @ViewBuilder let content: Content
 
     var body: some View {
         GeometryReader { viewport in
+            let maximum = djConnectListViewportLimit(for: viewport.size)
+            let ownsBackground = section.usesConstrainedDetail && maximum != nil
             content
-                .environment(\.djConnectDetailOwnsBackground, section.usesConstrainedDetail)
-                .frame(width: section.detailWidth(in: viewport.size.width),
+                .environment(\.djConnectDetailOwnsBackground, ownsBackground)
+                .frame(width: section.detailWidth(in: viewport.size.width, maximum: maximum),
                        height: viewport.size.height, alignment: .top)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .background {
-                    if section.usesConstrainedDetail {
+                    if ownsBackground {
                         DJConnectMainScreenBackground(mood: section == .djSession ? mood : nil)
                     }
                 }
@@ -726,6 +735,7 @@ struct DJConnectMacDetailViewport<Content: View>: View {
     }
 }
 
+#if os(macOS)
 private enum DJConnectSidebarFocusTarget: Hashable {
     case section(DJConnectSection)
     case feedback
@@ -755,10 +765,16 @@ public struct DJConnectRootView: View {
 
     public var body: some View {
         Group {
-            if liveGuest.isPresented {
+            if liveGuest.isJoined {
                 DJConnectLiveGuestView(guest: liveGuest, language: model.language)
             } else {
                 ordinaryRoot
+                    .djConnectPopup(isPresented: Binding(
+                        get: { liveGuest.isPresented && !liveGuest.isJoined },
+                        set: { if !$0 && !liveGuest.isJoined { liveGuest.disconnect() } }
+                    )) {
+                        DJConnectLiveGuestJoinView(guest: liveGuest, language: model.language)
+                    }
             }
         }
         .onOpenURL { url in
@@ -904,7 +920,7 @@ public struct DJConnectRootView: View {
                     .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 280)
                     .sessionIntroductionTarget("navigation")
                 } detail: {
-                    DJConnectMacDetailViewport(section: selectedSection, mood: model.activeDJSession?.selectedMood) {
+                    DJConnectDetailViewport(section: selectedSection, mood: model.activeDJSession?.selectedMood) {
                         selectedView.id(selectedSection)
                     }
                     .overlay(alignment: .bottom) {
@@ -1295,18 +1311,10 @@ public struct DJConnectRootView: View {
         )
         return NativeBottomTabBar(
             screens: [
-                AnyView(DJSessionView(model: model) { selectedSection = .queue }
-                    .environment(\.djConnectContentSizeClass, horizontalSizeClass)
-                    .safeAreaInset(edge: .bottom, spacing: 0) { nativeTabOfflineNotice }),
-                AnyView(QueueView(model: model)
-                    .environment(\.djConnectContentSizeClass, horizontalSizeClass)
-                    .safeAreaInset(edge: .bottom, spacing: 0) { nativeTabOfflineNotice }),
-                AnyView(TrackInsightView(model: model)
-                    .environment(\.djConnectContentSizeClass, horizontalSizeClass)
-                    .safeAreaInset(edge: .bottom, spacing: 0) { nativeTabOfflineNotice }),
-                AnyView(MusicDiscoveryView(model: model)
-                    .environment(\.djConnectContentSizeClass, horizontalSizeClass)
-                    .safeAreaInset(edge: .bottom, spacing: 0) { nativeTabOfflineNotice }),
+                iPadTabScreen(.djSession) { DJSessionView(model: model) { selectedSection = .queue } },
+                iPadTabScreen(.queue) { QueueView(model: model) },
+                iPadTabScreen(.trackInsight) { TrackInsightView(model: model) },
+                iPadTabScreen(.discovery) { MusicDiscoveryView(model: model) },
                 AnyView(MoreView(model: model, requestedSection: isMoreSectionSelected && selectedSection != .more ? selectedSection : nil) {
                     selectedSection = .djSession
                 }.id(moreResetID)
@@ -1317,6 +1325,14 @@ public struct DJConnectRootView: View {
                      localizedKey(model.language, "ui.discover"), localizedKey(model.language, "ui.more")],
             symbols: [DJConnectFeatureSymbols.djSession, "music.note.list", "waveform.path.ecg", "wand.and.stars", "ellipsis"],
             scenePhase: scenePhase, selection: selection)
+    }
+
+    private func iPadTabScreen<Content: View>(_ section: DJConnectSection, @ViewBuilder content: () -> Content) -> AnyView {
+        AnyView(DJConnectDetailViewport(section: section, mood: model.activeDJSession?.selectedMood) {
+            content()
+        }
+        .environment(\.djConnectContentSizeClass, horizontalSizeClass)
+        .safeAreaInset(edge: .bottom, spacing: 0) { nativeTabOfflineNotice })
     }
 
     private var isMoreSectionSelected: Bool {
@@ -3616,7 +3632,7 @@ struct RefreshStatusIcon: View {
     }
 }
 
-private struct DJConnectNotNowLinkButton: View {
+struct DJConnectNotNowLinkButton: View {
     let language: String
     let key: String
     let action: () -> Void
@@ -4510,13 +4526,14 @@ private struct MusicDNAView: View {
     }
 
     private func maxContentWidth(for size: CGSize) -> CGFloat {
-        shouldUseWideLayout(for: size) ? djConnectMacDetailContentMaxWidth : djConnectContentMaxWidth
+        djConnectListViewportLimit(for: size)
+            ?? (shouldUseWideLayout(for: size) ? djConnectMacDetailContentMaxWidth : djConnectContentMaxWidth)
     }
 
     var body: some View {
         NavigationStack {
             ZStack {
-                DJConnectCanvasBackground()
+                DJConnectMainScreenBackground()
                 GeometryReader { proxy in
                     ScrollView {
                         let contentWidth = min(maxContentWidth(for: proxy.size), proxy.size.width)
@@ -6477,6 +6494,7 @@ private struct MusicDiscoveryView: View {
     }
 
     private func maxContentWidth(for size: CGSize) -> CGFloat {
+        if let width = djConnectListViewportLimit(for: size) { return width }
         #if os(iOS)
         if horizontalSizeClass == .regular {
             return size.width
@@ -6488,7 +6506,7 @@ private struct MusicDiscoveryView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                DJConnectCanvasBackground()
+                DJConnectMainScreenBackground()
                 GeometryReader { proxy in
                     ScrollView {
                         let contentWidth = min(maxContentWidth(for: proxy.size), proxy.size.width)
@@ -7778,10 +7796,10 @@ private struct TrackInsightHeroArtwork: View {
     var body: some View {
         GeometryReader { geometry in
             let side = min(geometry.size.width, geometry.size.height)
-            let cornerRadius = max(16, side * 0.12)
+            let artworkSide = max(0, side - 2 * DJConnectCardAppearance.artworkInset)
             let iconPadding = max(12, side * 0.16)
             ZStack {
-                RoundedRectangle(cornerRadius: cornerRadius + 2, style: .continuous)
+                DJConnectCardAppearance.shape
                     .fill(.white.opacity(0.12))
                     .blur(radius: max(14, side * 0.11))
                     .scaleEffect(1.14)
@@ -7810,12 +7828,9 @@ private struct TrackInsightHeroArtwork: View {
                         }
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .frame(width: artworkSide, height: artworkSide)
+                .djAlbumArtworkGlassCard(tint: profile.colors.first)
                 .djConnectBreathingArtwork()
-                .overlay {
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(.white.opacity(0.32), lineWidth: 1)
-                }
                 .shadow(color: (profile.colors.last ?? djConnectAccent).opacity(0.42), radius: max(18, side * 0.16), x: 0, y: max(8, side * 0.08))
             }
         }
@@ -9656,8 +9671,9 @@ private struct VibeCastDestinationPicker: View {
                 .accessibilityIdentifier("vibecast-destination-hero")
             VStack(spacing: 4) {
                 Button { openScreen(false) } label: {
-                    destinationRow(localizedKey(language, "ui.vibecast.destinations.screen"),
-                                   showsChevron: true) { Image(systemName: "tv.badge.wifi") }
+                    destinationRow(localizedKey(language, "ui.vibecast.destinations.screen")) {
+                        Image(systemName: "tv.badge.wifi")
+                    }
                 }
                 .buttonStyle(.plain)
                 .disabled(castTarget != nil)
@@ -9665,9 +9681,8 @@ private struct VibeCastDestinationPicker: View {
                 #if os(iOS)
                 ForEach(model.legacyCastDevices) { device in
                     Button { model.connectLegacyCast(deviceID: device.id) } label: {
-                        HStack {
-                            destinationRow(device.name, showsChevron: true) { GoogleCastDeviceGlyph() }
-                            if model.legacyCastConnectingDeviceID == device.id { ProgressView() }
+                        destinationRow(device.name, isConnecting: model.legacyCastConnectingDeviceID == device.id) {
+                            GoogleCastDeviceGlyph()
                         }
                     }
                     .buttonStyle(.plain)
@@ -9684,9 +9699,8 @@ private struct VibeCastDestinationPicker: View {
                         castFailed = false
                         castTarget = device.receiverID
                     } label: {
-                        HStack {
-                            destinationRow(device.name, showsChevron: true) { GoogleCastDeviceGlyph() }
-                            if let castTarget, castTarget == device.receiverID { ProgressView() }
+                        destinationRow(device.name, isConnecting: castTarget != nil && castTarget == device.receiverID) {
+                            GoogleCastDeviceGlyph()
                         }
                     }
                     .buttonStyle(.plain)
@@ -9731,12 +9745,20 @@ private struct VibeCastDestinationPicker: View {
         #endif
     }
 
-    private func destinationRow<Icon: View>(_ title: String, showsChevron: Bool,
+    private func destinationRow<Icon: View>(_ title: String, isConnecting: Bool = false,
                                             @ViewBuilder icon: () -> Icon) -> some View {
         HStack(spacing: 12) {
             Label { Text(title) } icon: { icon().frame(width: 20).accessibilityHidden(true) }
             Spacer()
-            if showsChevron { Image(systemName: "chevron.right").font(.footnote.weight(.semibold)) }
+            Group {
+                if isConnecting {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold))
+                }
+            }
+            .frame(width: 20, height: 20)
+            .accessibilityHidden(true)
         }
         .padding(.horizontal, 14)
         .frame(minHeight: 44)
@@ -9971,8 +9993,9 @@ struct VibeCastDisplayConsentForm: View {
                 if model.canSelectVibeCastScreen && model.displayConsentState == .ready {
                     Text(localizedKey(model.language, model.displayConsentExistingShare == nil ? "ui.displayConsent.create" : "ui.displayConsent.existing"))
                     if model.displayConsentExistingShare == nil {
-                        Toggle("VibeCast Live", isOn: $model.vibeCastLiveEnabled)
-                            .accessibilityIdentifier("vibecast-live-start-toggle")
+                        liveChoice(enabled: model.vibeCastLiveEnabled, identifier: "vibecast-live-start-toggle") {
+                            model.vibeCastLiveEnabled = $0
+                        }
                         Text(localizedKey(model.language, "ui.live.host_consent"))
                             .font(.footnote).foregroundStyle(.secondary)
                     }
@@ -10023,28 +10046,26 @@ struct VibeCastDisplayConsentForm: View {
                     if let remote = model.vibeCastRemoteState {
                         VStack(alignment: .leading, spacing: 12) {
                             Text(localizedKey(model.language, "ui.live.remote_control")).font(.headline)
-                            Toggle("VibeCast Live", isOn: Binding(get: { remote.policy.information }, set: { value in
+                            liveChoice(enabled: remote.policy.information, identifier: "vibecast-live-remote-toggle") { value in
                                 Task { await model.refreshVibeCastRemote(live: value) }
-                            }))
-                            .accessibilityIdentifier("vibecast-live-remote-toggle")
-                            Picker(localizedKey(model.language, "ui.live.tv_view"), selection: Binding(get: { remote.view.mode }, set: { value in
-                                Task { await model.refreshVibeCastRemote(mode: value) }
-                            })) {
-                                Text(localizedKey(model.language, "ui.session.flow")).tag("flow")
-                                Text("VibeScape").tag("vibescape")
                             }
-                            .pickerStyle(.segmented)
-                            .accessibilityIdentifier("vibecast-remote-tv-mode")
+                            tvViewChoice(mode: remote.view.mode)
                             if remote.view.mode == "vibescape" {
-                                Slider(value: Binding(get: { dynamicsDraft ?? remote.view.dynamics }, set: { dynamicsDraft = $0 }), in: 0...1) { editing in
-                                    if !editing {
-                                        let value = dynamicsDraft ?? remote.view.dynamics
-                                        dynamicsDraft = nil
-                                        Task { await model.refreshVibeCastRemote(dynamics: value) }
+                                let label = localizedKey(model.language, "ui.vibescape.dynamics")
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text(label)
+                                        .font(.headline)
+                                        .accessibilityHidden(true)
+                                    Slider(value: Binding(get: { dynamicsDraft ?? remote.view.dynamics }, set: { dynamicsDraft = $0 }), in: 0...1) { editing in
+                                        if !editing {
+                                            let value = dynamicsDraft ?? remote.view.dynamics
+                                            dynamicsDraft = nil
+                                            Task { await model.refreshVibeCastRemote(dynamics: value) }
+                                        }
                                     }
+                                    .accessibilityLabel(label)
+                                    .accessibilityIdentifier("vibecast-remote-dynamics")
                                 }
-                                .accessibilityLabel(localizedKey(model.language, "ui.vibescape.dynamics"))
-                                .accessibilityIdentifier("vibecast-remote-dynamics")
                             }
                         }
                         .disabled(model.isUpdatingVibeCastRemote || model.stoppingLiveDisplay)
@@ -10052,11 +10073,6 @@ struct VibeCastDisplayConsentForm: View {
                         Button(localizedKey(model.language, "ui.refresh")) { Task { await model.refreshVibeCastRemote() } }
                             .disabled(model.isUpdatingVibeCastRemote)
                     }
-                    Button(role: .destructive) { Task { await model.endVibeCastShare() } } label: {
-                        Label(localizedKey(model.language, "ui.live.end_share"), systemImage: "stop.circle")
-                    }
-                    .disabled(model.stoppingLiveDisplay || model.isUpdatingVibeCastRemote)
-                    .accessibilityIdentifier("vibecast-end-entire-share")
                 }
                 if model.displayConsentState == .approved && model.usesLegacyVibeCastStatus {
                     Button(role: .destructive) { Task { await model.revokeDisplayConsent() } } label: {
@@ -10085,6 +10101,45 @@ struct VibeCastDisplayConsentForm: View {
                     await model.refreshVibeCastRemote()
                 }
             }
+    }
+
+    private var choiceTheme: DJConnectSessionMoodTheme {
+        .init(sessionMood: model.activeDJSession?.selectedMood)
+    }
+
+    private func liveChoice(enabled: Bool, identifier: String, onChange: @escaping (Bool) -> Void) -> some View {
+        SessionGlassChoiceSelector(
+            steps: [(localizedKey(model.language, "ui.off"), 0), (localizedKey(model.language, "ui.on"), 1)],
+            selectedIndex: enabled ? 1 : 0,
+            language: model.language,
+            glyphs: ["bubble.left", "bubble.left.and.bubble.right"],
+            titleOverride: "Party Mode",
+            optionIDs: [identifier + "-off", identifier + "-on"],
+            sessionTheme: choiceTheme,
+            showsOptionLabels: true
+        ) { index in
+            let selected = index == 1
+            if selected != enabled { onChange(selected) }
+        }
+        .accessibilityIdentifier(identifier)
+    }
+
+    private func tvViewChoice(mode: String) -> some View {
+        SessionGlassChoiceSelector(
+            steps: [(localizedKey(model.language, "ui.session.forecast.flow"), 0), ("VibeScape", 1)],
+            selectedIndex: mode == "vibescape" ? 1 : 0,
+            language: model.language,
+            glyphs: ["list.bullet", "waveform"],
+            titleKey: "ui.live.tv_view",
+            accessibilityLabelKey: "ui.live.tv_view",
+            optionIDs: ["vibecast-remote-flow", "vibecast-remote-vibescape"],
+            sessionTheme: choiceTheme,
+            showsOptionLabels: true
+        ) { index in
+            let selected = index == 1 ? "vibescape" : "flow"
+            if selected != mode { Task { await model.refreshVibeCastRemote(mode: selected) } }
+        }
+        .accessibilityIdentifier("vibecast-remote-tv-mode")
     }
 }
 
@@ -11770,16 +11825,9 @@ private struct AskDJView: View {
                         .overlay(alignment: .bottom) {
                             if usesFloatingComposer && !isSearchVisible {
                                 composer
-                                    #if !os(macOS)
                                     .djFloatingAskDJWidth(maximum: min(contentWidth, djConnectListContentMaxWidth))
-                                    #endif
                                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { floatingComposerHeight = $0 }
-                                    #if os(macOS)
-                                    .padding(.horizontal, djConnectScreenHorizontalPadding)
-                                    .frame(width: contentWidth)
-                                    #else
                                     .padding(.horizontal, 12)
-                                    #endif
                                     .padding(.bottom, composerBottomPadding)
                             }
                         }
@@ -13847,6 +13895,7 @@ struct SessionGlassChoiceSelector: View {
     var glyphs = ["moon.stars", "waveform", "bolt", askDJMoodIcon(for: 3)]
     var titleKey = "ui.session.welcome.mood"
     var accessibilityLabelKey = "ui.session.select_mood"
+    var titleOverride: String? = nil
     var optionIDs: [String]? = nil
     var selectionColor: Color = djConnectAccent
     var sessionTheme: DJConnectSessionMoodTheme? = nil
@@ -13862,13 +13911,14 @@ struct SessionGlassChoiceSelector: View {
     var preservesAppearanceWhileDisabled = true
     var selectedLabelIdentifier = "session-popover-selected-mood"
     var explanationKey: String? = nil
+    var showsOptionLabels = false
     @FocusState private var focusedOption: Int?
     var onSelect: (Int) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(localizedKey(language, titleKey))
+                Text(titleOverride ?? localizedKey(language, titleKey))
                     .font(.headline)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -13882,26 +13932,37 @@ struct SessionGlassChoiceSelector: View {
                 }
             }
             optionButtons
-            Text(steps[safe: selectedIndex]?.label ?? "")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.82))
-                .frame(maxWidth: .infinity)
-                .accessibilityIdentifier(selectedLabelIdentifier)
+            if !showsOptionLabels {
+                Text(steps[safe: selectedIndex]?.label ?? "")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.82))
+                    .frame(maxWidth: .infinity)
+                    .accessibilityIdentifier(selectedLabelIdentifier)
+            }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(localizedKey(language, accessibilityLabelKey))
+        .accessibilityLabel(titleOverride ?? localizedKey(language, accessibilityLabelKey))
         .accessibilityValue(steps[safe: selectedIndex]?.label ?? "")
     }
     @ViewBuilder private var optionButtons: some View {
         let buttons = HStack(spacing: 4) {
                 ForEach(steps.indices, id: \.self) { index in
                     Button { DJConnectHaptics.selection(); onSelect(index) } label: {
-                        Image(systemName: glyphs[safe: index] ?? "sparkles")
-                            .font(.title3.weight(.semibold))
-                            // Equal intrinsic width keeps HStack allocation independent of the symbol.
-                            .frame(width: 24, height: 28)
-                            .foregroundStyle(index == selectedIndex ? selectedForegroundColor : .white.opacity(0.78))
-                            .frame(maxWidth: .infinity, minHeight: 48)
+                        Group {
+                            if showsOptionLabels {
+                                Label(steps[index].label, systemImage: glyphs[safe: index] ?? "sparkles")
+                                    .font(.headline)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.75)
+                            } else {
+                                Image(systemName: glyphs[safe: index] ?? "sparkles")
+                                    .font(.title3.weight(.semibold))
+                                    // Equal intrinsic width keeps allocation independent of the symbol.
+                                    .frame(width: 24, height: 28)
+                            }
+                        }
+                        .foregroundStyle(index == selectedIndex ? selectedForegroundColor : .white.opacity(0.78))
+                        .frame(maxWidth: .infinity, minHeight: 48)
                     }
                     .djConnectButtonStyle(DJConnectButtonStyle(
                         emphasis: index == selectedIndex ? .selected : .secondary,
@@ -13946,8 +14007,8 @@ func askDJMoodIcon(for index: Int) -> String {
 /// Shared native composer. A Session surface supplies context-bound actions;
 /// the general Ask DJ surface continues using the existing model actions.
 extension View {
-    /// Use the actual container width, including iPad portrait and Split View.
-    /// Scale the layout width, preserving readable text and44-point controls.
+    /// Use the actual content width on Mac, including a resized detail column.
+    /// On iPad, use the container width to account for portrait and Split View.
     @ViewBuilder func djFloatingAskDJWidth(maximum: CGFloat) -> some View {
         #if os(iOS)
         if UIDevice.current.userInterfaceIdiom == .pad {
@@ -13958,7 +14019,7 @@ extension View {
             self.frame(maxWidth: maximum)
         }
         #else
-        self.frame(maxWidth: maximum)
+        self.frame(width: max(0, maximum - 24) * 0.75)
         #endif
     }
 }
@@ -14123,6 +14184,7 @@ struct AskDJInputBar: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 11)
+                    .frame(height: floating ? 44 : nil)
                     .onSubmit {
                         if floating && canSend { send() }
                     }
@@ -14130,7 +14192,7 @@ struct AskDJInputBar: View {
                         let modifiers = key.modifiers.intersection([.control, .command, .option, .shift])
                         if modifiers.isEmpty || modifiers == .control {
                             if canSend { send() }
-                        } else {
+                        } else if !floating {
                             insertPromptNewline()
                         }
                         return .handled
@@ -17171,7 +17233,18 @@ private struct MoreView: View {
             }
             .background(DJConnectMainScreenBackground())
             .navigationTitle(screenTitle(model.language, key: "More", isDemoMode: model.isDemoMode))
-            .navigationDestination(item: $destinationSelection) { destination($0).djConnectMouseBackNavigation() }
+            .navigationDestination(item: $destinationSelection) { section in
+                #if os(iOS)
+                if UIDevice.current.userInterfaceIdiom == .pad && section.usesConstrainedDetail {
+                    DJConnectDetailViewport(section: section, mood: nil) { destination(section) }
+                        .djConnectMouseBackNavigation()
+                } else {
+                    destination(section).djConnectMouseBackNavigation()
+                }
+                #else
+                destination(section).djConnectMouseBackNavigation()
+                #endif
+            }
         }
     }
     private func routeRequestedSection() {

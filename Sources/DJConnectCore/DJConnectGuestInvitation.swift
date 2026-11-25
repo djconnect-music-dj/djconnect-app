@@ -4,14 +4,21 @@ import Foundation
 /// Keep only in RAM; never encode into preferences, diagnostics or navigation history.
 public struct DJConnectGuestInvitation: Sendable, Equatable {
     public let origin: URL
-    public let issuerEpoch: String
+    public let issuerEpoch: String?
     public let invitationID: String
     private let invitationSecret: String
+    public let usesManualCode: Bool
+
+    public static func recognizes(_ raw: String) -> Bool {
+        guard raw.utf8.count <= 4096, let parts = URLComponents(string: raw) else { return false }
+        return (parts.scheme == "djconnect" && parts.host == "join" && parts.path.isEmpty)
+            || (parts.scheme == "https" && parts.host == "vibecast.tv" && parts.path == "/join")
+    }
 
     public static func parse(_ raw: String) throws -> Self {
         guard raw.utf8.count <= 4096, raw.utf8.allSatisfy({ $0 > 32 && $0 < 127 }),
               validPercentEscapes(raw), let parts = URLComponents(string: raw),
-              parts.scheme == "djconnect", parts.host == "join", parts.path.isEmpty,
+              recognizes(raw),
               parts.user == nil, parts.password == nil, parts.port == nil, parts.query == nil,
               let fragment = parts.percentEncodedFragment, !fragment.isEmpty, fragment.utf8.count <= 2048 else {
             throw DJConnectError.invalidResponse
@@ -36,12 +43,35 @@ public struct DJConnectGuestInvitation: Sendable, Equatable {
         if canonical.port == 443 { canonical.port = nil }
         guard let canonicalText = canonical.string,
               originText == canonicalText || originText == canonicalText + "/" else { throw DJConnectError.invalidResponse }
-        return Self(origin: origin, issuerEpoch: epoch, invitationID: id, invitationSecret: secret)
+        return Self(origin: origin, issuerEpoch: epoch, invitationID: id, invitationSecret: secret,
+                    usesManualCode: false)
+    }
+
+    public static func manualCode(_ raw: String, address: String) throws -> Self {
+        let code = raw.uppercased().filter { !$0.isWhitespace && $0 != "-" }
+        let entered = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        let url = entered.contains("://") ? entered : "https://" + entered
+        guard code.utf8.count == 12, code.allSatisfy("23456789ABCDEFGHJKLMNPQRSTUVWXYZ".contains),
+              url.utf8.count <= 1024, let parts = URLComponents(string: url),
+              parts.scheme == "https", let host = parts.host, !host.isEmpty,
+              parts.user == nil, parts.password == nil, parts.query == nil, parts.fragment == nil,
+              parts.path.isEmpty || parts.path == "/" else { throw DJConnectError.invalidResponse }
+        var canonical = parts
+        canonical.host = host.lowercased()
+        canonical.path = ""
+        if canonical.port == 443 { canonical.port = nil }
+        guard let origin = canonical.url else { throw DJConnectError.invalidResponse }
+        return Self(origin: origin, issuerEpoch: nil, invitationID: "", invitationSecret: code,
+                    usesManualCode: true)
     }
 
     /// Redeem at most once after explicit confirmation, through the guest-only transport.
     public func redemptionBody() throws -> Data {
-        try JSONSerialization.data(withJSONObject: ["contract_version": 1,
+        if usesManualCode {
+            return try JSONSerialization.data(withJSONObject: ["contract_version": 1, "code": invitationSecret])
+        }
+        guard let issuerEpoch else { throw DJConnectError.invalidResponse }
+        return try JSONSerialization.data(withJSONObject: ["contract_version": 1,
             "issuer_epoch": issuerEpoch, "invitation_id": invitationID, "invitation_secret": invitationSecret])
     }
 

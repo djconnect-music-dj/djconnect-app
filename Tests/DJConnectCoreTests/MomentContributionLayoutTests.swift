@@ -6,12 +6,13 @@ import Testing
 @testable import DJConnectUI
 
 @Test func macMainScreensShareTheListWidthAndKeepWideExceptions() {
-    let capped: [DJConnectSection] = [.djSession, .savedSessions, .trackInsight, .askDJ, .queue, .more,
+    let capped: [DJConnectSection] = [.djSession, .savedSessions, .trackInsight, .askDJ, .queue, .more, .musicDNA, .discovery,
                                      .playlists, .settings, .logs, .about, .legal, .privacy]
-    let wide: [DJConnectSection] = [.games, .musicDNA, .discovery]
+    let wide: [DJConnectSection] = [.games]
     for section in capped {
         #expect(section.detailWidth(in: 1_920) == 1_032)
         #expect(section.detailWidth(in: 820) == 820)
+        #expect(section.detailWidth(in: 1_200, maximum: nil) == 1_200)
     }
     for section in wide {
         #expect(section.detailWidth(in: 1_920) == 1_920)
@@ -40,7 +41,7 @@ import Testing
 @Test(.isolatedAppKitResources, arguments: [CGFloat(820), 1_600])
 @MainActor func macDetailCentersBothGuttersOverOneContinuousCanvas(width: CGFloat) throws {
     let height: CGFloat = 100
-    let screen = DJConnectMacDetailViewport(section: .askDJ, mood: nil) {
+    let screen = DJConnectDetailViewport(section: .askDJ, mood: nil) {
         Rectangle().fill(.white).frame(height: 20)
             .padding(.horizontal, 16)
             .frame(maxHeight: .infinity, alignment: .top)

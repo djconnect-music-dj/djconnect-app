@@ -5,6 +5,7 @@ import DJConnectCore
 @MainActor
 struct MusicCanvasView: View {
     @ObservedObject var model: DJConnectAppModel
+    let onSnapshot: (DJConnectCanvasSnapshot?, String) -> Void
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @State private var showingSettings = false
@@ -24,9 +25,13 @@ struct MusicCanvasView: View {
     @State private var preview: DJConnectSessionArtworkImage?
 
     private var scope: String {
+        Self.scope(for: model, scenePhase: scenePhase)
+    }
+
+    static func scope(for model: DJConnectAppModel, scenePhase: ScenePhase) -> String {
         [model.sessionHistory.authorizedProfileID ?? "", model.activeDJSession?.id ?? "",
          String(describing: model.sessionHistory.responseEpoch), model.homeAssistantURL,
-         model.haLocalURL, model.haRemoteURL, String(describing: model.haConnectionMode),
+         model.haLocalURL, model.haRemoteURL,
          String(describing: model.pairingStatus), String(describing: scenePhase)].joined(separator: "|")
     }
     private func text(_ key: String) -> String {
@@ -37,8 +42,9 @@ struct MusicCanvasView: View {
     }
 
     var body: some View {
+        let loadScope = scope
         let settingsTitle = DJConnectLocalization.localized(key: "ui.settings", language: model.language)
-        MusicCanvasPopupSurface(title: showingSettings ? settingsTitle : "Music Canvas") {
+        DJConnectGlassDialogSurface(title: showingSettings ? settingsTitle : "Music Canvas", systemImage: "photo.artframe") {
             VStack(alignment: .leading, spacing: 16) {
                 if showingSettings {
                     if let snapshot { settings(snapshot) }
@@ -59,7 +65,7 @@ struct MusicCanvasView: View {
                     .disabled(refreshing || busy)
                     .accessibilityIdentifier("music-canvas-retry")
                 }
-                if busy || (snapshot == nil && notice == nil) {
+                if busy || (refreshing && snapshot == nil && notice == nil) {
                     ProgressView().accessibilityLabel(text("working"))
                 }
             }
@@ -87,13 +93,16 @@ struct MusicCanvasView: View {
             }
         }
         .accessibilityIdentifier(showingSettings ? "music-canvas-settings-page" : "music-canvas-popup")
-        .task(id: scope) {
+        .task(id: loadScope) {
+            guard !Task.isCancelled, scope == loadScope else { return }
             snapshot = nil; selected = nil; preview = nil; notice = nil; showingSettings = false
             readID = UUID(); operationID = nil; busy = false; refreshing = false
-            let captured = scope
-            guard current(captured) else { return }
-            while !Task.isCancelled && current(captured) {
-                if !busy { await refresh(captured) }
+            guard current(loadScope) else {
+                if scenePhase == .active { notice = text("not_offered") }
+                return
+            }
+            while !Task.isCancelled && current(loadScope) {
+                if !busy { await refresh(loadScope) }
                 try? await Task.sleep(for: .seconds(5))
             }
         }
@@ -107,15 +116,17 @@ struct MusicCanvasView: View {
             Text(text("choose_screens")).font(.headline).accessibilityAddTraits(.isHeader)
             if snapshot.targets.isEmpty { Text(text("no_screens")).foregroundStyle(.secondary) }
             ForEach(snapshot.targets) { target in
-                let isSelected = snapshot.preferences.selected_targets.contains(target.id)
+                let isSelected = snapshot.preferences.enabled && snapshot.preferences.selected_targets.contains(target.id)
                 Button {
                     change {
                         if isSelected {
                             $0.selected_targets.removeAll { $0 == target.id }
-                            $0.cadence_overrides.removeValue(forKey: target.id)
-                        } else {
+                        } else if $0.enabled {
                             $0.selected_targets.append(target.id)
+                        } else {
+                            $0.selected_targets = [target.id]
                         }
+                        $0.enabled = !$0.selected_targets.isEmpty
                     }
                 } label: {
                     HStack(spacing: 12) {
@@ -144,12 +155,6 @@ struct MusicCanvasView: View {
 
     private func settings(_ snapshot: DJConnectCanvasSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            settingRow(text("enabled")) {
-                Toggle(text("enabled"), isOn: Binding(get: { snapshot.preferences.enabled }, set: { enabled in
-                    change { $0.enabled = enabled }
-                }))
-                .labelsHidden()
-            }
             settingRow(text("composition")) {
                 Picker(text("composition"), selection: Binding(get: { snapshot.preferences.composition }, set: { value in
                     change { $0.composition = value }
@@ -167,6 +172,15 @@ struct MusicCanvasView: View {
                 }
                 .pickerStyle(.menu)
                 .labelsHidden()
+            }
+            if let showTitle = snapshot.preferences.show_track_title {
+                settingRow(text("show_track_title")) {
+                    Toggle(text("show_track_title"), isOn: Binding(get: { showTitle }, set: { enabled in
+                        change { $0.show_track_title = enabled }
+                    }))
+                    .labelsHidden()
+                    .accessibilityIdentifier("music-canvas-show-track-title")
+                }
             }
             settingRow(text("cadence")) {
                 Picker(text("cadence"), selection: Binding(get: { snapshot.preferences.cadence }, set: { value in
@@ -249,23 +263,6 @@ struct MusicCanvasView: View {
                 Button(text("connect")) { setup(target) }
                     .djConnectButtonStyle(DJConnectButtonStyle())
             }
-            if snapshot.preferences.selected_targets.contains(target.id) {
-                settingRow(text("override")) {
-                    Picker(text("override"), selection: Binding(get: {
-                        snapshot.preferences.cadence_overrides[target.id] ?? "inherit"
-                    }, set: { value in
-                        change {
-                            if value == "inherit" { $0.cadence_overrides.removeValue(forKey: target.id) }
-                            else { $0.cadence_overrides[target.id] = value }
-                        }
-                    })) {
-                        Text(text("inherit")).tag("inherit")
-                        ForEach(DJConnectCanvasPreferences.cadences, id: \.self) { Text(text("cadence." + $0)).tag($0) }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                }
-            }
             if snapshot.can_manage_devices {
                 if target.shared_profiles > 1 { Text(text("shared_warning")).foregroundStyle(.secondary) }
                 if target.remote_cleanup {
@@ -299,14 +296,18 @@ struct MusicCanvasView: View {
         readID = requestID; refreshing = true
         defer { if readID == requestID { refreshing = false } }
         do {
-            let value = try await model.withHomeAssistantClient { try await $0.musicCanvas() }
+            let value = try await model.withHomeAssistantClient(notifiesTransportFailure: false) {
+                try await $0.musicCanvas()
+            }
             guard current(captured), !Task.isCancelled, readID == requestID else { return }
             snapshot = value; notice = nil
+            onSnapshot(value, captured)
             if let selected { self.selected = value.targets.first { $0.id == selected.id } }
         } catch {
             guard current(captured), !Task.isCancelled, readID == requestID else { return }
             // A failed refresh cannot retain an old management grant or private image.
             snapshot = nil; selected = nil; preview = nil
+            onSnapshot(nil, captured)
             notice = text((error as? DJConnectCanvasReadFailure) == .notOffered ? "not_offered" : "unavailable")
             model.recordCanvasReadFailure(error)
         }
@@ -314,7 +315,9 @@ struct MusicCanvasView: View {
 
     private func change(_ patch: (inout DJConnectCanvasPreferences) -> Void) {
         guard let snapshot, !busy else { return }
-        var prefs = snapshot.preferences; patch(&prefs)
+        var prefs = snapshot.preferences
+        patch(&prefs)
+        prefs.cadence_overrides.removeAll()
         perform(snapshot) { client, id in try await client.updateMusicCanvas(snapshot, preferences: prefs, operationID: id) }
     }
     private func setup(_ target: DJConnectCanvasTarget) {
@@ -381,13 +384,14 @@ struct MusicCanvasView: View {
 }
 
 /// Uses the feedback popup's glass surface for the heading, controls and actions.
-@MainActor struct MusicCanvasPopupSurface<Content: View>: View {
+@MainActor struct DJConnectGlassDialogSurface<Content: View>: View {
     let title: String
+    let systemImage: String
     @ViewBuilder var content: () -> Content
 
     private var card: some View {
         VStack(spacing: 16) {
-            DJConnectHeroGlyph(systemImage: "photo.artframe")
+            DJConnectHeroGlyph(systemImage: systemImage)
             Text(title)
                 .font(.title2.weight(.bold))
                 .multilineTextAlignment(.center)

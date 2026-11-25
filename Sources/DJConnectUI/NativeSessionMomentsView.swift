@@ -164,7 +164,7 @@ private struct DJAlbumArtworkGlassSurface: ViewModifier {
     @Environment(\.djConnectGlassEffectsEnabled) private var glassEnabled
 
     func body(content: Content) -> some View {
-        let inset: CGFloat = 8
+        let inset = DJConnectCardAppearance.artworkInset
         let shape = RoundedRectangle(cornerRadius: DJConnectCardAppearance.cornerRadius, style: .continuous)
         content
             .clipShape(RoundedRectangle(cornerRadius: DJConnectCardAppearance.cornerRadius - inset, style: .continuous))
@@ -1302,6 +1302,7 @@ struct SessionPlaybackCardButton: View {
 }
 
 struct MomentCard: View {
+    @Environment(\.scenePhase) private var scenePhase
     let moment: DJConnectMoment
     let kind: String
     let presentation: DJConnectPresentation?
@@ -1316,7 +1317,14 @@ struct MomentCard: View {
     var usesCurrentAvatar = false
     var activity: ((AskDJMomentsPresentation.Hold, Bool) -> Void)? = nil
     var contributionAction: (() -> Void)? = nil
-    private var spotifyURLs: [URL] { moment.nativeSourceURLs.filter(SessionSourceLinks.isSpotify) }
+    private var spotifyURLs: [URL] {
+        let sources = moment.nativeSourceURLs.filter(SessionSourceLinks.isSpotify)
+        guard usesThumbnailColumns, scenePhase == .active, let media = artworkMedia,
+              artworkModel?.sessionArtworkIsCurrent(media, target: .moment(moment.id), audience: .current) == true,
+              let grant = media.admittedArtwork(session: moment.sessionID, target: .moment(moment.id), audience: .current),
+              let url = grant.sourceURL.flatMap(URL.init(string:)), SessionSourceLinks.isSpotify(url) else { return sources }
+        return [url] + sources.filter { $0 != url }
+    }
     private var currentLiveAvatar: AnyView? {
         guard usesCurrentAvatar, let model = artworkModel else { return nil }
         return AnyView(PersonaReactionAvatar(model: model,
@@ -1327,16 +1335,12 @@ struct MomentCard: View {
     private var usesThumbnailColumns: Bool {
         guard artworkModel != nil, let media = artworkMedia,
               ["cover", "playback_thumbnail", "contextual_artist"].contains(media.artwork.role) else { return false }
-        #if os(iOS)
-        return UIDevice.current.userInterfaceIdiom == .pad
-        #else
-        return true
-        #endif
+        return SessionContributionLayout.usesWideColumns
     }
     @ViewBuilder private var thumbnail: some View {
         if let media = artworkMedia, let model = artworkModel {
             SessionArtworkView(media: media, target: .moment(moment.id), audience: .current,
-                language: language, model: model, showsAttribution: spotifyURLs.isEmpty)
+                language: language, model: model, showsAttribution: !usesThumbnailColumns && spotifyURLs.isEmpty)
         }
     }
     var body: some View {
@@ -1386,13 +1390,16 @@ struct MomentCard: View {
                 }
             }
             }
+            if SessionContributionLayout.usesWideColumns {
+                SessionTimestampText(value: moment.createdAt, language: language).font(.caption).foregroundStyle(.secondary)
+            }
             if let label = navigationLabel, let openInsight {
                 Button { DJConnectHaptics.selection(); openInsight() } label: { Label(label, systemImage: "waveform.path.ecg") }
                     .tint(djConnectAccent)
                     .accessibilityIdentifier("moment-open-track-insight")
             }
             HStack(alignment: .center, spacing: 12) {
-                SessionSpotifyAttributionLinks(urls: spotifyURLs)
+                SessionSpotifyAttributionLinks(urls: spotifyURLs, alignsWithText: SessionContributionLayout.usesWideColumns)
                 if let model = artworkModel { SharedDJSpeechActions(model: model, speech: speech, acceptedText: moment.content) }
             }
             if moment.isLiveImpressionV1 {
@@ -1420,10 +1427,12 @@ struct MomentCard: View {
 /// One branded credit, with every distinct Spotify destination still reachable.
 struct SessionSpotifyAttributionLinks: View {
     let urls: [URL]
+    var alignsWithText = false
     var body: some View {
         if let logo = spotifyAttributionLogo, let first = urls.first {
             let mark = logo.resizable().scaledToFit().frame(width: 70, height: 20)
-                .padding(10).frame(minHeight: 44).contentShape(Rectangle())
+                .padding(.vertical, 10).padding(.trailing, 10).padding(.leading, alignsWithText ? 0 : 10)
+                .frame(minHeight: 44).contentShape(Rectangle())
             Group {
                 if urls.count == 1 {
                     Link(destination: first) { mark }

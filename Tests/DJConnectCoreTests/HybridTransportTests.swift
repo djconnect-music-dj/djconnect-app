@@ -308,7 +308,10 @@ private func hybridCoordinator(_ wire: any DJConnectHybridWire, local: URL? = ni
     #expect(!DJConnectHybridTransport.canReplayLegacy(request))
     request.httpBody = Data(#"{"command":"status"}"#.utf8)
     #expect(DJConnectHybridTransport.canReplayLegacy(request))
-    for path in ["voice", "music_discovery/refresh", "music_dna/clear", "ask_dj/history/clear"] {
+    request.url = URL(string: "https://ha.local/api/djconnect/v1/music_canvas/read")
+    #expect(DJConnectHybridTransport.canReplayLegacy(request))
+    for path in ["voice", "music_discovery/refresh", "music_dna/clear", "ask_dj/history/clear",
+                 "music_canvas/update", "music_canvas/setup", "music_canvas/forget"] {
         request.url = URL(string: "https://ha.local/api/djconnect/v1/" + path)
         #expect(!DJConnectHybridTransport.canReplayLegacy(request))
     }

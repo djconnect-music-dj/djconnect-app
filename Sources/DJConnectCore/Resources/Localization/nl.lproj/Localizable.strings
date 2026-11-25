@@ -1832,6 +1832,7 @@
 "ui.canvas.off" = "Uit";
 "ui.canvas.matching" = "Passend";
 "ui.canvas.contrast" = "Contrasterend";
+"ui.canvas.show_track_title" = "Tracktitel weergeven";
 "ui.canvas.cadence" = "Kunstwerk wisselen";
 "ui.canvas.cadence.track" = "Ieder nummer";
 "ui.canvas.cadence.900" = "Ieder kwartier";
@@ -1931,3 +1932,6 @@
 "ui.canvas.not_offered" = "Deze Home Assistant biedt Music Canvas nu niet aan.";
 
 "ui.session.forecast.up_next" = "Hierna";
+
+"ui.live.tv_address" = "Adres op de tv";
+"ui.live.tv_code" = "Code op de tv";

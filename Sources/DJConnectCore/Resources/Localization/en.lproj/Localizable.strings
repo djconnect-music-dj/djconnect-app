@@ -1832,6 +1832,7 @@
 "ui.canvas.off" = "Off";
 "ui.canvas.matching" = "Matching";
 "ui.canvas.contrast" = "Contrasting";
+"ui.canvas.show_track_title" = "Show track title";
 "ui.canvas.cadence" = "Change artwork";
 "ui.canvas.cadence.track" = "Every track";
 "ui.canvas.cadence.900" = "Every 15 minutes";
@@ -1931,3 +1932,6 @@
 "ui.canvas.not_offered" = "This Home Assistant does not currently offer Music Canvas.";
 
 "ui.session.forecast.up_next" = "Up next";
+
+"ui.live.tv_address" = "TV address";
+"ui.live.tv_code" = "TV code";

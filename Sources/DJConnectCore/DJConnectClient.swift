@@ -1264,12 +1264,19 @@ public final class DJConnectClient: Sendable {
             let capabilities: [String: Bool]
             let contract_versions: [String: Int]
         }
+        let local = DJConnectHybridTransport.isLocalTransportCandidate(baseURL) ||
+            DJConnectHomeAssistantWebSocketFastPath.isLocalHomeAssistantURL(baseURL)
+        let timeout: TimeInterval = local ? 3 : 6
+        var capabilitiesRequest = try sessionHistoryReadRequest(route: "capabilities")
+        capabilitiesRequest.timeoutInterval = timeout
         let capability: Capability = try await decodedResponse(
-            for: sessionHistoryReadRequest(route: "capabilities"), using: sessionProjectionSession)
+            for: capabilitiesRequest, using: sessionProjectionSession)
         guard capability.success, capability.capabilities["music_canvas"] == true,
               capability.contract_versions["music_canvas"] == 1 else { throw DJConnectCanvasReadFailure.notOffered }
+        var readRequest = try canvasRequest("read", body: canvasIdentity())
+        readRequest.timeoutInterval = timeout
         let snapshot: DJConnectCanvasSnapshot = try await decodedResponse(
-            for: canvasRequest("read", body: canvasIdentity()), using: sessionProjectionSession)
+            for: readRequest, using: sessionProjectionSession)
         guard snapshot.isValid else { throw DJConnectCanvasReadFailure.invalidSnapshot }
         return snapshot
     }

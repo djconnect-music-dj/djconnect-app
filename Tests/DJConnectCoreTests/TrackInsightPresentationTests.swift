@@ -25,6 +25,8 @@ private let technicalUnavailableSummary = "Er is geen gekwalificeerde muzikale a
     #expect(restored.analysisBasis == insight.analysisBasis && restored.displaySummary(language: language) == display)
     #expect(TrackInsightShareService.shareText(for: insight, language: language).contains(display))
     #expect(!TrackInsightShareService.shareText(for: insight, language: language).contains(technicalUnavailableSummary))
+    let shareCard = TrackInsightShareCardView(insight: insight, format: .story, language: language, moodStepIndex: 2, animationPhase: 0)
+    #expect(shareCard.shareSummary == nil)
     #expect(DJConnectTrackInsightWidgetSnapshot(insight: insight).summary == insight.displaySummary())
 }
 
@@ -49,6 +51,8 @@ private let technicalUnavailableSummary = "Er is geen gekwalificeerde muzikale a
     let insight = TrackInsight(title: "Example", artist: "Artist", summary: text, rawAnalysisText: text)
     #expect(!insight.hasUnavailableAnalysis && insight.displaySummary(language: "nl") == text)
     #expect(TrackInsightShareService.shareText(for: insight, language: "nl").contains(text))
+    let shareCard = TrackInsightShareCardView(insight: insight, format: .square, language: "nl", moodStepIndex: 2, animationPhase: 0)
+    #expect(shareCard.shareSummary == text)
     #expect(DJConnectTrackInsightWidgetSnapshot(insight: insight).summary == text)
 }
 

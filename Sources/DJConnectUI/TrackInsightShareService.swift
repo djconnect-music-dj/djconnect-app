@@ -80,11 +80,13 @@ public enum TrackInsightShareService {
         let mediaURL: URL
         switch mediaKind {
         case .staticImage:
+            let artwork = try await TrackInsightShareRenderer.loadExportArtwork(for: insight.artwork)
             mediaURL = try TrackInsightShareRenderer.renderImage(
                 insight: insight,
                 format: format,
                 language: language,
-                moodStepIndex: moodStepIndex
+                moodStepIndex: moodStepIndex,
+                artwork: artwork
             )
             progress(1)
         case .animatedVideo:

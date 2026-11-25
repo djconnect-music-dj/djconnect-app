@@ -32,14 +32,13 @@ struct AskDJMomentsCardContent: View {
             }
             switch controller.presentation.phase {
             case .choosing:
-                if controller.loading { ProgressView(text("loading_inventory")) }
+                if controller.loading { Text(text("loading_inventory")) }
                 if let inventory = controller.inventory {
                     AskDJMomentsCatalogue(inventory: inventory, language: language, unavailableLabel: text("unavailable"),
                                           mood: mood, select: controller.select)
                 }
             case .pending:
                 if !controller.outcomeUnknown {
-                    ProgressView().accessibilityHidden(true)
                     Text(controller.pendingText ?? text("loading_inventory")).fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("ask-moments-pending")
                 }

@@ -442,6 +442,7 @@ struct TrackInsightShareCardView: View {
     let language: String
     let moodStepIndex: Int
     let animationPhase: Double
+    var renderArtwork: Image? = nil
 
     private var profile: TrackVibeProfile {
         TrackVibeProfile.make(for: insight)
@@ -503,13 +504,15 @@ struct TrackInsightShareCardView: View {
                 if insight.displayMetrics.numericCount > 0 {
                     TrackInsightShareMeters(insight: insight, profile: profile, format: format, language: language)
                 }
-                Text(insight.displaySummary(language: language))
-                    .font(summaryFont)
-                    .foregroundStyle(.white.opacity(0.78))
-                    .multilineTextAlignment(.center)
-                    .lineLimit(summaryLineLimit)
-                    .minimumScaleFactor(0.66)
-                    .fixedSize(horizontal: false, vertical: true)
+                if let shareSummary {
+                    Text(shareSummary)
+                        .font(summaryFont)
+                        .foregroundStyle(.white.opacity(0.78))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(summaryLineLimit)
+                        .minimumScaleFactor(0.66)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 Spacer(minLength: format == .story ? 10 : 0)
                 Text("#DJConnect #TrackInsight")
                     .font(hashtagFont)
@@ -524,15 +527,38 @@ struct TrackInsightShareCardView: View {
 
     @ViewBuilder
     private var artwork: some View {
-        CachedArtworkImage(url: insight.artwork, mode: .fill) {
-            TrackInsightShareAnimatedArtworkFallback(
-                profile: profile,
-                animationPhase: animationPhase
+        let inset: CGFloat = 8
+        let radius = DJConnectCardAppearance.cornerRadius
+        let border = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        Group {
+            if let renderArtwork {
+                renderArtwork.resizable().scaledToFill()
+            } else {
+                CachedArtworkImage(url: insight.artwork, mode: .fill) {
+                    TrackInsightShareAnimatedArtworkFallback(profile: profile, animationPhase: animationPhase)
+                }
+            }
+        }
+        .frame(width: artworkSize - 2 * inset, height: artworkSize - 2 * inset)
+        .clipShape(RoundedRectangle(cornerRadius: radius - inset, style: .continuous))
+        .padding(inset)
+        // ImageRenderer needs a backdrop made of SwiftUI shapes for both preview and export.
+        .background {
+            border.fill(
+                LinearGradient(
+                    colors: [.white.opacity(0.24), .white.opacity(0.10), .black.opacity(0.18)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
             )
         }
-        .frame(width: artworkSize, height: artworkSize)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .shadow(color: .clear, radius: 0)
+        .overlay { border.strokeBorder(.white.opacity(0.32), lineWidth: 1) }
+    }
+
+    var shareSummary: String? {
+        let summary = insight.displaySummary(language: language)
+        let unavailable = localizedKey("ui.trackInsight.analysis.unavailable")
+        return summary == unavailable || summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : summary
     }
 
     private var titleFont: Font {

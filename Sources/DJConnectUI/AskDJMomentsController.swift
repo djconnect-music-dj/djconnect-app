@@ -50,6 +50,10 @@ import DJConnectCore
     init(model: DJConnectAppModel? = nil) { self.model = model }
     var isActive: Bool { presentation.phase != .idle }
     var hasPriority: Bool { isActive && valid }
+    var showsWaitingActivity: Bool {
+        hasPriority && (presentation.phase == .choosing && loading ||
+                        presentation.phase == .pending && !outcomeUnknown)
+    }
     var generation: UUID { presentation.generation }
     var operationID: String? { handle?.id }
     var currentResult: DJConnectAskDJMoments.Result? {

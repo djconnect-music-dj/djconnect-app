@@ -42,7 +42,8 @@ public enum TrackInsightShareRenderer {
         insight: TrackInsight,
         format: TrackInsightShareFormat,
         language: String,
-        moodStepIndex: Int = 2
+        moodStepIndex: Int = 2,
+        artwork: Image? = nil
     ) throws -> URL {
         try cleanupTemporaryExports()
         let designSize = format.cardDesignSize
@@ -51,7 +52,8 @@ public enum TrackInsightShareRenderer {
             format: format,
             language: language,
             moodStepIndex: moodStepIndex,
-            animationPhase: 0
+            animationPhase: 0,
+            renderArtwork: artwork
         )
             .frame(width: designSize.width, height: designSize.height)
         let renderer = ImageRenderer(content: view)
@@ -76,6 +78,7 @@ public enum TrackInsightShareRenderer {
     ) async throws -> URL {
         #if canImport(AVFoundation)
         try Task.checkCancellation()
+        let artwork = try await loadExportArtwork(for: insight.artwork)
         try cleanupTemporaryExports()
         let fileURL = try makeOutputURL(insight: insight, format: format, mediaKind: .animatedVideo, extension: "mp4")
         try? FileManager.default.removeItem(at: fileURL)
@@ -126,7 +129,8 @@ public enum TrackInsightShareRenderer {
                     language: language,
                     moodStepIndex: moodStepIndex,
                     size: size,
-                    animationPhase: phase
+                    animationPhase: phase,
+                    artwork: artwork
                 ) else {
                     throw RenderError.videoFrameRenderingFailed
                 }
@@ -222,6 +226,13 @@ public enum TrackInsightShareRenderer {
         #endif
     }
 
+    static func loadExportArtwork(for url: URL?) async throws -> Image? {
+        guard let url else { return nil }
+        let artwork = try? await loadDecodedArtwork(for: url)
+        try Task.checkCancellation()
+        return artwork?.image
+    }
+
     #if canImport(AVFoundation)
     private static func finishWriting(_ writer: AVAssetWriter) async {
         await withCheckedContinuation { continuation in
@@ -237,7 +248,8 @@ public enum TrackInsightShareRenderer {
         language: String,
         moodStepIndex: Int,
         size: CGSize,
-        animationPhase: Double
+        animationPhase: Double,
+        artwork: Image?
     ) throws -> CVPixelBuffer? {
         let designSize = format.cardDesignSize
         let view = TrackInsightShareCardView(
@@ -245,7 +257,8 @@ public enum TrackInsightShareRenderer {
             format: format,
             language: language,
             moodStepIndex: moodStepIndex,
-            animationPhase: animationPhase
+            animationPhase: animationPhase,
+            renderArtwork: artwork
         )
             .frame(width: designSize.width, height: designSize.height)
         let renderer = ImageRenderer(content: view)

@@ -1003,9 +1003,23 @@ public final class DJConnectAppModel: ObservableObject {
     @Published var vibeCastLiveEnabled = false
     @Published private var storedVibeCastRemoteState: DJConnectClient.VibeCastOwnerState?
     @Published private(set) var isUpdatingVibeCastRemote = false
-    private var vibeCastRemoteScope: VibeCastStatusScope?
+    private struct VibeCastRemoteContext: Equatable {
+        let scope: VibeCastStatusScope
+        let shareID: String
+        let issuerEpoch: String
+    }
+    private var acceptedVibeCastRemoteContext: VibeCastRemoteContext?
+    private var vibeCastRemoteRead: UUID?
+    private var vibeCastRemoteContext: VibeCastRemoteContext? {
+        guard let scope = vibeCastStatusScope,
+              let shareID = vibeCastStopTarget?.shareID ?? displayConsentFlow?.receipt?.shareID,
+              let issuer = currentDisplayObservation?.issuerEpoch ?? displayConsentFlow?.resolvedClaim?.issuerEpoch else { return nil }
+        return VibeCastRemoteContext(scope: scope, shareID: shareID, issuerEpoch: issuer)
+    }
     var vibeCastRemoteState: DJConnectClient.VibeCastOwnerState? {
-        vibeCastRemoteScope == vibeCastStatusScope && isVibeCastSharing ? storedVibeCastRemoteState : nil
+        guard isVibeCastSharing, let context = vibeCastRemoteContext,
+              acceptedVibeCastRemoteContext == context else { return nil }
+        return storedVibeCastRemoteState
     }
     @Published private var liveDisplayShareLifetime: DJConnectDisplayShareLifetime?
     private var displayConsentFlow: DJConnectDisplayConsentSession?
@@ -1372,16 +1386,33 @@ public final class DJConnectAppModel: ObservableObject {
         }
     }
     func refreshVibeCastRemote(live: Bool? = nil, mode: String? = nil, dynamics: Double? = nil) async {
-        guard !isUpdatingVibeCastRemote, !stoppingLiveDisplay, let scope = vibeCastStatusScope,
-              let shareID = vibeCastStopTarget?.shareID ?? displayConsentFlow?.receipt?.shareID,
-              let issuer = currentDisplayObservation?.issuerEpoch ?? displayConsentFlow?.resolvedClaim?.issuerEpoch else { return }
-        isUpdatingVibeCastRemote = true
-        defer { isUpdatingVibeCastRemote = false }
-        let current: @MainActor @Sendable () -> Bool = { [weak self] in
-            guard let self else { return false }
-            return self.vibeCastStatusScope == scope && !self.stoppingLiveDisplay &&
-                (self.vibeCastStopTarget?.shareID ?? self.displayConsentFlow?.receipt?.shareID) == shareID
+        guard !Task.isCancelled, !isUpdatingVibeCastRemote, !stoppingLiveDisplay,
+              let context = vibeCastRemoteContext else { return }
+        let writesSettings = live != nil || mode != nil || dynamics != nil
+        let read: UUID?
+        if writesSettings {
+            // A user edit takes precedence over a read that is still in flight.
+            vibeCastRemoteRead = nil
+            isUpdatingVibeCastRemote = true
+            read = nil
+        } else {
+            guard vibeCastRemoteRead == nil else { return }
+            let request = UUID()
+            vibeCastRemoteRead = request
+            read = request
         }
+        defer {
+            if writesSettings { isUpdatingVibeCastRemote = false }
+            else if vibeCastRemoteRead == read { vibeCastRemoteRead = nil }
+        }
+        let current: @MainActor @Sendable () -> Bool = { [weak self] in
+            guard let self, !Task.isCancelled, self.vibeCastRemoteContext == context,
+                  !self.stoppingLiveDisplay else { return false }
+            return writesSettings || self.vibeCastRemoteRead == read
+        }
+        let scope = context.scope
+        let shareID = context.shareID
+        let issuer = context.issuerEpoch
         do {
             let client = try displayOwnerClient()
             let origin = Self.normalizedHomeAssistantURL(from: localHomeAssistantURL())
@@ -1401,9 +1432,12 @@ public final class DJConnectAppModel: ObservableObject {
                     issuerEpoch: issuer, expectedInstallationID: scope.installationID, pairedLocalOrigin: origin, isCurrent: current)
             }
             guard current() else { return }
-            vibeCastRemoteScope = scope; storedVibeCastRemoteState = response
+            if acceptedVibeCastRemoteContext != context || storedVibeCastRemoteState != response {
+                acceptedVibeCastRemoteContext = context
+                storedVibeCastRemoteState = response
+            }
         } catch {
-            if current() { storedVibeCastRemoteState = nil }
+            // Keep the last confirmed values for this share until the next successful read.
         }
     }
     func openVibeCastDestinationPicker() {
@@ -2045,6 +2079,7 @@ public final class DJConnectAppModel: ObservableObject {
             if activeDJSession == nil { widgetLastAcceptedServerSessionScope = nil }
             reconcileDirectSessionRuntimes()
             let helpNow = Date()
+            reconcileForecastTrackHandoff(from: oldValue, at: helpNow)
             reconcileSessionHelpTransition(from: oldValue, at: helpNow)
             reconcileSessionAuthorityTransition(from: oldValue)
             let moodChanged = oldValue?.id == activeDJSession?.id && oldValue?.selectedMood != activeDJSession?.selectedMood
@@ -2187,7 +2222,7 @@ public final class DJConnectAppModel: ObservableObject {
         canRefreshSessionForecast && forecastAutomaticReadFence != forecastAutomaticReadDenial
     }
     var sessionForecastNextReadDelay: TimeInterval {
-        if forecastOwnedRead != nil { return 1 }
+        if forecastOwnedRead != nil || isForecastTrackHandoffPending(at: Date()) { return 1 }
         guard let projection = forecastCursor?.projection, ["ready", "limited"].contains(projection.state) else { return 8 }
         let wallRemaining = forecastCursor?.projection?.valid_until
             .flatMap(DJConnectSessionForecast.timestamp)?.timeIntervalSinceNow
@@ -2206,9 +2241,21 @@ public final class DJConnectAppModel: ObservableObject {
         let presenceRevision: Int?
         let persona: DJConnectSessionPersonaValue?
         let personaRevision: Int?
-        let playbackID: String?
-        let playbackSource: String?
-        let playbackState: String?
+        private(set) var playbackID: String?
+        private(set) var playbackSource: String?
+        private(set) var playbackState: String?
+
+        func replacesTrack(in previous: Self) -> Bool {
+            guard playbackState == "playing", previous.playbackState == "playing",
+                  let playbackID, !playbackID.isEmpty, let previousID = previous.playbackID,
+                  !previousID.isEmpty, playbackID != previousID else { return false }
+            var withoutNewPlayback = self
+            withoutNewPlayback.playbackID = previous.playbackID
+            withoutNewPlayback.playbackSource = previous.playbackSource
+            withoutNewPlayback.playbackState = previous.playbackState
+            return withoutNewPlayback == previous
+        }
+
         init(_ session: DJConnectSessionRuntime) {
             sessionID = session.id; mood = session.selectedMood; moodRevision = session.confirmedMoodRevision
             locale = session.broadcast.session.locale
@@ -2231,6 +2278,52 @@ public final class DJConnectAppModel: ObservableObject {
             !djSessionIsRecovering && !djSessionLiveUnavailable && activeDJSession?.runtimeState == "active"
     }
     var canRefreshSessionForecast: Bool { hasSessionForecastOwner && haConnectionMode != .offline }
+
+    private struct ForecastTrackHandoff {
+        let scope: ForecastScope
+        let ownerEpoch: UUID
+        let deadline: Date
+        let uptimeDeadline: TimeInterval
+        let previousScope: ForecastScope
+        var previousCursor: DJConnectForecastCursor?
+    }
+    private var forecastTrackHandoff: ForecastTrackHandoff?
+    var forecastTrackHandoffDeadline: Date? { forecastTrackHandoff?.deadline }
+    var previousForecastDirectionDeadline: Date? {
+        forecastTrackHandoff?.previousCursor?.projection?.valid_until.flatMap(DJConnectSessionForecast.timestamp)
+    }
+
+    private func reconcileForecastTrackHandoff(from previous: DJConnectSessionRuntime?, at date: Date) {
+        let oldScope = previous.map(ForecastScope.init)
+        let newScope = sessionForecastRefreshScope
+        guard oldScope != newScope else { return }
+        forecastTrackHandoff = nil
+        guard let oldScope, let newScope, newScope.replacesTrack(in: oldScope),
+              canRefreshSessionForecast, forecastAvailable, forecastScope == oldScope,
+              let cursor = forecastCursor, forecastEpoch == sessionHistory.responseEpoch,
+              cursor.visible(playbackItemID: oldScope.playbackID, playbackSource: oldScope.playbackSource,
+                             at: date)?.sections.isEmpty == false else { return }
+        let grace: TimeInterval = 15
+        forecastTrackHandoff = .init(scope: newScope, ownerEpoch: sessionHistory.responseEpoch,
+            deadline: date.addingTimeInterval(grace), uptimeDeadline: ProcessInfo.processInfo.systemUptime + grace,
+            previousScope: oldScope, previousCursor: cursor)
+    }
+
+    func isForecastTrackHandoffPending(at date: Date) -> Bool {
+        guard let handoff = forecastTrackHandoff, canRefreshSessionForecast, forecastAvailable,
+              sessionForecastRefreshScope == handoff.scope, sessionHistory.responseEpoch == handoff.ownerEpoch else {
+            return false
+        }
+        return date < handoff.deadline && ProcessInfo.processInfo.systemUptime < handoff.uptimeDeadline
+    }
+
+    func previousForecastDirection(at date: Date) -> [DJConnectSessionForecast.Section] {
+        guard isForecastTrackHandoffPending(at: date), let handoff = forecastTrackHandoff else { return [] }
+        return handoff.previousCursor?.visible(playbackItemID: handoff.previousScope.playbackID,
+            playbackSource: handoff.previousScope.playbackSource, at: date)?.sections.filter {
+                $0.claim_type == "intention" || $0.claim_type == "conditional_target"
+            } ?? []
+    }
 
     public func visibleSessionForecast(at date: Date) -> DJConnectSessionForecast? {
         guard hasSessionForecastOwner, let session = activeDJSession, forecastAvailable,
@@ -2300,6 +2393,7 @@ public final class DJConnectAppModel: ObservableObject {
             forecastAvailable = caps.forecastAvailable
             guard forecastAvailable else {
                 forecastAutomaticReadDenial = .init(scope: scope, ownerEpoch: epoch)
+                forecastTrackHandoff = nil
                 forecastCursor?.withdraw(); return
             }
             let projection = try await withHomeAssistantClient { try await $0.sessionForecast(sessionID: session.id) }
@@ -2322,6 +2416,7 @@ public final class DJConnectAppModel: ObservableObject {
                 return
             }
             forecastPreservedTransportScope = nil
+            forecastTrackHandoff = nil
             forecastAutomaticReadDenial = .init(scope: scope, ownerEpoch: epoch)
             forecastCursor?.withdraw()
             _ = sessionHistory.withdrawAuthority(for: error)
@@ -2330,8 +2425,16 @@ public final class DJConnectAppModel: ObservableObject {
 
     private func acceptSessionForecast(_ incoming: DJConnectSessionForecast?, invalidatesPendingReads: Bool = false) {
         let previousRevision = forecastCursor?.revisionFloor ?? -1
+        let handoffPending = isForecastTrackHandoffPending(at: Date())
+        let omittedDuringHandoff = incoming == nil && handoffPending
         forecastCursor?.receive(incoming)
-        if incoming?.state == "withdrawn" || (invalidatesPendingReads && forecastCursor?.projection == nil) {
+        if let incoming, !incoming.structurallyValid ||
+            incoming.session_id != forecastCursor?.sessionID ||
+            ["withdrawn", "expired", "empty"].contains(incoming.state) {
+            forecastTrackHandoff?.previousCursor = nil
+        }
+        if incoming?.state == "withdrawn" ||
+            (invalidatesPendingReads && forecastCursor?.projection == nil && !omittedDuringHandoff) {
             forecastAutomaticReadDenial = forecastAutomaticReadFence
         } else if let incoming, ["ready", "limited"].contains(incoming.state),
                   let cursor = forecastCursor, cursor.revisionFloor > previousRevision, cursor.projection != nil {
@@ -2339,7 +2442,7 @@ public final class DJConnectAppModel: ObservableObject {
             // original lease. Equal/replayed data never clears a denial fence.
             forecastAutomaticReadDenial = nil
         }
-        if invalidatesPendingReads, forecastCursor?.projection == nil {
+        if invalidatesPendingReads, forecastCursor?.projection == nil, !omittedDuringHandoff {
             // A newer live denial also revokes owner reads already in flight.
             // Keep the cursor's revision floor; this is not transport recovery.
             forecastGeneration = UUID(); forecastAuthorityGeneration = UUID()
@@ -2349,6 +2452,9 @@ public final class DJConnectAppModel: ObservableObject {
         // A read or event cannot relabel old content after a context change.
         if let cursor = forecastCursor, cursor.revisionFloor > previousRevision, cursor.projection != nil {
             forecastScope = activeDJSession.map(ForecastScope.init)
+        }
+        if handoffPending, visibleSessionForecast(at: Date())?.sections.isEmpty == false {
+            forecastTrackHandoff = nil
         }
         forecastExpiryTask?.cancel(); forecastExpiryTask = nil
         guard let lifetime = forecastCursor?.remainingLifetime, forecastCursor?.projection != nil else { return }
@@ -2364,6 +2470,7 @@ public final class DJConnectAppModel: ObservableObject {
     }
 
     private func clearSessionForecast() {
+        forecastTrackHandoff = nil
         forecastOwnedRead?.task.cancel()
         forecastExpiryTask?.cancel(); forecastExpiryTask = nil
         forecastGeneration = UUID(); forecastAuthorityGeneration = UUID(); forecastReadContext = nil
@@ -6404,7 +6511,7 @@ public final class DJConnectAppModel: ObservableObject {
         let pending = sessionHistory.pendingTurns.contains {
             Self.pendingPersonaTurnMatches($0, scope: scope)
         }
-        return (personaRequestScope == scope && isSendingAskDJText && pending) || (askDJMoments.hasPriority && askDJMoments.presentation.phase == .pending && !askDJMoments.outcomeUnknown)
+        return (personaRequestScope == scope && isSendingAskDJText && pending) || askDJMoments.showsWaitingActivity
     }
 
     private static func pendingPersonaTurnMatches(_ turn: DJConnectSessionHistoryModel.PendingTurn, scope: PersonaObservationScope) -> Bool {
