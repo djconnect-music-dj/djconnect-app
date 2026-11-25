@@ -1828,6 +1828,10 @@
 "ui.canvas.free" = "Vrij";
 "ui.canvas.full" = "Beeldvullend";
 "ui.canvas.matte" = "Passe-partout";
+"ui.canvas.matte_size" = "Dikte passe-partout";
+"ui.canvas.matte_size.small" = "Smal";
+"ui.canvas.matte_size.medium" = "Gemiddeld";
+"ui.canvas.matte_size.large" = "Breed";
 "ui.canvas.off" = "Uit";
 "ui.canvas.matching" = "Passend";
 "ui.canvas.contrast" = "Contrasterend";
