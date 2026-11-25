@@ -55,7 +55,8 @@ struct AskDJMomentsCardContent: View {
                         controller.visibility(visible && windowVisible && scenePhase == .active, generation: generation)
                     }
                     .onDisappear { controller.visibility(false, generation: generation) }
-                if let accepted = controller.currentResult {
+                if let accepted = controller.currentResult,
+                   accepted.retention == "retained" || accepted.moment.privateBulletinHeadlines.isEmpty {
                     Text(text(accepted.retention == "retained" ? "already_saved" : "not_retained"))
                         .font(.caption).foregroundStyle(.secondary)
                 }
