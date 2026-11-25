@@ -16,12 +16,27 @@ import DJConnectCore
                 !item_id.isEmpty && DJConnectHistoryEntry.date(expires_at).map { $0 > date } == true
         }
     }
-    struct Playback: Decodable { let item_id: String?; let title: String?; let artist: String?; let state: String; let artwork: Artwork?; let source_url: String? }
+    struct Playback: Decodable {
+        let item_id: String?
+        let title: String?
+        let artist: String?
+        let album: String?
+        let state: String
+        let artwork: Artwork?
+        let source_url: String?
+        let duration_ms: Int?
+        let position_ms: Int?
+
+        var progress: (position: Int, duration: Int)? {
+            guard let duration_ms, duration_ms > 0, let position_ms, position_ms >= 0 else { return nil }
+            return (min(position_ms, duration_ms), duration_ms)
+        }
+    }
     struct Session: Decodable { let session_id: String; let locale: String; let mood: String; let persona: String; let presence: String }
     struct ViewState: Decodable { let mode: String; let dynamics: Double; let mood: String; let persona: String }
     struct FlowItem: Decodable, Identifiable {
         let moment_id: String; let title: String?; let summary: String?; let content: String?
-        let artwork: Artwork?; let playback_item_id: String?; let source_attribution: Attribution?; let created_at: String?
+        let artwork: Artwork?; let playback_item_id: String?; let source_attribution: Attribution?; let created_at: String?; let published_at: String?
         let flow_expires_at: String?; let display_expires_at: String?; let source_expires_at: String?
         var id: String { moment_id }
         func isCurrent(at now: Date) -> Bool {
@@ -45,7 +60,7 @@ import DJConnectCore
         case moment(FlowItem), playback(ObservedPlayback)
         var id: String { switch self { case .moment(let item): "moment:" + item.id; case .playback(let item): "playback:" + item.id } }
         var date: Date { switch self {
-            case .moment(let item): DJConnectHistoryEntry.date(item.created_at ?? "") ?? .distantPast
+            case .moment(let item): DJConnectHistoryEntry.date(item.published_at ?? item.created_at ?? "") ?? .distantPast
             case .playback(let item): DJConnectHistoryEntry.date(item.observed_at) ?? .distantPast
         } }
     }

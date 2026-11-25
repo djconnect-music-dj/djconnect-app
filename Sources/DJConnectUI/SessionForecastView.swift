@@ -252,7 +252,7 @@ struct SessionForecastContent: View {
     }
 }
 
-private struct SessionHorizonHero: View {
+struct SessionHorizonHero: View {
     let theme: DJConnectSessionMoodTheme
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
