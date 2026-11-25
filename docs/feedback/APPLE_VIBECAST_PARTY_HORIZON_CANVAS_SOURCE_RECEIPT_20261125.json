@@ -1,0 +1,22 @@
+{
+  "source_pr": 416,
+  "reviewed_sha": "fedd54843df22938abef6ec58c9964568ef5d5d4",
+  "main_sha": "527c159915ad9524c454599ada17cae7826d5d26",
+  "reviewed_and_main_tree": "282d62200ecd554ebff848558b42bba4311d0f1b",
+  "source_qualification": {
+    "decision": "POST_MERGE_RELEASE_EVIDENCE_QUALIFIED",
+    "provenance": "PASS",
+    "main_ci_run": 45562756198,
+    "durable_evidence_run": 45564244654,
+    "durable_evidence_sha256": "fb5a5af07b9e7367987e79bccf0e1a15db2b9a1b218676cd0656799c88f0b8ce",
+    "evidence_digest": "c380e93a90a0027b0532229154ad8b3d09cd88050709cdbe9a6e2baf4e1df91a",
+    "local_targeted_tests_passed": 117
+  },
+  "physical_installation": "OPEN",
+  "physical_functional_acceptance": "OPEN",
+  "unsigned_main_build": {
+    "version": "4.1.0",
+    "build": "40478",
+    "run": 45562756198
+  }
+}
