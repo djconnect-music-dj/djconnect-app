@@ -16,6 +16,26 @@ private func canvasFixture() throws -> Data {
     #expect(snapshot.preferences.cadence == "1800")
 }
 
+@Test func musicCanvasScreenPresentationKeepsTheSwitchBotDefaultIndependent() throws {
+    let snapshot = try JSONDecoder().decode(DJConnectCanvasSnapshot.self, from: canvasFixture())
+    let frame = try #require(snapshot.targets.first { $0.adapter == "switchbot" })
+    let tv = try #require(snapshot.targets.first { $0.adapter == "samsung" })
+    var preferences = snapshot.preferences
+    preferences.matte = "contrast"
+    preferences.show_track_title = true
+    preferences.presentation_overrides = [:]
+    #expect(preferences.presentation(for: frame).matte == "off")
+    #expect(!preferences.presentation(for: frame).show_track_title)
+    #expect(preferences.presentation(for: tv).show_track_title)
+    preferences.updatePresentation(for: tv) { $0.matte = "matching" }
+    let data = try JSONEncoder().encode(preferences)
+    let saved = try JSONDecoder().decode(DJConnectCanvasPreferences.self, from: data)
+    #expect(saved.isValid)
+    #expect(saved.presentation_overrides?.keys.contains(frame.id) == false)
+    #expect(saved.presentation(for: tv).matte == "matching")
+    #expect(saved.presentation(for: tv).show_track_title)
+}
+
 @Test(arguments: ["cadence", "composition", "matte", "cadence_overrides"])
 func musicCanvasRejectsMalformedPreferences(field: String) throws {
     var raw = try #require(JSONSerialization.jsonObject(with: canvasFixture()) as? [String: Any])
