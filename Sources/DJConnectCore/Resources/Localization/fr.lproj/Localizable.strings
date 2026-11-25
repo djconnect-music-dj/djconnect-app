@@ -1878,7 +1878,8 @@
 
 "ui.displayConsent.remaining" = "Temps de session restant : %@";
 
-"ui.live.join" = "Rejoindre une session (mode invité)";
+"ui.live.join" = "Rejoindre VibeCast Party";
+"ui.session.welcome.join_separator" = "ou";
 
 "ui.live.leave" = "Quitter la session invitée";
 
@@ -1886,7 +1887,7 @@
 
 "ui.live.not_connected" = "Non connecté à une session invitée";
 
-"ui.live.join_instructions" = "Scanne le QR code actuel du téléviseur avec ton téléphone. Confirme ici pour rejoindre VibeCast Live.";
+"ui.live.join_instructions" = "Scanne le QR code actuel du téléviseur avec ton téléphone. Confirme ici pour rejoindre VibeCast Party.";
 
 "ui.live.invitation_link" = "Lien d’invitation";
 

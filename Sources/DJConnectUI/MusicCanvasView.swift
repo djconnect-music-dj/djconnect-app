@@ -44,7 +44,10 @@ struct MusicCanvasView: View {
     var body: some View {
         let loadScope = scope
         let settingsTitle = DJConnectLocalization.localized(key: "ui.settings", language: model.language)
-        DJConnectGlassDialogSurface(title: showingSettings ? settingsTitle : "Music Canvas", systemImage: "photo.artframe") {
+        DJConnectGlassDialogSurface(
+            title: showingSettings ? settingsTitle : "Music Canvas",
+            icon: DJConnectHeroGlyph(systemImage: "photo.artframe")
+        ) {
             VStack(alignment: .leading, spacing: 16) {
                 if showingSettings {
                     if let snapshot { settings(snapshot) }
@@ -384,14 +387,14 @@ struct MusicCanvasView: View {
 }
 
 /// Uses the feedback popup's glass surface for the heading, controls and actions.
-@MainActor struct DJConnectGlassDialogSurface<Content: View>: View {
+@MainActor struct DJConnectGlassDialogSurface<Icon: View, Content: View>: View {
     let title: String
-    let systemImage: String
+    let icon: Icon
     @ViewBuilder var content: () -> Content
 
     private var card: some View {
         VStack(spacing: 16) {
-            DJConnectHeroGlyph(systemImage: systemImage)
+            icon
             Text(title)
                 .font(.title2.weight(.bold))
                 .multilineTextAlignment(.center)
