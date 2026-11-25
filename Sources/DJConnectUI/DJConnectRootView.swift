@@ -9925,12 +9925,15 @@ struct VibeCastDisplayConsentForm: View {
         self.qrPrepared = qrPrepared
     }
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @State private var code = ""
     @State private var dynamicsDraft: Double?
     @State private var didSubmitLookup = false
     @State private var lookupFocusRequest = 0
     @FocusState private var lookupFocused: Bool
     private var busy: Bool { model.displayConsentState == .resolving || model.displayConsentState == .approving || model.displayConsentState == .revoking }
+    private var pollsRemoteState: Bool { scenePhase == .active && model.isVibeCastSharing }
+
     var body: some View {
         Group {
             if embedded { formContent }
@@ -10101,9 +10104,6 @@ struct VibeCastDisplayConsentForm: View {
                             }
                         }
                         .disabled(model.isUpdatingVibeCastRemote || model.stoppingLiveDisplay)
-                    } else {
-                        Button(localizedKey(model.language, "ui.refresh")) { Task { await model.refreshVibeCastRemote() } }
-                            .disabled(model.isUpdatingVibeCastRemote)
                     }
                 }
                 if model.displayConsentState == .approved && model.usesLegacyVibeCastStatus {
@@ -10127,10 +10127,10 @@ struct VibeCastDisplayConsentForm: View {
             }
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("display-consent-form")
-            .task(id: model.isVibeCastSharing) {
-                while model.isVibeCastSharing && !Task.isCancelled {
-                    do { try await Task.sleep(for: .seconds(3)) } catch { return }
+            .task(id: pollsRemoteState) {
+                while pollsRemoteState && !Task.isCancelled {
                     await model.refreshVibeCastRemote()
+                    do { try await Task.sleep(for: .seconds(3)) } catch { return }
                 }
             }
     }
