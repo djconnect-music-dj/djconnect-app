@@ -1,12 +1,6 @@
 import DJConnectCore
 import SwiftUI
 
-#if os(iOS)
-import UIKit
-#elseif os(macOS)
-import AppKit
-#endif
-
 enum DJConnectVersionInfo {
     static var displayVersion: String {
         DJConnectApplicationVersion.releaseVersion
@@ -254,42 +248,11 @@ struct DJConnectLaunchBanner: View {
     }
 }
 
-/// The approved artwork already contains its glass rim. Do not add a second tile.
-struct DJConnectGlassBrandIcon: View {
+private struct DJConnectGlassBrandIcon: View {
     var body: some View {
-        DJConnectAppIconView()
+        Image("DJConnectBrandMark")
+            .resizable()
+            .scaledToFit()
             .accessibilityHidden(true)
-    }
-}
-
-private struct DJConnectAppIconView: View {
-    var body: some View {
-        #if os(iOS)
-        if let image = UIImage(named: "LaunchIcon") ?? UIImage(named: "AppIcon") {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFit()
-        } else {
-            fallbackImage
-        }
-        #elseif os(macOS)
-        if let image = NSImage(named: "LaunchIcon") ?? NSImage(named: NSImage.applicationIconName) {
-            Image(nsImage: image)
-                .resizable()
-                .scaledToFit()
-        } else {
-            fallbackImage
-        }
-        #else
-        fallbackImage
-        #endif
-    }
-
-    private var fallbackImage: some View {
-        Image(systemName: "music.note")
-            .font(.system(size: 48, weight: .semibold))
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(red: 0.23, green: 0.18, blue: 0.42))
     }
 }
