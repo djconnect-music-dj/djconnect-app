@@ -158,15 +158,6 @@ struct DJConnectLiveGuestView: View {
         }
         .foregroundStyle(.white)
         .environment(\.colorScheme, .dark)
-        .sheet(isPresented: $showsHelp) {
-            VStack(alignment: .leading, spacing: 20) {
-                Text(vibeCastPartyTitle).font(.title2.bold())
-                Text(text(guest.requestSongsAllowed ? "ui.live.help" : "ui.live.help_information_only"))
-                Text(text("ui.ask_dj.accuracy_notice")).font(.caption).foregroundStyle(.secondary)
-                Button(text("ui.close")) { showsHelp = false }
-            }
-            .padding(24)
-        }
         .accessibilityIdentifier("live-guest-root")
     }
 
@@ -435,6 +426,42 @@ struct DJConnectLiveGuestView: View {
         .accessibilityIdentifier("live-guest-horizon")
     }
 
+    private var helpPopover: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Text(vibeCastPartyTitle)
+                    .font(.title2.bold())
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 0)
+                Button { showsHelp = false } label: {
+                    Image(systemName: "xmark").frame(width: 44, height: 44)
+                }
+                .djConnectButtonStyle(DJConnectButtonStyle(shape: .icon))
+                .accessibilityLabel(text("ui.close"))
+            }
+            ViewThatFits(in: .vertical) {
+                helpText
+                ScrollView { helpText }
+                    .scrollBounceBehavior(.basedOnSize)
+            }
+        }
+        .padding(16)
+        .frame(idealWidth: 340, maxWidth: 400, maxHeight: 420)
+        .djConnectGlassPopoutSurface(nativePresentation: true)
+        .accessibilityIdentifier("live-guest-help-popover")
+    }
+
+    private var helpText: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(text(guest.requestSongsAllowed ? "ui.live.help" : "ui.live.help_information_only"))
+            Text(text("ui.ask_dj.accuracy_notice"))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
     private var composer: some View {
         HStack(spacing: 12) {
             Button { showsHelp = true } label: {
@@ -443,6 +470,10 @@ struct DJConnectLiveGuestView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(text("ui.live.help_title"))
                 .accessibilityIdentifier("live-guest-help")
+                .popover(isPresented: $showsHelp, arrowEdge: .bottom) {
+                    helpPopover
+                        .presentationCompactAdaptation(.popover)
+                }
             TextField(text(guest.requestSongsAllowed ? "ui.live.composer" : "ui.live.composer_information_only"), text: $guest.draft, axis: .vertical)
                 .lineLimit(1...4)
                 .textFieldStyle(.plain)
