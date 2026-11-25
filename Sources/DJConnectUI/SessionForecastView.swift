@@ -161,17 +161,20 @@ struct SessionForecastContent: View {
               unavailable: model.djSessionLiveUnavailable, phase: scenePhase,
               automaticReadPermitted: model.permitsAutomaticSessionForecastRead)
     }
-    // The task starts after the first paint. Idle for a new admitted context is
-    // still pending, not a backend denial. Reset on mounting a new Horizon view.
+    // Only the first read for a Session and owner needs a loading placeholder.
+    // Later reads can replace the empty state with content when Core supplies it.
     struct ReadProgress {
         var completedContext: RefreshContext?
-        func showsLoading(context: RefreshContext, canRead: Bool, readInFlight: Bool) -> Bool {
-            readInFlight || (context.phase == .active && context.automaticReadPermitted && canRead && completedContext != context)
+
+        func showsLoading(context: RefreshContext, canRead: Bool) -> Bool {
+            guard context.phase == .active, context.automaticReadPermitted, canRead else { return false }
+            guard let completedContext else { return true }
+            return completedContext.ownerEpoch != context.ownerEpoch ||
+                completedContext.scope?.sessionID != context.scope?.sessionID
         }
     }
     private var showsLoading: Bool {
-        readProgress.showsLoading(context: contextKey, canRead: model.canRefreshSessionForecast,
-                                  readInFlight: model.forecastLoading)
+        readProgress.showsLoading(context: contextKey, canRead: model.canRefreshSessionForecast)
     }
     private var demoSections: [DJConnectSessionForecast.Section] {
         [
@@ -192,7 +195,7 @@ struct SessionForecastContent: View {
                     Text(text("demo.horizon.notice")).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                     SessionForecastTextView(sections: demoSections, language: model.language)
                 } else if scenePhase == .active, let projection = model.visibleSessionForecast(at: clock.date),
-                          !projection.sections.isEmpty || !model.isForecastTrackHandoffPending(at: clock.date) {
+                          !projection.sections.isEmpty {
                     ForEach(projection.sections) { section in
                         if section.id == "current" {
                             if let session = model.activeDJSession,
@@ -217,19 +220,17 @@ struct SessionForecastContent: View {
                     }
                 } else {
                     let handoffPending = scenePhase == .active && model.isForecastTrackHandoffPending(at: clock.date)
-                    let loading = showsLoading || handoffPending
-                    Text(text(loading ? "ui.session.forecast.loading" : "ui.session.forecast.unavailable"))
-                        .fixedSize(horizontal: false, vertical: true)
+                    if showsLoading || handoffPending {
+                        Text(text("ui.session.forecast.loading"))
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        DJConnectEmptyState(title: text("ui.session.forecast.empty"), systemImage: "sun.horizon")
+                            .frame(minHeight: 360)
+                            .accessibilityIdentifier("session-forecast-empty")
+                    }
                     let previous = handoffPending ? model.previousForecastDirection(at: clock.date) : []
                     if !previous.isEmpty {
                         SessionForecastTextView(sections: previous, language: model.language, showsSourceLinks: false)
-                    } else if !handoffPending {
-                        Button(text("ui.refresh.page")) { Task { await model.refreshSessionForecast() } }
-                            .buttonStyle(.plain)
-                            .font(.callout)
-                            .foregroundStyle(.white.opacity(0.78))
-                            .frame(minHeight: 44, alignment: .leading)
-                            .disabled(loading || !model.canRefreshSessionForecast)
                     }
                 }
             }.padding(.horizontal, 20).padding(.bottom, 16)
@@ -242,9 +243,9 @@ struct SessionForecastContent: View {
             guard context.phase == .active, context.automaticReadPermitted else { return }
             while !Task.isCancelled {
                 await model.refreshSessionForecast(automatic: true)
-                guard !Task.isCancelled, contextKey == context else { return }
+                guard !Task.isCancelled else { return }
                 readProgress.completedContext = context
-                guard model.permitsAutomaticSessionForecastRead else { return }
+                guard contextKey == context, model.permitsAutomaticSessionForecastRead else { return }
                 do { try await Task.sleep(for: .seconds(model.sessionForecastNextReadDelay)) } catch { return }
             }
         }

@@ -1171,7 +1171,6 @@
 
 "ui.trackInsight.verified_credits" = "Verified credits";
 "ui.trackInsight.interpretation" = "Interpretation";
-"ui.refresh.page" = "Refresh page";
 
 "ui.transport.automatic" = "The app automatically chooses an available connection and restores it when your network changes.";
 
@@ -1457,7 +1456,7 @@
 "ui.session.forecast.title" = "Horizon · ~15 min";
 "ui.session.forecast.notice" = "A direction for the coming minutes. Music and contributions may change.";
 "ui.session.forecast.loading" = "Loading Horizon…";
-"ui.session.forecast.unavailable" = "Horizon is currently unavailable.";
+"ui.session.forecast.empty" = "No Horizon";
 "ui.session.forecast.source" = "Source";
 "ui.session.forecast.claim.current" = "Playing now";
 "ui.session.forecast.claim.intention" = "Intention";

@@ -504,6 +504,9 @@ struct SessionTimelineScreen: View {
         if activeSession != nil { await model.refreshAskDJExampleCapabilities(userRefresh: true) }
         await manualRefresh.run(model: model, systemImage: DJConnectFeatureSymbols.djSession) {
             let sessionSucceeded = await refreshAction?() ?? true
+            if displayingForecast, activeSession?.id == model.activeDJSession?.id {
+                await model.refreshSessionForecast()
+            }
             let conversationSucceeded = history.profileScopeActive ? await history.refreshConversation() : true
             let timelineSucceeded = await history.refreshVisibleTimeline(sessionID, anchor: visibleEntry)
             let succeeded = sessionSucceeded && conversationSucceeded && timelineSucceeded

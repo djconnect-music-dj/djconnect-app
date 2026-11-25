@@ -1171,7 +1171,6 @@
 
 "ui.trackInsight.verified_credits" = "Crédits vérifiés";
 "ui.trackInsight.interpretation" = "Interprétation";
-"ui.refresh.page" = "Actualiser la page";
 
 "ui.transport.automatic" = "L’app choisit automatiquement une connexion disponible et la rétablit lorsque le réseau change.";
 
@@ -1457,7 +1456,7 @@
 "ui.session.forecast.title" = "Horizon · env. 15 min";
 "ui.session.forecast.notice" = "Une direction pour les prochaines minutes. La musique et les interventions peuvent changer.";
 "ui.session.forecast.loading" = "Chargement de Horizon…";
-"ui.session.forecast.unavailable" = "Horizon est indisponible pour le moment.";
+"ui.session.forecast.empty" = "Pas d’horizon";
 "ui.session.forecast.source" = "Source";
 "ui.session.forecast.claim.current" = "En cours";
 "ui.session.forecast.claim.intention" = "Intention";
