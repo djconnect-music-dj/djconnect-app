@@ -37,7 +37,6 @@ struct VibeCastPartyJoinLabel: View {
 struct DJConnectLiveGuestJoinView: View {
     @ObservedObject var guest: DJConnectLiveGuestModel
     let language: String
-    @State private var pastedLink = ""
     #if os(macOS)
     @State private var address = ""
     @State private var manualCode = ""
@@ -51,7 +50,7 @@ struct DJConnectLiveGuestJoinView: View {
     }
 
     var body: some View {
-        DJConnectGlassDialogSurface(title: vibeCastPartyTitle, icon: VibeCastPartyMark(size: 86)) {
+        DJConnectGlassDialogSurface(title: vibeCastPartyTitle, icon: partyHero) {
             VStack(spacing: 14) {
                 if guest.invitation != nil {
                     Button {
@@ -84,14 +83,6 @@ struct DJConnectLiveGuestJoinView: View {
                         .djConnectButtonStyle(DJConnectButtonStyle(emphasis: .primary, expands: true))
                         .disabled(address.isEmpty || manualCode.isEmpty)
                     #endif
-                    TextField(text("ui.live.invitation_link"), text: $pastedLink)
-                        .textFieldStyle(.roundedBorder)
-                        .textContentType(.URL)
-                        .accessibilityIdentifier("live-guest-invitation")
-                        .onSubmit(openInvitation)
-                    Button(text("ui.live.open_invitation"), action: openInvitation)
-                        .djConnectButtonStyle(DJConnectButtonStyle(expands: true))
-                        .disabled(pastedLink.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
                 if let key = guest.statusKey { Text(text(key)).foregroundStyle(.secondary) }
                 DJConnectNotNowLinkButton(language: language, key: "ui.not.now.b1e535") {
@@ -112,11 +103,9 @@ struct DJConnectLiveGuestJoinView: View {
         #endif
     }
 
-    private func openInvitation() {
-        let link = pastedLink.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !link.isEmpty else { return }
-        pastedLink = ""
-        guest.receiveScan(link)
+    private var partyHero: some View {
+        let mark = VibeCastPartyMark(size: 86)
+        return DJConnectHeroShine(artwork: djConnectIconGradient.frame(width: 86, height: 86).mask(mark))
     }
 
     #if os(macOS)
