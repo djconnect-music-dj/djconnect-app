@@ -123,6 +123,7 @@ struct DJConnectLiveGuestView: View {
     let language: String
     @Environment(\.dynamicTypeSize) private var dynamicType
     @State private var showsHelp = false
+    @State private var confirmsLeaving = false
     @State private var mode: Mode = .flow
     @State private var artworkSample: (artwork: DJConnectLiveGuestModel.Artwork, color: Color)?
 
@@ -169,6 +170,9 @@ struct DJConnectLiveGuestView: View {
         #endif
         .foregroundStyle(.white)
         .environment(\.colorScheme, .dark)
+        .djConnectPopup(isPresented: $confirmsLeaving) {
+            leaveConfirmation
+        }
         .accessibilityIdentifier("live-guest-root")
     }
 
@@ -204,7 +208,7 @@ struct DJConnectLiveGuestView: View {
                 .foregroundStyle(.white.opacity(0.78))
                 .accessibilityLabel(text("ui.live.connected"))
                 .accessibilityIdentifier("live-guest-connection")
-            Button { guest.disconnect() } label: {
+            Button { confirmsLeaving = true } label: {
                 Image(systemName: "stop.fill")
                     .font(.subheadline.weight(.semibold))
                     .frame(width: 44, height: 44)
@@ -216,6 +220,28 @@ struct DJConnectLiveGuestView: View {
             .accessibilityIdentifier("live-guest-leave")
         }
         .padding(.horizontal, gutter)
+    }
+
+    private var leaveConfirmation: some View {
+        DJConnectGlassDialogSurface(
+            title: text("ui.live.leave_confirmation"),
+            icon: DJConnectHeroGlyph(systemImage: "stop.fill")
+        ) {
+            VStack(spacing: 12) {
+                Button(text("ui.live.leave"), role: .destructive) {
+                    confirmsLeaving = false
+                    guest.disconnect()
+                }
+                .djConnectButtonStyle(DJConnectButtonStyle(emphasis: .destructive, expands: true))
+                .accessibilityIdentifier("live-guest-confirm-leave")
+
+                Button(text("ui.cancel"), role: .cancel) { confirmsLeaving = false }
+                    .djConnectButtonStyle(DJConnectButtonStyle(expands: true))
+                    .accessibilityIdentifier("live-guest-cancel-leave")
+                    .keyboardShortcut(.cancelAction)
+            }
+        }
+        .accessibilityIdentifier("live-guest-leave-confirmation")
     }
 
     private func modeSelector(onVibeScape: @escaping () -> Void) -> some View {
