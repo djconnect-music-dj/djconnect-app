@@ -135,27 +135,38 @@ struct DJConnectLiveGuestView: View {
     private func text(_ key: String) -> String { DJConnectLocalization.localized(key: key, language: language) }
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { clock in
-            let tint = currentArtworkTint
-            VStack(spacing: spacing) {
-                header
-                modeSelector
-                switch mode {
-                case .flow:
-                    flow(at: clock.date, tint: tint)
-                case .horizon:
-                    horizon(tint: tint)
-                case .vibeScape:
-                    DJConnectGuestVibescape(guest: guest, language: language)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .padding(.horizontal, gutter)
-                        .accessibilityIdentifier("live-guest-vibescape")
+        Group {
+            if mode == .vibeScape {
+                DJConnectGuestVibescape(guest: guest, language: language) { toggleControls in
+                    VStack(spacing: spacing) {
+                        header
+                        modeSelector(onVibeScape: toggleControls)
+                    }
+                    .padding(.top, 8)
+                }
+                .accessibilityIdentifier("live-guest-vibescape")
+            } else {
+                TimelineView(.periodic(from: .now, by: 1)) { clock in
+                    let tint = currentArtworkTint
+                    VStack(spacing: spacing) {
+                        header
+                        modeSelector { mode = .vibeScape }
+                        if mode == .horizon {
+                            horizon(tint: tint)
+                        } else {
+                            flow(at: clock.date, tint: tint)
+                        }
+                    }
+                    .padding(.top, 8)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .background { background(tint: tint) }
                 }
             }
-            .padding(.top, 8)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .background { background(tint: tint) }
         }
+        #if os(macOS)
+        .toolbar(mode == .vibeScape ? .hidden : .automatic, for: .windowToolbar)
+        .windowToolbarFullScreenVisibility(mode == .vibeScape ? .onHover : .visible)
+        #endif
         .foregroundStyle(.white)
         .environment(\.colorScheme, .dark)
         .accessibilityIdentifier("live-guest-root")
@@ -207,10 +218,10 @@ struct DJConnectLiveGuestView: View {
         .padding(.horizontal, gutter)
     }
 
-    private var modeSelector: some View {
+    private func modeSelector(onVibeScape: @escaping () -> Void) -> some View {
         SessionModeToggleButtons(
             showsForecast: Binding(get: { mode == .horizon }, set: { mode = $0 ? .horizon : .flow }),
-            language: language, openVibeScape: { mode = .vibeScape }, isVibeScape: mode == .vibeScape
+            language: language, openVibeScape: onVibeScape, isVibeScape: mode == .vibeScape
         )
         .padding(.horizontal, gutter)
     }
@@ -499,40 +510,128 @@ struct DJConnectLiveGuestView: View {
 }
 
 /// Reuses the native GPU renderer with public session style and local dynamics only.
-private struct DJConnectGuestVibescape: View {
+private struct DJConnectGuestVibescape<TopControls: View>: View {
     @ObservedObject var guest: DJConnectLiveGuestModel
     let language: String
+    @ViewBuilder let topControls: (@escaping () -> Void) -> TopControls
     @StateObject private var visit = VisualDirectorVisit()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @State private var unavailable = false
+    @State private var controlsVisible = true
+    @State private var controlsGeneration = UUID()
+    @State private var adjustingDynamics = false
+    #if os(macOS)
+    @State private var hoveringControls = false
+    @State private var topBounds = CGRect.zero
+    @State private var bottomBounds = CGRect.zero
+    #else
+    private let hoveringControls = false
+    #endif
 
     private var style: [String] {
         [guest.session?.session_id ?? "", guest.viewState?.mood ?? "", guest.viewState?.persona ?? ""]
     }
+
     var body: some View {
-        VStack {
-            if unavailable {
-                Image(systemName: "sparkles.tv").font(.largeTitle)
-            } else if visit.scene != nil {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            if !unavailable, visit.scene != nil {
                 VibeScapeMetalView(visit: visit, reduceMotion: reduceMotion,
                     isActive: scenePhase == .active, unavailable: { unavailable = true })
+                    .ignoresSafeArea()
+                    .accessibilityHidden(true)
             }
-            Slider(value: Binding(get: { Double(visit.dynamics) }, set: { _ = visit.setDynamics(Float($0)) }), in: 0...1)
-                .accessibilityLabel(DJConnectLocalization.localized(key: "ui.live.local_dynamics", language: language))
-                .disabled(visit.scene == nil)
-                .padding()
+            if unavailable {
+                Text(DJConnectLocalization.localized(key: "ui.vibescape.unavailable", language: language))
+                    .padding(28)
+            }
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture(perform: showControls)
+                .accessibilityHidden(true)
+            VStack(spacing: 0) {
+                topControls(toggleControls)
+                    #if os(macOS)
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { topBounds = $0 }
+                    #endif
+                Spacer(minLength: 0)
+                VibeScapeDynamicsControls(visit: visit, language: language,
+                    editingChanged: dynamicsEditingChanged, didFollowDJ: showControls)
+                    .disabled(visit.scene == nil || unavailable)
+                    .frame(maxWidth: 480)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
+                    #if os(macOS)
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { bottomBounds = $0 }
+                    #endif
+            }
+            .opacity(controlsVisible ? 1 : 0)
+            .allowsHitTesting(controlsVisible)
+            .accessibilityHidden(!controlsVisible)
         }
+        #if os(macOS)
+        .onContinuousHover(coordinateSpace: .global) { phase in
+            switch phase {
+            case let .active(point):
+                updateControlHover(topBounds.contains(point) || bottomBounds.contains(point))
+            case .ended:
+                updateControlHover(false)
+            }
+        }
+        #endif
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.24), value: controlsVisible)
+        .task(id: controlsGeneration) {
+            guard controlsVisible, !adjustingDynamics, !hoveringControls else { return }
+            do { try await Task.sleep(for: .seconds(3)) } catch { return }
+            guard !Task.isCancelled, !adjustingDynamics, !hoveringControls else { return }
+            controlsVisible = false
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("VibeScape")
+        .accessibilityAction(named: Text(DJConnectLocalization.localized(
+            key: "ui.vibescape.dynamics", language: language)), showControls)
         .task(id: style) {
             guard guest.isJoined, let state = guest.viewState,
                   let persona = DJConnectSessionPersonaValue(rawValue: state.persona) else { visit.revoke(); return }
             visit.enter(mood: state.mood, occurrence: nil, family: VibeScapeFamily(persona: persona))
-            _ = visit.setDynamics(Float(state.dynamics))
+            visit.updateTrackIntensity(Float(state.dynamics))
+        }
+        .onChange(of: guest.viewState?.dynamics) { _, value in
+            visit.updateTrackIntensity(value.map(Float.init))
         }
         .onDisappear { visit.revoke() }
     }
-}
 
+    private func showControls() {
+        controlsVisible = true
+        controlsGeneration = UUID()
+    }
+
+    private func toggleControls() {
+        DJConnectHaptics.selection()
+        controlsVisible.toggle()
+        controlsGeneration = UUID()
+    }
+
+    private func dynamicsEditingChanged(_ editing: Bool) {
+        if editing {
+            DJConnectHaptics.selection()
+            visit.beginDynamicsAdjustment()
+        }
+        adjustingDynamics = editing
+        showControls()
+    }
+
+    #if os(macOS)
+    private func updateControlHover(_ inside: Bool) {
+        guard hoveringControls != inside else { return }
+        hoveringControls = inside
+        if inside { showControls() }
+        else { controlsGeneration = UUID() }
+    }
+    #endif
+}
 
 /// Only the current guest-purpose bytes render here, with original source
 /// expiry. Pixels and the guest bearer never enter a file or owner cache.
