@@ -1171,7 +1171,6 @@
 
 "ui.trackInsight.verified_credits" = "Geverifieerde credits";
 "ui.trackInsight.interpretation" = "Duiding";
-"ui.refresh.page" = "Ververs pagina";
 
 "ui.transport.automatic" = "De app kiest automatisch de beschikbare verbinding en herstelt deze wanneer je netwerk verandert.";
 

@@ -223,13 +223,6 @@ struct SessionForecastContent: View {
                     let previous = handoffPending ? model.previousForecastDirection(at: clock.date) : []
                     if !previous.isEmpty {
                         SessionForecastTextView(sections: previous, language: model.language, showsSourceLinks: false)
-                    } else if !handoffPending {
-                        Button(text("ui.refresh.page")) { Task { await model.refreshSessionForecast() } }
-                            .buttonStyle(.plain)
-                            .font(.callout)
-                            .foregroundStyle(.white.opacity(0.78))
-                            .frame(minHeight: 44, alignment: .leading)
-                            .disabled(loading || !model.canRefreshSessionForecast)
                     }
                 }
             }.padding(.horizontal, 20).padding(.bottom, 16)

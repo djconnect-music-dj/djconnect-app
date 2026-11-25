@@ -1171,7 +1171,6 @@
 
 "ui.trackInsight.verified_credits" = "Crédits vérifiés";
 "ui.trackInsight.interpretation" = "Interprétation";
-"ui.refresh.page" = "Actualiser la page";
 
 "ui.transport.automatic" = "L’app choisit automatiquement une connexion disponible et la rétablit lorsque le réseau change.";
 
