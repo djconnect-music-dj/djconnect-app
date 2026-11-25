@@ -1816,7 +1816,7 @@
 
 // Music Canvas v1
 "ui.canvas.open" = "Afficher la musique en art";
-"ui.canvas.description" = "Des œuvres, des couleurs et une ambiance au fil de votre session.";
+"ui.canvas.description" = "Music Canvas transforme la musique que vous écoutez en compositions artistiques sur votre écran en mode Art.";
 "ui.canvas.enabled" = "Afficher sur les écrans";
 "ui.canvas.choose_screens" = "Choisissez vos écrans";
 "ui.canvas.screens" = "Écrans";

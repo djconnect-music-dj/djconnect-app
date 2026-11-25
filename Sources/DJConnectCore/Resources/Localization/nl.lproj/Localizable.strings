@@ -1816,7 +1816,7 @@
 
 // Music Canvas v1
 "ui.canvas.open" = "Muziek als kunst tonen";
-"ui.canvas.description" = "Artwork, kleur en sfeer die je sessie volgen.";
+"ui.canvas.description" = "Music Canvas vertaalt de muziek die je afspeelt naar kunstcomposities op je Art Mode-scherm.";
 "ui.canvas.enabled" = "Toon op schermen";
 "ui.canvas.choose_screens" = "Kies je schermen";
 "ui.canvas.screens" = "Schermen";
