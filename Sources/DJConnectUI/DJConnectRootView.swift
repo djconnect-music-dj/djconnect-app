@@ -4849,8 +4849,8 @@ private struct MusicDNAContentView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            if let error = model.musicDNAErrorMessage {
-                Label(error, systemImage: model.musicDNAProfileNeedsRecovery ? "arrow.triangle.2.circlepath" : "exclamationmark.triangle")
+            if !model.musicDNAProfileNeedsRecovery, let error = model.musicDNAErrorMessage {
+                Label(error, systemImage: "exclamationmark.triangle")
                     .font(.callout)
                     .foregroundStyle(.white.opacity(0.88))
                     .fixedSize(horizontal: false, vertical: true)
