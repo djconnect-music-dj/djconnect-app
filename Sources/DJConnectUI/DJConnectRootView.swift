@@ -10076,9 +10076,13 @@ struct VibeCastDisplayConsentForm: View {
                 }
                 TimelineView(.periodic(from: .now, by: 1)) { _ in
                     if let remaining = model.vibeCastShareRemainingSeconds {
-                        let seconds = max(0, Int(remaining))
-                        Text(String(format: localizedKey(model.language, "ui.displayConsent.remaining"),
-                                    String(format: "%d:%02d", seconds / 3600, (seconds % 3600) / 60)))
+                        let locale = Locale(identifier: DJConnectLocalization.supportedLanguageCode(model.language))
+                        let duration = Duration.seconds(max(0, Int(remaining)) / 60 * 60)
+                        let remainingText = duration.formatted(
+                            .units(allowed: [.hours, .minutes], width: .wide, zeroValueUnits: .hide)
+                                .locale(locale)
+                        )
+                        Text(localizedKey(model.language, "ui.displayConsent.remaining", arguments: remainingText))
                             .font(.footnote.monospacedDigit())
                             .foregroundStyle(.secondary)
                             .accessibilityIdentifier("vibecast-session-remaining")
@@ -10145,10 +10149,6 @@ struct VibeCastDisplayConsentForm: View {
             }
     }
 
-    private var choiceTheme: DJConnectSessionMoodTheme {
-        .init(sessionMood: model.activeDJSession?.selectedMood)
-    }
-
     private func liveChoice(enabled: Bool, identifier: String, onChange: @escaping (Bool) -> Void) -> some View {
         SessionGlassChoiceSelector(
             steps: [(localizedKey(model.language, "ui.off"), 0), (localizedKey(model.language, "ui.on"), 1)],
@@ -10157,7 +10157,7 @@ struct VibeCastDisplayConsentForm: View {
             glyphs: ["", "party.popper.fill"],
             titleOverride: "Party Mode",
             optionIDs: [identifier + "-off", identifier + "-on"],
-            sessionTheme: choiceTheme,
+            usesFrostedSurface: true,
             showsOptionLabels: true
         ) { index in
             let selected = index == 1
@@ -10175,7 +10175,7 @@ struct VibeCastDisplayConsentForm: View {
             titleKey: "ui.live.tv_view",
             accessibilityLabelKey: "ui.live.tv_view",
             optionIDs: ["vibecast-remote-flow", "vibecast-remote-vibescape"],
-            sessionTheme: choiceTheme,
+            usesFrostedSurface: true,
             showsOptionLabels: true
         ) { index in
             let selected = index == 1 ? "vibescape" : "flow"
@@ -13941,6 +13941,7 @@ struct SessionGlassChoiceSelector: View {
     var optionIDs: [String]? = nil
     var selectionColor: Color = djConnectAccent
     var sessionTheme: DJConnectSessionMoodTheme? = nil
+    var usesFrostedSurface = false
     private var resolvedSelectionColor: Color {
         sessionTheme?.controlSelectionButtonTint ?? selectionColor
     }
@@ -14034,7 +14035,7 @@ struct SessionGlassChoiceSelector: View {
                 }
             }
             .padding(DJConnectCardAppearance.segmentedContentInset)
-        if sessionTheme != nil { buttons.djSessionFrostedSurface() }
+        if usesFrostedSurface || sessionTheme != nil { buttons.djSessionFrostedSurface() }
         else { buttons.djConnectGradientCard() }
     }
 
