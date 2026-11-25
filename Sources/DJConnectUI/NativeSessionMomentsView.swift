@@ -1344,6 +1344,7 @@ struct MomentCard: View {
         }
     }
     var body: some View {
+        let privateHeadlines = moment.privateBulletinHeadlines
         SessionContributionColumns(horizontal: usesThumbnailColumns) {
             if usesThumbnailColumns {
                 // Stable thumbnail column while its separately authorized pixels
@@ -1382,8 +1383,24 @@ struct MomentCard: View {
                     title
                 }
             }
-            Text(moment.content).font(.title3).fixedSize(horizontal: false, vertical: true)
-                .modifier(ContributionContentAction(question: contributionQuestion, action: contributionAction))
+            if privateHeadlines.isEmpty {
+                Text(moment.content).font(.title3).fixedSize(horizontal: false, vertical: true)
+                    .modifier(ContributionContentAction(question: contributionQuestion, action: contributionAction))
+            } else {
+                ForEach(privateHeadlines, id: \.url) { source in
+                    if let destination = source.destination {
+                        Link(destination: destination) {
+                            Text(source.attributedHeadline)
+                                .font(.title3)
+                                .underline()
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .tint(.white)
+                        .accessibilityValue(destination.absoluteString)
+                        .accessibilityIdentifier("moment-source-" + destination.absoluteString)
+                    }
+                }
+            }
             if let speech = presentation?.speech {
                 ForEach(speech.segments.filter { !(["dj", "primary_dj"].contains($0.speakerRole) && $0.text == moment.content) }.sorted { $0.ordinal < $1.ordinal }, id: \.ordinal) { segment in
                     Text(segment.text).fixedSize(horizontal: false, vertical: true)
@@ -1405,18 +1422,20 @@ struct MomentCard: View {
             if moment.isLiveImpressionV1 {
                 Text(DJConnectLocalization.localized(key: "ui.live_impression.sources", language: language)).font(.caption.weight(.semibold))
             }
-            ForEach(moment.nativeSourceURLs.filter { !SessionSourceLinks.isSpotify($0) }, id: \.absoluteString) { url in
-                let source = moment.isBulletinV1 ? moment.sources.first { $0.destination == url } : nil
-                let liveSource = moment.isLiveImpressionV1 ? moment.liveSources.first { $0.destination == url } : nil
-                let researchSource = moment.researchSources.first { $0["url"] == url.absoluteString }
-                let researchLabel = researchSource.map { [$0["title"], $0["provider"], $0["license"]].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ") }
-                let label = source?.attributionLabel ?? liveSource?.attributionLabel ?? researchLabel ?? moment.sourceAttribution?["provider"] ?? url.host ?? ""
-                Link(label, destination: url)
-                    .foregroundStyle(.white)
-                    .tint(.white)
-                    .accessibilityLabel(source?.accessibilityLabel ?? liveSource?.accessibilityLabel ?? label)
-                    .accessibilityValue(url.absoluteString)
-                    .accessibilityIdentifier("moment-source-" + url.absoluteString)
+            if privateHeadlines.isEmpty {
+                ForEach(moment.nativeSourceURLs.filter { !SessionSourceLinks.isSpotify($0) }, id: \.absoluteString) { url in
+                    let source = moment.isBulletinV1 ? moment.sources.first { $0.destination == url } : nil
+                    let liveSource = moment.isLiveImpressionV1 ? moment.liveSources.first { $0.destination == url } : nil
+                    let researchSource = moment.researchSources.first { $0["url"] == url.absoluteString }
+                    let researchLabel = researchSource.map { [$0["title"], $0["provider"], $0["license"]].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ") }
+                    let label = source?.attributionLabel ?? liveSource?.attributionLabel ?? researchLabel ?? moment.sourceAttribution?["provider"] ?? url.host ?? ""
+                    Link(label, destination: url)
+                        .foregroundStyle(.white)
+                        .tint(.white)
+                        .accessibilityLabel(source?.accessibilityLabel ?? liveSource?.accessibilityLabel ?? label)
+                        .accessibilityValue(url.absoluteString)
+                        .accessibilityIdentifier("moment-source-" + url.absoluteString)
+                }
             }
         }
         }

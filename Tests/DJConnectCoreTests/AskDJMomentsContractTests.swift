@@ -119,6 +119,12 @@ func askDJMomentsActualRichFamilyAndSourceSpecificRetention(name: String) throws
         #expect(result.historyState == "content_retained")
     } else {
         #expect(result.moment.isBulletinV1)
+        let headlines = result.moment.privateBulletinHeadlines
+        #expect(headlines.map(\.provider) == ["Tweakers", "NU.nl"])
+        #expect(headlines.compactMap { $0.destination?.host } == ["tweakers.net", "www.nu.nl"])
+        var mismatched = result.moment
+        mismatched.content += " Extra text without a source binding."
+        #expect(mismatched.privateBulletinHeadlines.isEmpty)
         #expect(result.retention == "not_retained")
         #expect(result.historyState == "receipt_only")
         #expect(result.entryID != nil)
