@@ -9181,18 +9181,6 @@ private struct IdleDJSessionView: View {
                 }
                     .djConnectButtonStyle(DJConnectButtonStyle(expands: true))
                     .accessibilityIdentifier("session-welcome-join")
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "sparkles")
-                        .font(.body.weight(.semibold))
-                        .accessibilityHidden(true)
-                    Text(localizedKey(model.language, "ui.session.welcome.for_you_tip"))
-                        .font(.footnote)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .foregroundStyle(.white.opacity(0.85))
-                .frame(maxWidth: .infinity, alignment: .center)
-                .accessibilityElement(children: .combine)
                 welcomeInstruction
                 if !model.isDemoMode && (model.pairingStatus != .paired || !model.canUsePlaybackFeatures) {
                     Text(localizedKey(model.language, "ui.session.requires_connection")).font(.footnote).foregroundStyle(.secondary)
