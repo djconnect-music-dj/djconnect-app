@@ -148,6 +148,22 @@ private final class GuestFixtureTransport: DJConnectGuestTransporting, @unchecke
     #expect(clock.accepts(fresh, wall: wall.addingTimeInterval(30), tick: tick.advanced(by: .seconds(30))))
 }
 
+@Test func guestTrackUsesOptionalPublicAlbumAndProgress() throws {
+    let legacy = Data(#"{"item_id":"one","state":"playing"}"#.utf8)
+    let old = try JSONDecoder().decode(DJConnectLiveGuestModel.Playback.self, from: legacy)
+    #expect(old.album == nil && old.progress == nil)
+
+    let context = Data(#"{"item_id":"one","state":"paused","album":"Original album","duration_ms":180000,"position_ms":182000}"#.utf8)
+    let playback = try JSONDecoder().decode(DJConnectLiveGuestModel.Playback.self, from: context)
+    #expect(playback.album == "Original album")
+    #expect(playback.progress?.position == 180000)
+    #expect(playback.progress?.duration == 180000)
+
+    let unknown = Data(#"{"state":"playing","position_ms":-1,"duration_ms":180000}"#.utf8)
+    let invalid = try JSONDecoder().decode(DJConnectLiveGuestModel.Playback.self, from: unknown)
+    #expect(invalid.progress == nil)
+}
+
 @Test @MainActor func guestObservedPlaybackStaysMetadataOnlyAndLeavesNoPublicFlowAfterDisconnect() async throws {
     let wire = GuestFixtureTransport(); wire.setObserved(true)
     let model = try await joinedGuest(wire)
