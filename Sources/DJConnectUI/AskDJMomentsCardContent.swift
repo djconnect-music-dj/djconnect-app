@@ -42,10 +42,9 @@ struct AskDJMomentsCardContent: View {
                     Text(controller.pendingText ?? text("loading_inventory")).fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("ask-moments-pending")
                 }
-                HStack {
-                    Button(text("cancel")) { controller.cancel() }.disabled(controller.operationID == nil || controller.checkingCancellation)
-                    if controller.noticeText != nil { Button(text("check_status")) { controller.checkStatus() } }
-                }.frame(minHeight: 44)
+                if controller.noticeText != nil {
+                    Button(text("check_status")) { controller.checkStatus() }.frame(minHeight: 44)
+                }
             case .presenting:
                 result()
                     .id("requested-rich-result-" + generation.uuidString)
