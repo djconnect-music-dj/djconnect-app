@@ -9,6 +9,8 @@ public enum DJConnectCanvasReadFailure: Error, Equatable, Sendable {
 public struct DJConnectCanvasPresentation: Codable, Equatable, Sendable {
     public var matte: String
     public var show_track_title: Bool
+    public var composition: String?
+    public var cadence: String?
 
     public static let mattes = ["off", "matching", "contrast"]
 }
@@ -47,8 +49,13 @@ public struct DJConnectCanvasPreferences: Codable, Equatable, Sendable {
         Set(selected_targets).count == selected_targets.count &&
         Set(cadence_overrides.keys).isSubset(of: Set(selected_targets)) &&
         cadence_overrides.values.allSatisfy(Self.cadences.contains) &&
-        (presentation_overrides?.values.allSatisfy { DJConnectCanvasPresentation.mattes.contains($0.matte) } ?? true)
+        (presentation_overrides?.values.allSatisfy { style in
+            DJConnectCanvasPresentation.mattes.contains(style.matte)
+                && (style.composition.map(Self.compositions.contains) ?? true)
+                && (style.cadence.map(Self.cadences.contains) ?? true)
+        } ?? true)
     }
+    public static let compositions = ["central", "free", "full"]
     public static let cadences = ["track", "900", "1800", "3600"]
 }
 
@@ -84,6 +91,7 @@ public struct DJConnectCanvasSnapshot: Decodable, Equatable, Sendable {
     public let targets: [DJConnectCanvasTarget]
     public let image_generation_available: Bool
     public let can_manage_devices: Bool
+    public let per_screen_composition_and_cadence: Bool?
     public var isValid: Bool {
         success && contract_version == 1 && binding.count == 64 &&
         binding.allSatisfy({ $0.isHexDigit && $0.isASCII }) && revision >= 0 &&
