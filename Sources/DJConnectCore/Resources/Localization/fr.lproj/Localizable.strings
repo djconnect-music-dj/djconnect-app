@@ -1828,6 +1828,10 @@
 "ui.canvas.free" = "Libre";
 "ui.canvas.full" = "Plein cadre";
 "ui.canvas.matte" = "Passe-partout";
+"ui.canvas.matte_size" = "Largeur du passe-partout";
+"ui.canvas.matte_size.small" = "Fin";
+"ui.canvas.matte_size.medium" = "Moyen";
+"ui.canvas.matte_size.large" = "Large";
 "ui.canvas.off" = "Désactivé";
 "ui.canvas.matching" = "Assorti";
 "ui.canvas.contrast" = "Contrasté";

@@ -1828,6 +1828,10 @@
 "ui.canvas.free" = "Free";
 "ui.canvas.full" = "Full frame";
 "ui.canvas.matte" = "Mat";
+"ui.canvas.matte_size" = "Mat thickness";
+"ui.canvas.matte_size.small" = "Small";
+"ui.canvas.matte_size.medium" = "Medium";
+"ui.canvas.matte_size.large" = "Large";
 "ui.canvas.off" = "Off";
 "ui.canvas.matching" = "Matching";
 "ui.canvas.contrast" = "Contrasting";
