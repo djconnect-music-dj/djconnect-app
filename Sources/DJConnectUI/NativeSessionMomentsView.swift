@@ -1392,10 +1392,10 @@ struct MomentCard: View {
                         Link(destination: destination) {
                             Text(source.attributedHeadline)
                                 .font(.title3)
-                                .underline()
+                                .foregroundStyle(.white)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                        .tint(.white)
+                        .buttonStyle(.plain)
                         .accessibilityValue(destination.absoluteString)
                         .accessibilityIdentifier("moment-source-" + destination.absoluteString)
                     }
