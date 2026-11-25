@@ -81,6 +81,7 @@ public struct DJConnectCanvasTarget: Decodable, Equatable, Identifiable, Sendabl
     public let screen: DJConnectCanvasScreen
     public let remote_cleanup: Bool
     public let preview_available: Bool
+    public let preview_revision: String?
     public let shared_profiles: Int
     public let forgetting: Bool?
 }
@@ -107,6 +108,10 @@ public struct DJConnectCanvasSnapshot: Decodable, Equatable, Sendable {
             !target.id.isEmpty && target.id.utf8.count <= 128 &&
             !target.name.isEmpty && target.name.count <= 128 &&
             target.shared_profiles >= 0 &&
+            (target.preview_revision.map { revision in
+                target.preview_available && revision.utf8.count == 64 &&
+                revision.allSatisfy { $0.isASCII && $0.isHexDigit }
+            } ?? true) &&
             (target.adapter != "switchbot" || !target.remote_cleanup) &&
             (target.screen.width.map { (256...8192).contains($0) } ?? true) &&
             (target.screen.height.map { (256...8192).contains($0) } ?? true) &&
