@@ -4573,8 +4573,6 @@ private struct MusicDNAView: View {
                         let contentWidth = min(maxContentWidth(for: proxy.size), proxy.size.width)
                         VStack(alignment: .leading, spacing: djConnectCardSpacing) {
                             MusicDNAHeroView(model: model, moodStepIndex: model.askDJMoodStepIndex)
-                                .djConnectStandardHeroWidth()
-                                .frame(maxWidth: .infinity, alignment: .top)
                             MusicDNAContentView(model: model, refreshAction: { Task { await refreshMusicDNAWithToast() } })
                                 .frame(maxWidth: .infinity, alignment: .topLeading)
                             if let updatedSummary {
@@ -4719,6 +4717,7 @@ private struct MusicDNAHeroView: View {
             activeHero
         } else {
             inactiveHero
+                .djConnectStandardHeroWidth()
         }
     }
 
@@ -4850,8 +4849,8 @@ private struct MusicDNAContentView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            if let error = model.musicDNAErrorMessage {
-                Label(error, systemImage: model.musicDNAProfileNeedsRecovery ? "arrow.triangle.2.circlepath" : "exclamationmark.triangle")
+            if !model.musicDNAProfileNeedsRecovery, let error = model.musicDNAErrorMessage {
+                Label(error, systemImage: "exclamationmark.triangle")
                     .font(.callout)
                     .foregroundStyle(.white.opacity(0.88))
                     .fixedSize(horizontal: false, vertical: true)
@@ -5418,6 +5417,7 @@ private struct MusicDNANoProfileView: View {
             .foregroundStyle(.white.opacity(0.62))
         }
         .padding(24)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .djConnectGradientCard()
     }
 }
@@ -6546,7 +6546,6 @@ private struct MusicDiscoveryView: View {
                         let contentWidth = min(maxContentWidth(for: proxy.size), proxy.size.width)
                         VStack(alignment: .leading, spacing: djConnectCardSpacing) {
                             header
-                                .djConnectStandardHeroWidth()
                             content
                         }
                         .djConnectScreenPadding()
@@ -6607,7 +6606,6 @@ private struct MusicDiscoveryView: View {
     private var content: some View {
         if shouldShowMusicDNALockedState {
             MusicDiscoveryLockedState(model: model)
-                .djConnectStandardHeroWidth()
         } else if model.musicDiscoveryResponse == nil || visibleSections.isEmpty {
             MusicDiscoveryEmptyState(model: model)
         } else {
