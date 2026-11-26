@@ -46,6 +46,7 @@ jobs:
           case "$MANIFEST_ID" in
             release-apple-internal-4.0.0-40475) manifest_file=PLATFORM_4_0_RC1_APPLE_OPERATIONAL_MANIFEST.json; manifest_version=4.0.0 ;;
             release-apple-internal-4.1.0-40545) manifest_file=PLATFORM_4_1_APPLE_OPERATIONAL_MANIFEST.json; manifest_version=4.1.0 ;;
+            release-apple-internal-4.1.0-40546) manifest_file=PLATFORM_4_1_APPLE_40546_IPHONE_OPERATIONAL_MANIFEST.json; manifest_version=4.1.0 ;;
             *) echo "Unrecognized Apple internal release manifest." >&2; exit 1 ;;
           esac
           curl --fail --silent --show-error --location "https://raw.githubusercontent.com/djconnect-music-dj/djconnect/main/docs/release/$manifest_file" --output "$manifest"
@@ -62,6 +63,10 @@ jobs:
           xcrun devicectl device info apps --device "$WATCH_UDID" --bundle-id dev.djconnect.ios.watch --json-output watch-apps.json
           jq -e --arg version "$expected_version" '[.result.apps[] | select(.bundleIdentifier == "dev.djconnect.ios" and .version == $version)] | length == 1' iphone-apps.json >/dev/null
           jq -e --arg version "$expected_version" '[.result.apps[] | select(.bundleIdentifier == "dev.djconnect.ios.watch" and .version == $version)] | length == 1' watch-apps.json >/dev/null
+          if [ "$MANIFEST_ID" = release-apple-internal-4.1.0-40546 ]; then
+            jq -e '[.result.apps[] | select(.bundleIdentifier == "dev.djconnect.ios" and (.bundleVersion | tostring) == "40546")] | length == 1' iphone-apps.json >/dev/null
+            jq -e '[.result.apps[] | select(.bundleIdentifier == "dev.djconnect.ios.watch" and (.bundleVersion | tostring) == "40546")] | length == 1' watch-apps.json >/dev/null
+          fi
       - name: Publish redacted iPhone smoke evidence
         run: |
           printf '%s\n' '{"kind":"apple_private_iphone_smoke","target":"apple_private_device","target_device":"iphone","paired_watch_result":"PASS","final_result":"SMOKE_PASSED"}' > apple-iphone-smoke-evidence.json
