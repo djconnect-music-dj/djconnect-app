@@ -3692,13 +3692,14 @@ private struct AnimatedAlbumArtworkView: View {
     var usesDemoArtwork = false
 
     var body: some View {
+        let isPlaying = playback?.isPlaying == true && playback?.hasPlayback != false
         CachedArtworkImage(url: usesDemoArtwork ? nil : playback?.albumImageURL, mode: .fit,
                            usesAlbumGlassFrame: true, animatesArtworkChanges: true, showsArtworkSpotlight: true) {
-            AlbumArtworkPlaceholder(tint: artworkTintColor(for: playback), isPlaying: playback?.isPlaying == true)
+            AlbumArtworkPlaceholder(tint: artworkTintColor(for: playback), isPlaying: isPlaying)
         }
         .aspectRatio(1, contentMode: .fit)
         .frame(maxWidth: maxWidth)
-        .djConnectBreathingArtwork()
+        .djConnectBreathingArtwork(enabled: isPlaying)
         .frame(maxWidth: .infinity, alignment: .center)
     }
 }
@@ -7864,7 +7865,7 @@ private struct TrackInsightHeroArtwork: View {
                 }
                 .frame(width: artworkSide, height: artworkSide)
                 .djAlbumArtworkGlassCard(tint: profile.colors.first)
-                .djConnectBreathingArtwork()
+                .djConnectBreathingArtwork(enabled: isActive && !reduceMotion && playback?.hasPlayback != false)
                 .shadow(color: (profile.colors.last ?? djConnectAccent).opacity(0.42), radius: max(18, side * 0.16), x: 0, y: max(8, side * 0.08))
             }
         }

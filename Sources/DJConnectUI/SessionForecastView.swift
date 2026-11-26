@@ -204,7 +204,8 @@ struct SessionForecastContent: View {
                                 SessionHorizonTrackContent(heading: section.title, mood: session.selectedMood,
                                     language: model.language, title: current.title, artist: current.artist, intro: nil,
                                     artworkURL: model.resolvedArtworkURL(current.artworkURL.flatMap { URL(string: $0) }),
-                                    sourceURL: current.sourceURL, showsDJAvatar: false)
+                                    sourceURL: current.sourceURL, showsDJAvatar: false,
+                                    isPlaying: model.isPlaying && model.playback?.hasPlayback != false)
                                     .accessibilityIdentifier("session-horizon-now")
                             } else {
                                 // Keep authored text when current metadata cannot
