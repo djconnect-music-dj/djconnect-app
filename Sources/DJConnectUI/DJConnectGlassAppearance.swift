@@ -166,7 +166,7 @@ private struct DJConnectPresentationSurface: ViewModifier {
 extension View {
     func djConnectGlassPreferences() -> some View { modifier(DJConnectGlassPreference()) }
     func djConnectPresentationSurface() -> some View { modifier(DJConnectPresentationSurface()) }
-    func djConnectBreathingArtwork(enabled: Bool = true) -> some View {
+    func djConnectBreathingArtwork(enabled: Bool) -> some View {
         modifier(DJConnectBreathingArtwork(enabled: enabled))
     }
 }

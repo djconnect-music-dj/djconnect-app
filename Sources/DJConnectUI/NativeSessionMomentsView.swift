@@ -674,13 +674,15 @@ struct NativeSessionMomentsView: View {
     }
 
     private var musicContext: some View {
-        SessionCurrentColumns(stacked: stacksCurrentOnPhone) {
+        let isPlaying = session.broadcast.playback?.state == "playing" &&
+            playbackModel?.playback?.hasPlayback != false &&
+            playbackModel?.playback?.isPlaying != false && !artworkIsPaused
+        return SessionCurrentColumns(stacked: stacksCurrentOnPhone) {
             CachedArtworkImage(url: musicArtworkURL, mode: .fit, usesAlbumGlassFrame: true, animatesArtworkChanges: true) {
-                AlbumArtworkPlaceholder(tint: djConnectAccent,
-                    isPlaying: session.broadcast.playback?.state == "playing" && !artworkIsPaused)
+                AlbumArtworkPlaceholder(tint: djConnectAccent, isPlaying: isPlaying)
             }
                 .aspectRatio(1, contentMode: .fit)
-                .djConnectBreathingArtwork()
+                .djConnectBreathingArtwork(enabled: isPlaying)
                 // The base cover determines geometry. Neither the native hit
                 // surface nor an initially empty feedback view participates in sizing.
                 .overlay {
