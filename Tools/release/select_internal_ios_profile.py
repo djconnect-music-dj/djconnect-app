@@ -32,6 +32,8 @@ def select_profile(profiles, bundle_id, device, signing_identity, now):
         elif allowed_bundle.endswith("*") and bundle_id.startswith(allowed_bundle[:-1]):
             wildcard.append((expiry, path, entitlements))
 
+    if not exact and len(wildcard) > 1:
+        raise ValueError(f"Multiple wildcard development profiles for {bundle_id}")
     candidates = exact or wildcard
     if not candidates:
         raise ValueError(f"No current development profile for {bundle_id} covering the approved device and signing identity")

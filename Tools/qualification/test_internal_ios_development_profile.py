@@ -47,3 +47,9 @@ class InternalIOSDevelopmentProfileTests(unittest.TestCase):
         wildcard = self.profile(30)
         wildcard['Entitlements']['application-identifier'] = 'TEAM.dev.djconnect.*'
         self.assertEqual(self.select([('wildcard', wildcard), ('exact', self.profile())]), 'exact')
+
+    def test_multiple_wildcard_profiles_remain_ambiguous(self):
+        wildcard = self.profile(30)
+        wildcard['Entitlements']['application-identifier'] = 'TEAM.dev.djconnect.*'
+        with self.assertRaisesRegex(ValueError, 'Multiple wildcard'):
+            self.select([('older', wildcard), ('renewed', wildcard)])
