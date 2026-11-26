@@ -59,6 +59,22 @@ class PrivateAppleArtifactTests(unittest.TestCase):
             with self.subTest(device=device), self.assertRaisesRegex(ValueError, "requested device"):
                 verified_asset(**(fixture | {"device": wrong_target}))
 
+    def test_standalone_iphone_requires_exact_manifest_and_watch_scope(self):
+        fixture = self.fixture("iphone")
+        manifest = fixture["manifest"]
+        binding = manifest["artifact_bindings"][0]
+        binding["paired_watch_validation"] = "disabled"
+        with self.assertRaisesRegex(ValueError, "Watch validation"):
+            verified_asset(**fixture)
+        manifest["manifest_id"] = fixture["manifest_id"] = "release-apple-internal-4.1.0-40546-iphone-only"
+        with self.assertRaisesRegex(ValueError, "Standalone iPhone"):
+            verified_asset(**fixture)
+        manifest["deployment_constraints"] = {"iphone_only_route": "APPROVED"}
+        self.assertEqual(verified_asset(**fixture), 456)
+        binding["paired_watch_validation"] = "required"
+        with self.assertRaisesRegex(ValueError, "Watch validation"):
+            verified_asset(**fixture)
+
     def test_source_owner_must_match_manifest_and_allowlist(self):
         fixture = self.fixture("ipad")
         fixture["source_repository"] = "djconnect-music-dj/djconnect-app"

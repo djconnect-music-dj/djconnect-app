@@ -24,7 +24,8 @@ jobs:
           github-token: ${{ github.token }}
           run-id: ${{ inputs.deployment_workflow_run }}
           path: deployment-evidence
-      - name: Verify deployment evidence and installed iPhone plus paired Watch apps
+      - id: verify
+        name: Verify the approved deployment and installed apps
         env:
           IPHONE_UDID: ${{ secrets.DJCONNECT_APPLE_IPHONE_UDID }}
           WATCH_UDID: ${{ secrets.DJCONNECT_APPLE_WATCH_UDID }}
@@ -39,7 +40,14 @@ jobs:
           test "$(jq -r '.manifest_id' "$evidence")" = "$MANIFEST_ID"
           test "$(jq -r '.artifact_id' "$evidence")" = "$ARTIFACT_ID"
           test "$(jq -r '.artifact_sha256' "$evidence")" = "$ARTIFACT_SHA256"
-          test "$(jq -r '.paired_watch_installation' "$evidence")" = completed
+          watch_validation=required
+          watch_installation=completed
+          if [ "$MANIFEST_ID" = release-apple-internal-4.1.0-40546-iphone-only ]; then
+            watch_validation=disabled
+            watch_installation=skipped
+          fi
+          test "$(jq -r '.paired_watch_validation' "$evidence")" = "$watch_validation"
+          test "$(jq -r '.paired_watch_installation' "$evidence")" = "$watch_installation"
           test "$(jq -r '.deployment_result' "$evidence")" = DEPLOYED_PENDING_SMOKE
           manifest="$(mktemp)"
           trap 'rm -f "$manifest" iphone-apps.json watch-apps.json' EXIT
@@ -47,6 +55,7 @@ jobs:
             release-apple-internal-4.0.0-40475) manifest_file=PLATFORM_4_0_RC1_APPLE_OPERATIONAL_MANIFEST.json; manifest_version=4.0.0 ;;
             release-apple-internal-4.1.0-40545) manifest_file=PLATFORM_4_1_APPLE_OPERATIONAL_MANIFEST.json; manifest_version=4.1.0 ;;
             release-apple-internal-4.1.0-40546) manifest_file=PLATFORM_4_1_APPLE_40546_IPHONE_OPERATIONAL_MANIFEST.json; manifest_version=4.1.0 ;;
+            release-apple-internal-4.1.0-40546-iphone-only) manifest_file=PLATFORM_4_1_APPLE_40546_IPHONE_ONLY_OPERATIONAL_MANIFEST.json; manifest_version=4.1.0 ;;
             *) echo "Unrecognized Apple internal release manifest." >&2; exit 1 ;;
           esac
           curl --fail --silent --show-error --location "https://raw.githubusercontent.com/djconnect-music-dj/djconnect/main/docs/release/$manifest_file" --output "$manifest"
@@ -57,19 +66,28 @@ jobs:
           esac
           test "$(jq -r '.approval.state' "$manifest")" = APPROVED
           test "$(jq -r '.manifest_id' "$manifest")" = "$MANIFEST_ID"
-          jq -e --arg artifact "$ARTIFACT_ID" --arg checksum "$ARTIFACT_SHA256" '.artifact_bindings[] | select(.target == "apple_private_device" and .target_device == "iphone" and .artifact_id == $artifact and .artifact_sha256 == $checksum and .signing == "local_developer_provisioning_required" and .paired_watch_validation == "required")' "$manifest" >/dev/null
+          jq -e --arg artifact "$ARTIFACT_ID" --arg checksum "$ARTIFACT_SHA256" --arg watch "$watch_validation" '.artifact_bindings[] | select(.target == "apple_private_device" and .target_device == "iphone" and .artifact_id == $artifact and .artifact_sha256 == $checksum and .signing == "local_developer_provisioning_required" and .paired_watch_validation == $watch)' "$manifest" >/dev/null
           expected_version="$(jq -er --arg sha "$CANDIDATE_SHA" --arg repo "$GITHUB_REPOSITORY" --arg version "$manifest_version" '.repositories[] | select(.repository == $repo and .source_sha == $sha and .version == $version) | .version' "$manifest")"
           xcrun devicectl device info apps --device "$IPHONE_UDID" --bundle-id dev.djconnect.ios --json-output iphone-apps.json
-          xcrun devicectl device info apps --device "$WATCH_UDID" --bundle-id dev.djconnect.ios.watch --json-output watch-apps.json
           jq -e --arg version "$expected_version" '[.result.apps[] | select(.bundleIdentifier == "dev.djconnect.ios" and .version == $version)] | length == 1' iphone-apps.json >/dev/null
+          if [ "$watch_validation" = disabled ]; then
+            test "$(jq -r '.deployment_constraints.iphone_only_route' "$manifest")" = APPROVED
+            jq -e '[.result.apps[] | select(.bundleIdentifier == "dev.djconnect.ios" and (.bundleVersion | tostring) == "40546")] | length == 1' iphone-apps.json >/dev/null
+            echo 'paired_watch_result=NOT_APPLICABLE' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          xcrun devicectl device info apps --device "$WATCH_UDID" --bundle-id dev.djconnect.ios.watch --json-output watch-apps.json
           jq -e --arg version "$expected_version" '[.result.apps[] | select(.bundleIdentifier == "dev.djconnect.ios.watch" and .version == $version)] | length == 1' watch-apps.json >/dev/null
           if [ "$MANIFEST_ID" = release-apple-internal-4.1.0-40546 ]; then
             jq -e '[.result.apps[] | select(.bundleIdentifier == "dev.djconnect.ios" and (.bundleVersion | tostring) == "40546")] | length == 1' iphone-apps.json >/dev/null
             jq -e '[.result.apps[] | select(.bundleIdentifier == "dev.djconnect.ios.watch" and (.bundleVersion | tostring) == "40546")] | length == 1' watch-apps.json >/dev/null
           fi
+          echo 'paired_watch_result=PASS' >> "$GITHUB_OUTPUT"
       - name: Publish redacted iPhone smoke evidence
+        env:
+          PAIRED_WATCH_RESULT: ${{ steps.verify.outputs.paired_watch_result }}
         run: |
-          printf '%s\n' '{"kind":"apple_private_iphone_smoke","target":"apple_private_device","target_device":"iphone","paired_watch_result":"PASS","final_result":"SMOKE_PASSED"}' > apple-iphone-smoke-evidence.json
+          jq -n --arg watch "$PAIRED_WATCH_RESULT" '{kind:"apple_private_iphone_smoke",target:"apple_private_device",target_device:"iphone",paired_watch_result:$watch,final_result:"SMOKE_PASSED"}' > apple-iphone-smoke-evidence.json
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: apple-iphone-smoke-evidence
