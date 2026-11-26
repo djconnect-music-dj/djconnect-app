@@ -2166,6 +2166,16 @@ private struct DJConnectWatchSettingsView: View {
                         .pickerStyle(.navigationLink)
                         .buttonStyle(.plain)
                         DJConnectGlassPreferenceToggle(language: model.language)
+                        if !model.isDemoMode, model.connectionState == .paired {
+                            Button {
+                                model.startDemoMode()
+                            } label: {
+                                Label(watchLocalizedKey(model.language, "ui.start.demo.mode"), systemImage: "play.circle")
+                                    .frame(maxWidth: .infinity, minHeight: 30)
+                            }
+                            .buttonStyle(DJConnectWatchFlatActionRowStyle())
+                            .accessibilityIdentifier("watch-settings-start-demo")
+                        }
                     }
 
                     if !model.isDemoMode {
