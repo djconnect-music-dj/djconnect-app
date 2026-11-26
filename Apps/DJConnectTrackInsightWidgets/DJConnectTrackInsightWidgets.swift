@@ -643,7 +643,9 @@ private struct PassiveSessionContentView: View {
             if showsHeader { sessionHeader(geometry: geometry) }
             if let playback {
                 playbackContent(playback, artworkSide: artworkSide, geometry: geometry)
-                credit(playback.attribution)
+                if !activity || watchActivity || artworkSide != nil || playback.attribution["mark"] != "spotify" {
+                    credit(playback.attribution)
+                }
             }
             if let contribution, !suppressContribution && (!activity || playback == nil || hasResearchCredit) {
                 contributionContent(contribution)
@@ -704,6 +706,7 @@ private struct PassiveSessionContentView: View {
                 Text(playback.album).font(.caption).foregroundStyle(.white.opacity(0.7)).lineLimit(typography.albumLines)
             }
             if activity { playbackProgress(playback) }
+            if activity, !watchActivity, playback.attribution["mark"] == "spotify" { credit(playback.attribution) }
         }
     }
 

@@ -242,14 +242,15 @@ public final class DJConnectClient: Sendable {
                                isCurrent: @escaping @MainActor @Sendable () -> Bool) async throws -> VibeCastOwnerState {
         let before = try await vibeCastOwnerState(shareID: shareID, sessionID: sessionID, issuerEpoch: issuerEpoch,
             expectedInstallationID: expectedInstallationID, pairedLocalOrigin: pairedLocalOrigin, isCurrent: isCurrent)
-        if before.policy.information == enabled { return before }
-        let policy: [String: Any] = ["information": enabled, "requests": enabled ? "review" : "disabled",
+        let requests = enabled ? "auto_queue" : "disabled"
+        if before.policy.information == enabled, before.policy.requests == requests { return before }
+        let policy: [String: Any] = ["information": enabled, "requests": requests,
             "max_pending": before.policy.max_pending, "screen_focus": false]
         _ = try await participationOwnerExchange("configure", shareID: shareID, sessionID: sessionID,
             extra: ["policy": policy], isCurrent: isCurrent)
         let after = try await vibeCastOwnerState(shareID: shareID, sessionID: sessionID, issuerEpoch: issuerEpoch,
             expectedInstallationID: expectedInstallationID, pairedLocalOrigin: pairedLocalOrigin, isCurrent: isCurrent)
-        guard after.policy.information == enabled else { throw DJConnectError.invalidResponse }
+        guard after.policy.information == enabled, after.policy.requests == requests else { throw DJConnectError.invalidResponse }
         return after
     }
 

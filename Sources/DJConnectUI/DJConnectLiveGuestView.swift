@@ -464,13 +464,11 @@ struct DJConnectLiveGuestView: View {
                 .accessibilityLabel(text("ui.close"))
             }
 
-            if guest.requestSongsAllowed {
-                helpExamples("ui.live.help_requests", examples: ["ui.live.help_request_track", "ui.live.help_request_title"])
-            }
+            helpExamples("ui.live.help_requests", examples: ["ui.live.help_request_track", "ui.live.help_request_title"])
             helpExamples("ui.live.help_questions", examples: ["ui.live.help_question_playing", "ui.live.help_question_artist"])
 
             VStack(alignment: .leading, spacing: 6) {
-                Text(text(guest.requestSongsAllowed ? "ui.live.help" : "ui.live.help_information_only"))
+                Text(text("ui.live.help"))
                 Text(text("ui.ask_dj.accuracy_notice"))
             }
             .font(.caption)
