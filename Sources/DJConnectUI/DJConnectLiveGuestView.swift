@@ -130,6 +130,9 @@ struct DJConnectLiveGuestView: View {
     @FocusState private var isComposerFocused: Bool
     @State private var showsHelp = false
     @State private var confirmsLeaving = false
+    #if os(iOS)
+    @State private var showsReactions = false
+    #endif
     @State private var mode: Mode = .flow
     @State private var artworkSample: (artwork: DJConnectLiveGuestModel.Artwork, color: Color)?
 
@@ -137,6 +140,7 @@ struct DJConnectLiveGuestView: View {
 
     private let spacing: CGFloat = 12
     private let gutter: CGFloat = 20
+    private let reactionEmojis = ["❤️", "🔥", "👏", "😍", "💃"]
     private var locale: Locale { Locale(identifier: DJConnectLocalization.supportedLanguageCode(language)) }
 
     private func text(_ key: String) -> String { DJConnectLocalization.localized(key: key, language: language) }
@@ -418,8 +422,32 @@ struct DJConnectLiveGuestView: View {
     }
 
     private var emotionMenu: some View {
+        #if os(iOS)
+        Button { showsReactions.toggle() } label: {
+            Image(systemName: "heart")
+                .font(.system(size: 34))
+                .frame(width: 64, height: 64)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(guest.isBusy)
+        .accessibilityLabel(text("ui.live.react"))
+        .accessibilityIdentifier("live-guest-emotion-menu")
+        .popover(isPresented: $showsReactions) {
+            ViewThatFits(in: .horizontal) {
+                reactionRow(reactionEmojis[...])
+                VStack(spacing: 6) {
+                    reactionRow(reactionEmojis.prefix(3))
+                    reactionRow(reactionEmojis.suffix(2))
+                }
+            }
+            .padding(8)
+            .presentationCompactAdaptation(.popover)
+            .djConnectGlassPopoutSurface(nativePresentation: true)
+        }
+        #else
         Menu {
-            ForEach(["❤️", "🔥", "👏", "😍", "💃"], id: \.self) { emoji in
+            ForEach(reactionEmojis, id: \.self) { emoji in
                 Button(emoji) { Task { await guest.react(emoji) } }
             }
         } label: {
@@ -429,7 +457,30 @@ struct DJConnectLiveGuestView: View {
         .disabled(guest.isBusy)
         .accessibilityLabel(text("ui.live.react"))
         .accessibilityIdentifier("live-guest-emotion-menu")
+        #endif
     }
+
+    #if os(iOS)
+    private func reactionRow(_ emojis: ArraySlice<String>) -> some View {
+        HStack(spacing: 6) {
+            ForEach(emojis, id: \.self) { emoji in
+                Button {
+                    showsReactions = false
+                    Task { await guest.react(emoji) }
+                } label: {
+                    Text(emoji)
+                        .font(.system(size: 34))
+                        .frame(width: 60, height: 60)
+                        .background(.white.opacity(0.10), in: Circle())
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(guest.isBusy)
+            }
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+    #endif
 
     @ViewBuilder private func publicRow(_ row: DJConnectLiveGuestModel.PublicRow, at date: Date, tint: Color?) -> some View {
         switch row {
