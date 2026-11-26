@@ -1742,7 +1742,8 @@
 "ui.surface.push.activity" = "Sta Live Activity-updates op de achtergrond toe";
 "ui.surface.push.activity.detail" = "Ververs je Live Activity op het toegangsscherm en, waar beschikbaar, in het Dynamic Island.";
 
-"ui.vibecast.destinations.title" = "Kies een scherm";
+"ui.vibecast.destinations.choose_screen" = "Kies je scherm";
+"ui.vibecast.destinations.description" = "Met VibeCast toon je je DJ-sessie op een tv of ander scherm.";
 "ui.vibecast.destinations.screen" = "VibeCast scherm";
 "ui.vibecast.destinations.scanning" = "Zoeken naar Google Cast-apparaten…";
 "ui.vibecast.destinations.empty" = "Geen Google Cast-apparaten gevonden.";
@@ -1835,6 +1836,13 @@
 "ui.canvas.off" = "Uit";
 "ui.canvas.matching" = "Passend";
 "ui.canvas.contrast" = "Contrasterend";
+"ui.canvas.frame" = "Matchen met rand";
+"ui.canvas.frame_finish" = "Randafwerking";
+"ui.canvas.frame_finish.white" = "Wit";
+"ui.canvas.frame_finish.teak" = "Teakhout";
+"ui.canvas.frame_finish.walnut" = "Walnoothout";
+"ui.canvas.frame_finish.sand_gold" = "Sand Gold Metal";
+"ui.canvas.frame_finish.terracotta" = "Terracotta";
 "ui.canvas.show_track_title" = "Tracktitel weergeven";
 "ui.canvas.cadence" = "Kunstwerk wisselen";
 "ui.canvas.cadence.track" = "Ieder nummer";
@@ -1842,7 +1850,7 @@
 "ui.canvas.cadence.1800" = "Ieder half uur";
 "ui.canvas.cadence.3600" = "Ieder uur";
 "ui.canvas.details" = "Details";
-"ui.canvas.new_artwork" = "Nieuw kunstwerk";
+"ui.canvas.new_artwork" = "Kunstwerk vernieuwen";
 "ui.canvas.state.alternative_unchanged" = "De beeldgenerator gaf hetzelfde kunstwerk terug.";
 "ui.canvas.done" = "Gereed";
 "ui.canvas.cancel" = "Annuleren";

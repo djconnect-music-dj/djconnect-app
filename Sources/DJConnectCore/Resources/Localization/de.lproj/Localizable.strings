@@ -1742,7 +1742,8 @@
 "ui.surface.push.activity" = "Live-Aktivitäten im Hintergrund aktualisieren";
 "ui.surface.push.activity.detail" = "Aktualisiere deine Live-Aktivität auf dem Sperrbildschirm und, falls verfügbar, in der Dynamic Island.";
 
-"ui.vibecast.destinations.title" = "Bildschirm auswählen";
+"ui.vibecast.destinations.choose_screen" = "Wähle deinen Bildschirm";
+"ui.vibecast.destinations.description" = "Mit VibeCast zeigst du deine DJ-Session auf einem Fernseher oder einem anderen Bildschirm.";
 "ui.vibecast.destinations.screen" = "VibeCast-Bildschirm";
 "ui.vibecast.destinations.scanning" = "Google Cast-Geräte werden gesucht…";
 "ui.vibecast.destinations.empty" = "Keine Google Cast-Geräte gefunden.";
@@ -1835,6 +1836,13 @@
 "ui.canvas.off" = "Aus";
 "ui.canvas.matching" = "Passend";
 "ui.canvas.contrast" = "Kontrastierend";
+"ui.canvas.frame" = "Passend zum Rahmen";
+"ui.canvas.frame_finish" = "Rahmenoberfläche";
+"ui.canvas.frame_finish.white" = "Weiß";
+"ui.canvas.frame_finish.teak" = "Teakholz";
+"ui.canvas.frame_finish.walnut" = "Walnussholz";
+"ui.canvas.frame_finish.sand_gold" = "Sand Gold Metal";
+"ui.canvas.frame_finish.terracotta" = "Terracotta";
 "ui.canvas.show_track_title" = "Songtitel anzeigen";
 "ui.canvas.cadence" = "Kunstwerk wechseln";
 "ui.canvas.cadence.track" = "Bei jedem Titel";
@@ -1842,7 +1850,7 @@
 "ui.canvas.cadence.1800" = "Alle halbe Stunde";
 "ui.canvas.cadence.3600" = "Jede Stunde";
 "ui.canvas.details" = "Details";
-"ui.canvas.new_artwork" = "Neues Kunstwerk";
+"ui.canvas.new_artwork" = "Kunstwerk erneuern";
 "ui.canvas.state.alternative_unchanged" = "Der Bildgenerator hat dasselbe Kunstwerk zurückgegeben.";
 "ui.canvas.done" = "Fertig";
 "ui.canvas.cancel" = "Abbrechen";

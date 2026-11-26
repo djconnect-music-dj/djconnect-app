@@ -112,6 +112,24 @@ final class DJConnectMacAppDelegate: NSObject, NSApplicationDelegate, @preconcur
         UNUserNotificationCenter.current().delegate = self
     }
 
+    func applicationDidUpdate(_ notification: Notification) {
+        // SwiftUI mounts new scroll views as navigation and sheets change.
+        if let content = NSApp.keyWindow?.contentView {
+            Self.useOverlayVerticalScrollers(in: content)
+        }
+    }
+
+    static func useOverlayVerticalScrollers(in view: NSView) {
+        guard !view.isHidden else { return }
+        if let scrollView = view as? NSScrollView, scrollView.hasVerticalScroller,
+           scrollView.scrollerStyle != .overlay {
+            scrollView.scrollerStyle = .overlay
+        }
+        for child in view.subviews {
+            useOverlayVerticalScrollers(in: child)
+        }
+    }
+
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls where url.scheme?.lowercased() == "djconnect" {
             guard url.host?.lowercased() != "join" else { continue }

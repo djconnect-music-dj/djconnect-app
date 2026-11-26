@@ -1742,7 +1742,8 @@
 "ui.surface.push.activity" = "Allow background Live Activity updates";
 "ui.surface.push.activity.detail" = "Refresh your Live Activity on the Lock Screen and, where available, in the Dynamic Island.";
 
-"ui.vibecast.destinations.title" = "Choose a screen";
+"ui.vibecast.destinations.choose_screen" = "Choose your screen";
+"ui.vibecast.destinations.description" = "VibeCast shows your DJ session on a TV or other display.";
 "ui.vibecast.destinations.screen" = "VibeCast screen";
 "ui.vibecast.destinations.scanning" = "Looking for Google Cast devices…";
 "ui.vibecast.destinations.empty" = "No Google Cast devices found.";
@@ -1835,6 +1836,13 @@
 "ui.canvas.off" = "Off";
 "ui.canvas.matching" = "Matching";
 "ui.canvas.contrast" = "Contrasting";
+"ui.canvas.frame" = "Match the frame";
+"ui.canvas.frame_finish" = "Frame finish";
+"ui.canvas.frame_finish.white" = "White";
+"ui.canvas.frame_finish.teak" = "Teak";
+"ui.canvas.frame_finish.walnut" = "Walnut";
+"ui.canvas.frame_finish.sand_gold" = "Sand Gold Metal";
+"ui.canvas.frame_finish.terracotta" = "Terracotta";
 "ui.canvas.show_track_title" = "Show track title";
 "ui.canvas.cadence" = "Change artwork";
 "ui.canvas.cadence.track" = "Every track";
@@ -1842,7 +1850,7 @@
 "ui.canvas.cadence.1800" = "Every half hour";
 "ui.canvas.cadence.3600" = "Every hour";
 "ui.canvas.details" = "Details";
-"ui.canvas.new_artwork" = "New artwork";
+"ui.canvas.new_artwork" = "Refresh artwork";
 "ui.canvas.state.alternative_unchanged" = "The image provider returned the same artwork.";
 "ui.canvas.done" = "Done";
 "ui.canvas.cancel" = "Cancel";

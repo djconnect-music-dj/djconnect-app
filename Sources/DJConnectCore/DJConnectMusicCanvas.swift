@@ -12,6 +12,23 @@ public struct DJConnectCanvasPresentation: Codable, Equatable, Sendable {
     public var composition: String?
     public var cadence: String?
     public var matte_size: String?
+    public var match_frame: Bool?
+    public var frame_finish: String?
+
+    public static let frameMatte = "frame"
+    public static let frameFinishes = ["white", "teak", "walnut", "sand_gold", "terracotta"]
+    public static let defaultFrameFinish = "teak"
+    public var matteChoice: String { match_frame == true ? Self.frameMatte : matte }
+
+    public mutating func selectMatte(_ choice: String) {
+        if choice == Self.frameMatte {
+            matte = "matching"
+            match_frame = true
+        } else {
+            matte = choice
+            if match_frame == true { match_frame = false }
+        }
+    }
 
     public static let matteSizes = ["small", "medium", "large"]
     public static let mattes = ["off", "matching", "contrast"]
@@ -56,6 +73,8 @@ public struct DJConnectCanvasPreferences: Codable, Equatable, Sendable {
                 && (style.composition.map(Self.compositions.contains) ?? true)
                 && (style.cadence.map(Self.cadences.contains) ?? true)
                 && (style.matte_size.map(DJConnectCanvasPresentation.matteSizes.contains) ?? true)
+                && (style.match_frame != true || style.matte == "matching")
+                && (style.frame_finish.map(DJConnectCanvasPresentation.frameFinishes.contains) ?? true)
         } ?? true)
     }
     public static let compositions = ["central", "free", "full"]
@@ -82,6 +101,8 @@ public struct DJConnectCanvasTarget: Decodable, Equatable, Identifiable, Sendabl
     public let remote_cleanup: Bool
     public let preview_available: Bool
     public let can_request_artwork: Bool?
+    public let artwork_request_pending: Bool?
+    public let artwork_preview_revision: String?
     public let preview_revision: String?
     public let shared_profiles: Int
     public let forgetting: Bool?
@@ -99,6 +120,7 @@ public struct DJConnectCanvasSnapshot: Decodable, Equatable, Sendable {
     public let can_manage_devices: Bool
     public let per_screen_composition_and_cadence: Bool?
     public let per_screen_matte_size: Bool?
+    public let frame_matching_matte: Bool?
     public var isValid: Bool {
         success && contract_version == 1 && binding.count == 64 &&
         binding.allSatisfy({ $0.isHexDigit && $0.isASCII }) && revision >= 0 &&
@@ -113,6 +135,9 @@ public struct DJConnectCanvasSnapshot: Decodable, Equatable, Sendable {
             (target.preview_revision.map { revision in
                 target.preview_available && revision.utf8.count == 64 &&
                 revision.allSatisfy { $0.isASCII && $0.isHexDigit }
+            } ?? true) &&
+            (target.artwork_preview_revision.map { revision in
+                revision.utf8.count == 64 && revision.utf8.allSatisfy { (48...57).contains($0) || (97...102).contains($0) }
             } ?? true) &&
             (target.adapter != "switchbot" || !target.remote_cleanup) &&
             (target.screen.width.map { (256...8192).contains($0) } ?? true) &&
@@ -143,6 +168,7 @@ struct DJConnectCanvasRequest: Encodable {
     var expected_revision: Int?
     var patch: DJConnectCanvasPreferences?
     var target_id: String?
+    var preview_revision: String?
     var screen: DJConnectCanvasScreen?
     var cleanup_remote: Bool?
     var allow_remaining_art: Bool?

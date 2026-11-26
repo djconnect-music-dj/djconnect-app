@@ -915,7 +915,7 @@ public struct DJConnectRootView: View {
                         .padding(12)
                     .navigationTitle(screenTitle(model.language, key: "ui.djconnect", isDemoMode: model.isDemoMode))
                     .scrollContentBackgroundIfAvailable(.hidden)
-                    .scrollIndicators(.hidden)
+                    .scrollIndicators(.never)
                     .toolbar(removing: .sidebarToggle)
                     .focusSection()
                     .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 280)
@@ -9087,6 +9087,11 @@ private struct DJSessionView: View {
             .djSessionNavigationTitleStyle()
             .toolbar {
                 #if os(iOS)
+                if model.activeDJSession == nil {
+                    ToolbarItem(placement: .topBarLeading) {
+                        partyJoinMenu
+                    }
+                }
                 if model.shouldShowAppleWatchPairingReminder {
                     ToolbarItem(placement: .topBarLeading) {
                         AppleWatchPairingReminderButton(model: model)
@@ -9100,6 +9105,24 @@ private struct DJSessionView: View {
         }
         .accessibilityIdentifier("screen-dj-session")
     }
+
+    #if os(iOS)
+    private var partyJoinMenu: some View {
+        let title = localizedKey(model.language, "ui.live.join")
+        return Menu {
+            Button {
+                model.isShowingGuestJoin = true
+            } label: {
+                Label(title, systemImage: "party.popper.fill")
+            }
+            .accessibilityIdentifier("session-idle-join-party")
+        } label: {
+            Image(systemName: "party.popper")
+        }
+        .accessibilityLabel(title)
+        .accessibilityIdentifier("session-idle-party-menu")
+    }
+    #endif
 
     private func idleSessionContent(contentTop: CGFloat) -> some View {
         #if os(iOS)
@@ -9188,19 +9211,6 @@ private struct IdleDJSessionView: View {
                     dimsWhenDisabled: !refreshing && !model.isSchedulingProfileDJChoice && model.profileDJSettings.phase != .saving))
                 .disabled(model.isLoadingDJSession || (!model.isDemoMode && model.pairingStatus != .paired) || !model.canUsePlaybackFeatures || model.isSchedulingProfileDJChoice || (!model.isDemoMode && [.saving, .uncertain].contains(model.profileDJSettings.phase)))
                 .accessibilityIdentifier("session-welcome-start")
-                #if os(iOS)
-                Text(localizedKey(model.language, "ui.session.welcome.join_separator"))
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
-                Button {
-                    model.isShowingGuestJoin = true
-                } label: {
-                    VibeCastPartyJoinLabel(title: localizedKey(model.language, "ui.live.join"))
-                }
-                    .djConnectButtonStyle(DJConnectButtonStyle(expands: true))
-                    .accessibilityIdentifier("session-welcome-join")
-                #endif
                 welcomeInstruction
                 if !model.isDemoMode && (model.pairingStatus != .paired || !model.canUsePlaybackFeatures) {
                     Text(localizedKey(model.language, "ui.session.requires_connection")).font(.footnote).foregroundStyle(.secondary)
@@ -9715,47 +9725,55 @@ private struct VibeCastDestinationPicker: View {
 
     private var card: some View {
         VStack(alignment: .leading, spacing: 16) {
-            VibeCastDialogHero(title: localizedKey(language, "ui.vibecast.destinations.title"))
+            VibeCastDialogHero(title: "VibeCast")
                 .accessibilityIdentifier("vibecast-destination-hero")
-            VStack(spacing: 4) {
-                Button { openScreen(false) } label: {
-                    destinationRow(localizedKey(language, "ui.vibecast.destinations.screen")) {
-                        Image(systemName: "tv.badge.wifi")
+            Text(localizedKey(language, "ui.vibecast.destinations.description"))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 8) {
+                Text(localizedKey(language, "ui.vibecast.destinations.choose_screen"))
+                    .font(.headline)
+                    .accessibilityAddTraits(.isHeader)
+                VStack(spacing: 4) {
+                    Button { openScreen(false) } label: {
+                        destinationRow(localizedKey(language, "ui.vibecast.destinations.screen")) {
+                            Image(systemName: "tv.badge.wifi")
+                        }
                     }
-                }
-                .buttonStyle(.plain)
-                .disabled(castTarget != nil)
-                .accessibilityIdentifier("vibecast-destination-screen")
+                    .buttonStyle(.plain)
+                    .disabled(castTarget != nil)
+                    .accessibilityIdentifier("vibecast-destination-screen")
                 #if os(iOS)
-                ForEach(model.legacyCastDevices) { device in
-                    Button { model.connectLegacyCast(deviceID: device.id) } label: {
-                        destinationRow(device.name, isConnecting: model.legacyCastConnectingDeviceID == device.id) {
-                            GoogleCastDeviceGlyph()
+                    ForEach(model.legacyCastDevices) { device in
+                        Button { model.connectLegacyCast(deviceID: device.id) } label: {
+                            destinationRow(device.name, isConnecting: model.legacyCastConnectingDeviceID == device.id) {
+                                GoogleCastDeviceGlyph()
+                            }
                         }
+                        .buttonStyle(.plain)
+                        .disabled(!model.canConnectLegacyCast || model.legacyCastConnectingDeviceID != nil)
+                        .accessibilityIdentifier("vibecast-cast-device-" + device.id)
                     }
-                    .buttonStyle(.plain)
-                    .disabled(!model.canConnectLegacyCast || model.legacyCastConnectingDeviceID != nil)
-                    .accessibilityIdentifier("vibecast-cast-device-" + device.id)
-                }
-                if model.legacyCastState != .idle && model.legacyCastState != .stopped {
-                    Button(localizedKey(language, "ui.vibecast.cast.stop")) { model.stopLegacyCast() }
-                        .accessibilityIdentifier("vibecast-cast-stop")
-                }
+                    if model.legacyCastState != .idle && model.legacyCastState != .stopped {
+                        Button(localizedKey(language, "ui.vibecast.cast.stop")) { model.stopLegacyCast() }
+                            .accessibilityIdentifier("vibecast-cast-stop")
+                    }
                 #else
-                ForEach(discovery.devices) { device in
-                    Button {
-                        castFailed = false
-                        castTarget = device.receiverID
-                    } label: {
-                        destinationRow(device.name, isConnecting: castTarget != nil && castTarget == device.receiverID) {
-                            GoogleCastDeviceGlyph()
+                    ForEach(discovery.devices) { device in
+                        Button {
+                            castFailed = false
+                            castTarget = device.receiverID
+                        } label: {
+                            destinationRow(device.name, isConnecting: castTarget != nil && castTarget == device.receiverID) {
+                                GoogleCastDeviceGlyph()
+                            }
                         }
+                        .buttonStyle(.plain)
+                        .disabled(castTarget != nil || device.receiverID == nil || !model.canResolveDisplayConsent)
+                        .accessibilityIdentifier("vibecast-cast-device-" + device.id)
                     }
-                    .buttonStyle(.plain)
-                    .disabled(castTarget != nil || device.receiverID == nil || !model.canResolveDisplayConsent)
-                    .accessibilityIdentifier("vibecast-cast-device-" + device.id)
-                }
                 #endif
+                }
             }
             if let statusKey {
                 VStack(alignment: .leading, spacing: 6) {
@@ -18193,6 +18211,26 @@ struct SettingsView: View {
         .djCompactSettingsListRow()
     }
 
+    private var retainedWidgetConsentToggle: some View {
+        let enabled = model.passiveSurfaces.retainedWidgetEnabled
+        let sessionID = model.activeDJSession?.id
+        let offered = sessionID != nil && retainedWidgetSessionID == sessionID
+        return Toggle(isOn: Binding(
+            get: { model.passiveSurfaces.retainedWidgetEnabled },
+            set: { enabled in Task { await model.setRetainedWidgetContributionEnabled(enabled) } }
+        )) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(localizedKey(model.language, "ui.widget.retained.title"))
+                Text(localizedKey(model.language, "ui.widget.retained.detail"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .disabled(model.passiveSurfaces.busy(.widget) || (!offered && !enabled))
+        .accessibilityIdentifier("settings-widget-retained-contribution")
+        .djCompactSettingsListRow()
+    }
+
     private static func localizedAskDJHistoryExportFallback(language: String) -> String {
         localizedKey(language, "ui.ask.dj.history.export.failed")
     }
@@ -18215,22 +18253,6 @@ struct SettingsView: View {
                     .djMusicDNASettingsListRow()
                     DJConnectGlassPreferenceToggle(language: model.language)
                         .djMusicDNASettingsListRow()
-                    if model.passiveSurfaces.retainedWidgetEnabled ||
-                        (retainedWidgetSessionID != nil && retainedWidgetSessionID == model.activeDJSession?.id) {
-                        Toggle(isOn: Binding(get: { model.passiveSurfaces.retainedWidgetEnabled }, set: { enabled in
-                            Task { await model.setRetainedWidgetContributionEnabled(enabled) }
-                        })) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(localizedKey(model.language, "ui.widget.retained.title"))
-                                Text(localizedKey(model.language, "ui.widget.retained.detail"))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .disabled(model.passiveSurfaces.busy(.widget))
-                        .accessibilityIdentifier("settings-widget-retained-contribution")
-                        .djMusicDNASettingsListRow()
-                    }
                     if model.isDemoMode {
                         LabeledContent(localizedKey(model.language, "ui.demo.mode")) {
                             Button(localizedKey(model.language, "ui.stop.demo.mode"), role: .destructive) {
@@ -18396,6 +18418,7 @@ struct SettingsView: View {
                         nativePushConsentToggle(.liveActivityUpdate, title: "ui.surface.push.activity")
                         #endif
                     }
+                    retainedWidgetConsentToggle
                     PermissionStatusRow(
                         title: localizedKey(model.language, "ui.microphone"),
                         detail: localizedKey(model.language, "ui.needed.for.push.to.talk.voice.requests"),
@@ -18563,11 +18586,13 @@ struct SettingsView: View {
                 model.startPairingWait()
             }
             .task(id: model.activeDJSession?.id) {
-                retainedWidgetSessionID = nil
-                let sessionID = model.activeDJSession?.id
-                if await model.supportsRetainedWidgetContribution(), !Task.isCancelled {
-                    retainedWidgetSessionID = sessionID
+                guard let sessionID = model.activeDJSession?.id else {
+                    retainedWidgetSessionID = nil
+                    return
                 }
+                let offered = await model.supportsRetainedWidgetContribution()
+                guard !Task.isCancelled, model.activeDJSession?.id == sessionID else { return }
+                retainedWidgetSessionID = offered ? sessionID : nil
             }
         }
         .djConnectButtonStyle(DJConnectButtonStyle(usesDestructiveGlass: true))

@@ -1742,7 +1742,8 @@
 "ui.surface.push.activity" = "Autoriser les mises à jour des activités en direct en arrière-plan";
 "ui.surface.push.activity.detail" = "Actualisez votre activité en direct sur l’écran verrouillé et, si disponible, dans la Dynamic Island.";
 
-"ui.vibecast.destinations.title" = "Choisir un écran";
+"ui.vibecast.destinations.choose_screen" = "Choisis ton écran";
+"ui.vibecast.destinations.description" = "VibeCast affiche ta session DJ sur un téléviseur ou un autre écran.";
 "ui.vibecast.destinations.screen" = "Écran VibeCast";
 "ui.vibecast.destinations.scanning" = "Recherche d’appareils Google Cast…";
 "ui.vibecast.destinations.empty" = "Aucun appareil Google Cast détecté.";
@@ -1835,6 +1836,13 @@
 "ui.canvas.off" = "Désactivé";
 "ui.canvas.matching" = "Assorti";
 "ui.canvas.contrast" = "Contrasté";
+"ui.canvas.frame" = "Assorti au cadre";
+"ui.canvas.frame_finish" = "Finition du cadre";
+"ui.canvas.frame_finish.white" = "Blanc";
+"ui.canvas.frame_finish.teak" = "Teck";
+"ui.canvas.frame_finish.walnut" = "Noyer";
+"ui.canvas.frame_finish.sand_gold" = "Sand Gold Metal";
+"ui.canvas.frame_finish.terracotta" = "Terracotta";
 "ui.canvas.show_track_title" = "Afficher le titre du morceau";
 "ui.canvas.cadence" = "Changer d’œuvre";
 "ui.canvas.cadence.track" = "À chaque titre";
@@ -1842,7 +1850,7 @@
 "ui.canvas.cadence.1800" = "Toutes les demi-heures";
 "ui.canvas.cadence.3600" = "Toutes les heures";
 "ui.canvas.details" = "Détails";
-"ui.canvas.new_artwork" = "Nouvelle œuvre";
+"ui.canvas.new_artwork" = "Renouveler l’œuvre";
 "ui.canvas.state.alternative_unchanged" = "Le générateur d’images a renvoyé la même œuvre.";
 "ui.canvas.done" = "Terminé";
 "ui.canvas.cancel" = "Annuler";
