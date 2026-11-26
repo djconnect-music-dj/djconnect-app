@@ -298,13 +298,14 @@ configured physical devices before publishing redacted evidence.
 ### Internal Release: iPad
 
 `Apple iPad Secure Distribution Relay` is the separate, manifest-bound path
-for an internal iPad deployment. It accepts only an approved
-`target_device=ipad` binding for the unsigned iOS artifact, verifies the exact
+for an internal iPad deployment. It accepts only the approved binding for
+the requested iPad target and unsigned iOS artifact, verifies the exact
 checksum and source candidate, and installs only on the configured physical
-iPad. The `apple-secure-distribution` environment requires
-`DJCONNECT_APPLE_IPAD_UDID` and the existing local Apple Development signing
-identity. Neither the iPad UDID nor any profile/private key is written to a
-workflow artifact or log.
+iPad. The existing `ipad` target uses `DJCONNECT_APPLE_IPAD_UDID`. The separate
+`ipad-mini` target requires its own manifest asset binding and
+`DJCONNECT_APPLE_IPAD_MINI_UDID` in the same protected environment. Both use the
+existing local Apple Development signing identity. Neither the iPad UDID nor
+any profile or private key is written to a workflow artifact or log.
 
 The relay downloads the checksum-bound asset through the GitHub Releases API
 using the existing scoped `PUBLIC_RELEASES_TOKEN`; it does not rely on an
