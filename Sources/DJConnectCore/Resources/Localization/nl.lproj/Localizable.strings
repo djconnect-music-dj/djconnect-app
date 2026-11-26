@@ -1842,6 +1842,8 @@
 "ui.canvas.cadence.1800" = "Ieder half uur";
 "ui.canvas.cadence.3600" = "Ieder uur";
 "ui.canvas.details" = "Details";
+"ui.canvas.new_artwork" = "Nieuw kunstwerk";
+"ui.canvas.state.alternative_unchanged" = "De beeldgenerator gaf hetzelfde kunstwerk terug.";
 "ui.canvas.done" = "Gereed";
 "ui.canvas.cancel" = "Annuleren";
 "ui.canvas.working" = "Bezig";

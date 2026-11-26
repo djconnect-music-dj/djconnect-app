@@ -1842,6 +1842,8 @@
 "ui.canvas.cadence.1800" = "Alle halbe Stunde";
 "ui.canvas.cadence.3600" = "Jede Stunde";
 "ui.canvas.details" = "Details";
+"ui.canvas.new_artwork" = "Neues Kunstwerk";
+"ui.canvas.state.alternative_unchanged" = "Der Bildgenerator hat dasselbe Kunstwerk zurückgegeben.";
 "ui.canvas.done" = "Fertig";
 "ui.canvas.cancel" = "Abbrechen";
 "ui.canvas.working" = "In Bearbeitung";

@@ -98,7 +98,8 @@ func musicCanvasLocalizesTheEntirePanel(language: String) {
     for key in ["open", "description", "enabled", "screens", "provider_required",
                 "composition", "matte", "cadence", "cadence.track", "cadence.900",
                 "cadence.1800", "cadence.3600", "forget", "cleanup_remote",
-                "state.delivered_unknown", "uncertain", "tv_permission", "not_offered"] {
+                "state.delivered_unknown", "uncertain", "tv_permission", "not_offered",
+                "new_artwork", "state.alternative_unchanged"] {
         let full = "ui.canvas." + key
         let value = DJConnectLocalization.localized(key: full, language: language)
         #expect(!value.isEmpty && value != full)
@@ -152,6 +153,12 @@ private final class CanvasURLProtocol: URLProtocol, @unchecked Sendable {
             data = Data("{\"success\":true,\"capabilities\":{\"music_canvas\":\(wire.capability)},\"contract_versions\":{\"music_canvas\":1}}".utf8)
         } else if path.hasSuffix("/read") {
             data = wire.fixture
+        } else if path.hasSuffix("/new_artwork") {
+            data = (try? JSONSerialization.data(withJSONObject: [
+                "success": true, "contract_version": 1, "state": "confirmed",
+                "binding": body["binding"] ?? NSNull(), "operation_id": body["operation_id"] ?? NSNull(),
+                "revision": body["expected_revision"] ?? NSNull(),
+            ])) ?? Data()
         } else {
             data = Data(#"{"success":false,"error":"synthetic_failure"}"#.utf8)
         }
@@ -197,4 +204,33 @@ func musicCanvasMissingCapabilityCannotStartAnUnqualifiedRead() async throws {
         #expect((error as? DJConnectCanvasReadFailure) == .notOffered)
     }
     #expect(CanvasWire.lock.withLock { wire.requests.count } == 1)
+}
+
+@Test(.isolatedClientResources) @MainActor
+func musicCanvasNewArtworkSendsOnlyTheSupportedScreenAndOperation() async throws {
+    let rawFixture = try canvasFixture()
+    let older = try JSONDecoder().decode(DJConnectCanvasSnapshot.self, from: rawFixture)
+    var json = try #require(JSONSerialization.jsonObject(with: rawFixture) as? [String: Any])
+    var targets = try #require(json["targets"] as? [[String: Any]])
+    targets[0]["can_request_artwork"] = true
+    json["targets"] = targets
+    json["manual_artwork_refresh"] = true
+    let wire = CanvasWire(fixture: try JSONSerialization.data(withJSONObject: json))
+    defer { wire.close() }
+    let client = wire.client()
+    let snapshot = try await client.musicCanvas()
+    let target = snapshot.targets[0].id
+    let operation = UUID()
+    await #expect(throws: DJConnectError.self) {
+        try await client.requestNewMusicCanvasArtwork(older, targetID: target, operationID: operation)
+    }
+    let receipt = try await client.requestNewMusicCanvasArtwork(snapshot, targetID: target, operationID: operation)
+    #expect(receipt.revision == snapshot.revision)
+    let requests = CanvasWire.lock.withLock { wire.requests }
+    let request = try #require(requests.last)
+    #expect(requests.count == 3 && request.0.hasSuffix("/music_canvas/new_artwork"))
+    #expect(Set(request.1.keys) == ["contract_version", "device_id", "client_type", "binding",
+        "target_id", "operation_id", "expected_revision"])
+    #expect(request.1["target_id"] as? String == target)
+    #expect(request.1["operation_id"] as? String == operation.uuidString.lowercased())
 }

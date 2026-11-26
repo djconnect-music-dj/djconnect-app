@@ -1842,6 +1842,8 @@
 "ui.canvas.cadence.1800" = "Every half hour";
 "ui.canvas.cadence.3600" = "Every hour";
 "ui.canvas.details" = "Details";
+"ui.canvas.new_artwork" = "New artwork";
+"ui.canvas.state.alternative_unchanged" = "The image provider returned the same artwork.";
 "ui.canvas.done" = "Done";
 "ui.canvas.cancel" = "Cancel";
 "ui.canvas.working" = "Working";

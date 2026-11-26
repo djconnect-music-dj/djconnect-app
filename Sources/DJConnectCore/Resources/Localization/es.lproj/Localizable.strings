@@ -1842,6 +1842,8 @@
 "ui.canvas.cadence.1800" = "Cada media hora";
 "ui.canvas.cadence.3600" = "Cada hora";
 "ui.canvas.details" = "Detalles";
+"ui.canvas.new_artwork" = "Nueva obra";
+"ui.canvas.state.alternative_unchanged" = "El generador de imágenes devolvió la misma obra.";
 "ui.canvas.done" = "Listo";
 "ui.canvas.cancel" = "Cancelar";
 "ui.canvas.working" = "En curso";

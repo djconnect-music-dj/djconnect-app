@@ -84,6 +84,17 @@ struct MusicCanvasView: View {
                 }
             }
             VStack(spacing: 12) {
+                if let selected, let snapshot, snapshot.manual_artwork_refresh == true {
+                    Button(text("new_artwork")) {
+                        perform(snapshot) { client, id in
+                            try await client.requestNewMusicCanvasArtwork(snapshot, targetID: selected.id, operationID: id)
+                        }
+                    }
+                    .djConnectButtonStyle(DJConnectButtonStyle(expands: true))
+                    .controlSize(.large)
+                    .disabled(busy || !snapshot.image_generation_available || selected.can_request_artwork != true)
+                    .accessibilityIdentifier("music-canvas-new-artwork")
+                }
                 if selected != nil {
                     Button(DJConnectLocalization.localized(key: "ui.session.intro.back", language: model.language)) {
                         selected = nil
@@ -334,6 +345,7 @@ struct MusicCanvasView: View {
         let known = ["disabled", "waiting_music", "preparing", "delivering", "displayed", "delivered_unknown",
                      "needs_setup", "discovered", "ready", "busy", "image_provider_required"]
         if known.contains(state) { return text("state." + state) }
+        if state == "canvas_alternative_unchanged" { return text("state.alternative_unchanged") }
         if state == "canvas_manual_takeover" { return text("state.waiting_screen") }
         if state == "canvas_public_asset_required" { return text("asset_required") }
         return text("state.unavailable")
