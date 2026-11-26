@@ -42,7 +42,7 @@ jobs:
           test "$(jq -r '.artifact_sha256' "$evidence")" = "$ARTIFACT_SHA256"
           watch_validation=required
           watch_installation=completed
-          if [ "$MANIFEST_ID" = release-apple-internal-4.1.0-40546-iphone-only ]; then
+          if [[ "$MANIFEST_ID" = release-apple-internal-4.1.0-40546-iphone-only || "$MANIFEST_ID" = release-apple-internal-4.1.0-40547-private-devices ]]; then
             watch_validation=disabled
             watch_installation=skipped
           fi
@@ -56,6 +56,7 @@ jobs:
             release-apple-internal-4.1.0-40545) manifest_file=PLATFORM_4_1_APPLE_OPERATIONAL_MANIFEST.json; manifest_version=4.1.0 ;;
             release-apple-internal-4.1.0-40546) manifest_file=PLATFORM_4_1_APPLE_40546_IPHONE_OPERATIONAL_MANIFEST.json; manifest_version=4.1.0 ;;
             release-apple-internal-4.1.0-40546-iphone-only) manifest_file=PLATFORM_4_1_APPLE_40546_IPHONE_ONLY_OPERATIONAL_MANIFEST.json; manifest_version=4.1.0 ;;
+            release-apple-internal-4.1.0-40547-private-devices) manifest_file=PLATFORM_4_1_APPLE_40547_PRIVATE_DEVICES_OPERATIONAL_MANIFEST.json; manifest_version=4.1.0 ;;
             *) echo "Unrecognized Apple internal release manifest." >&2; exit 1 ;;
           esac
           curl --fail --silent --show-error --location "https://raw.githubusercontent.com/djconnect-music-dj/djconnect/main/docs/release/$manifest_file" --output "$manifest"
@@ -72,7 +73,9 @@ jobs:
           jq -e --arg version "$expected_version" '[.result.apps[] | select(.bundleIdentifier == "dev.djconnect.ios" and .version == $version)] | length == 1' iphone-apps.json >/dev/null
           if [ "$watch_validation" = disabled ]; then
             test "$(jq -r '.deployment_constraints.iphone_only_route' "$manifest")" = APPROVED
-            jq -e '[.result.apps[] | select(.bundleIdentifier == "dev.djconnect.ios" and (.bundleVersion | tostring) == "40546")] | length == 1' iphone-apps.json >/dev/null
+            expected_build=40546
+            if [ "$MANIFEST_ID" = release-apple-internal-4.1.0-40547-private-devices ]; then expected_build=40547; fi
+            jq -e --arg build "$expected_build" '[.result.apps[] | select(.bundleIdentifier == "dev.djconnect.ios" and (.bundleVersion | tostring) == $build)] | length == 1' iphone-apps.json >/dev/null
             echo 'paired_watch_result=NOT_APPLICABLE' >> "$GITHUB_OUTPUT"
             exit 0
           fi

@@ -38,7 +38,10 @@ def verify_binding(manifest, *, manifest_id, source_sha, source_repository, devi
         raise ValueError("Expected one binding for the requested device")
     binding = matches[0]
     watch_requirement = WATCH_REQUIREMENTS[device]
-    if device == "iphone" and manifest_id == "release-apple-internal-4.1.0-40546-iphone-only":
+    if device == "iphone" and manifest_id in {
+        "release-apple-internal-4.1.0-40546-iphone-only",
+        "release-apple-internal-4.1.0-40547-private-devices",
+    }:
         if manifest.get("deployment_constraints", {}).get("iphone_only_route") != "APPROVED":
             raise ValueError("Standalone iPhone deployment is not approved")
         watch_requirement = "disabled"

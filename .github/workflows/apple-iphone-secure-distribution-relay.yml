@@ -51,6 +51,7 @@ jobs:
             release-apple-internal-4.1.0-40545) manifest_file=PLATFORM_4_1_APPLE_OPERATIONAL_MANIFEST.json; manifest_version=4.1.0 ;;
             release-apple-internal-4.1.0-40546) manifest_file=PLATFORM_4_1_APPLE_40546_IPHONE_OPERATIONAL_MANIFEST.json; manifest_version=4.1.0 ;;
             release-apple-internal-4.1.0-40546-iphone-only) manifest_file=PLATFORM_4_1_APPLE_40546_IPHONE_ONLY_OPERATIONAL_MANIFEST.json; manifest_version=4.1.0 ;;
+            release-apple-internal-4.1.0-40547-private-devices) manifest_file=PLATFORM_4_1_APPLE_40547_PRIVATE_DEVICES_OPERATIONAL_MANIFEST.json; manifest_version=4.1.0 ;;
             *) echo "Unrecognized Apple internal release manifest." >&2; exit 1 ;;
           esac
           curl --fail --silent --show-error --location "https://raw.githubusercontent.com/djconnect-music-dj/djconnect/main/docs/release/$manifest_file" --output "$manifest"
@@ -85,7 +86,7 @@ jobs:
           security find-identity -v -p codesigning | grep -F -- "$SIGNING_IDENTITY" >/dev/null
           xcrun devicectl list devices --json-output devices.json >/dev/null
           jq -e --arg udid "$IPHONE_UDID" '[.result.devices[] | select(.hardwareProperties.udid == $udid and .hardwareProperties.deviceType == "iPhone" and .hardwareProperties.reality == "physical" and .deviceProperties.developerModeStatus == "enabled")] | length == 1' devices.json >/dev/null
-          if [ "$MANIFEST_ID" != release-apple-internal-4.1.0-40546-iphone-only ]; then
+          if [[ "$MANIFEST_ID" != release-apple-internal-4.1.0-40546-iphone-only && "$MANIFEST_ID" != release-apple-internal-4.1.0-40547-private-devices ]]; then
             test -n "$WATCH_UDID"
             jq -e --arg udid "$WATCH_UDID" '[.result.devices[] | select(.hardwareProperties.udid == $udid and .hardwareProperties.deviceType == "appleWatch" and .hardwareProperties.reality == "physical" and .deviceProperties.developerModeStatus == "enabled")] | length == 1' devices.json >/dev/null
           fi
@@ -102,8 +103,10 @@ jobs:
           app_bundle="$staging/DJConnect.app"
           watch_app_bundle="$app_bundle/Watch/DJConnect.app"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app_bundle/Info.plist")" = dev.djconnect.ios
-          if [ "$MANIFEST_ID" = release-apple-internal-4.1.0-40546-iphone-only ]; then
-            test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app_bundle/Info.plist")" = 40546
+          if [[ "$MANIFEST_ID" = release-apple-internal-4.1.0-40546-iphone-only || "$MANIFEST_ID" = release-apple-internal-4.1.0-40547-private-devices ]]; then
+            expected_build=40546
+            if [ "$MANIFEST_ID" = release-apple-internal-4.1.0-40547-private-devices ]; then expected_build=40547; fi
+            test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app_bundle/Info.plist")" = "$expected_build"
             Tools/release/resign_internal_ios_bundle.sh "$app_bundle" "$SIGNING_IDENTITY" "$IPHONE_UDID"
             test ! -e "$app_bundle/Watch"
             xcrun devicectl device install app --device "$IPHONE_UDID" "$app_bundle"
@@ -127,7 +130,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import json, os
-          standalone = os.environ["MANIFEST_ID"] == "release-apple-internal-4.1.0-40546-iphone-only"
+          standalone = os.environ["MANIFEST_ID"] in {"release-apple-internal-4.1.0-40546-iphone-only", "release-apple-internal-4.1.0-40547-private-devices"}
           json.dump({"kind":"apple_private_iphone_deployment","candidate_sha":os.environ["CANDIDATE_SHA"],"manifest_id":os.environ["MANIFEST_ID"],"artifact_id":os.environ["ARTIFACT_ID"],"artifact_sha256":os.environ["ARTIFACT_SHA256"],"target":"apple_private_device","target_device":"iphone","paired_watch_validation":"disabled" if standalone else "required","paired_watch_installation":"skipped" if standalone else "completed","deployment_result":"DEPLOYED_PENDING_SMOKE"}, open("apple-iphone-deployment-evidence.json", "w"), sort_keys=True)
           PY
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
