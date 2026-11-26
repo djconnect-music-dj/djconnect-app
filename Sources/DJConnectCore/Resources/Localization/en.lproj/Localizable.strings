@@ -1774,7 +1774,7 @@
 "ui.ask_moments.loading_inventory" = "Loading available Moments…";
 "ui.ask_moments.unavailable" = "Moments are not available here yet.";
 "ui.ask_moments.subject" = "Subject";
-"ui.ask_moments.choose" = "Choose a Moment";
+"ui.ask_moments.choose" = "Choose another Moment";
 "ui.ask_moments.no_result" = "I could not find a well-supported Moment about this subject.";
 "ui.ask_moments.temporary" = "This is temporarily unavailable. Please try again later.";
 "ui.ask_moments.denied" = "This Moment is not available for this session.";
