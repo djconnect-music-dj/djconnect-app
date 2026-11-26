@@ -1,7 +1,9 @@
 """Exercise the actual Apple workflow manifest selectors with both owners."""
 import json
+import os
 import re
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -49,6 +51,18 @@ class AppleRepositoryManifestIdentityTests(unittest.TestCase):
                 self.assertTrue(select(new, 'b' * 40, '4.1.0'))
                 self.assertFalse(select(new, 'b' * 40, '4.0.0'))
                 self.assertFalse(select('other/djconnect-app', source, '4.0.0'))
+
+
+    def test_ipad_smoke_artifact_is_json_for_each_device(self):
+        workflow = (ROOT / '.github/workflows/apple-ipad-post-deployment-smoke.yml').read_text()
+        evidence_script, = re.findall(r'        run: \|\n          ([^\n]+apple-ipad-smoke-evidence\.json)\n', workflow)
+        for target in ('ipad', 'ipad-mini'):
+            with self.subTest(target=target), tempfile.TemporaryDirectory() as scratch:
+                subprocess.run(['bash', '-ec', evidence_script], cwd=scratch,
+                               env={**os.environ, 'TARGET_DEVICE': target}, check=True)
+                evidence = json.loads((Path(scratch) / 'apple-ipad-smoke-evidence.json').read_text())
+                self.assertEqual(evidence['target_device'], target)
+                self.assertEqual(evidence['final_result'], 'SMOKE_PASSED')
 
 
 if __name__ == '__main__':

@@ -71,7 +71,7 @@ jobs:
           jq -e --arg version "$expected_version" --arg build "$expected_build" '[.result.apps[] | select(.bundleIdentifier == "dev.djconnect.ios" and .version == $version and .bundleVersion == $build)] | length == 1' ipad-apps.json >/dev/null
       - name: Publish redacted iPad smoke evidence
         run: |
-          printf '%s\n' '{"kind":"apple_private_ipad_smoke","target":"apple_private_device","target_device":"%s","paired_watch_result":"NOT_APPLICABLE","installed_version_result":"PASS","final_result":"SMOKE_PASSED"}' "$TARGET_DEVICE" > apple-ipad-smoke-evidence.json
+          jq -nc --arg target "$TARGET_DEVICE" '{"kind":"apple_private_ipad_smoke","target":"apple_private_device","target_device":$target,"paired_watch_result":"NOT_APPLICABLE","installed_version_result":"PASS","final_result":"SMOKE_PASSED"}' > apple-ipad-smoke-evidence.json
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: apple-ipad-smoke-evidence
