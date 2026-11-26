@@ -1937,3 +1937,6 @@
 
 "ui.live.tv_address" = "TV address";
 "ui.live.tv_code" = "TV code";
+
+"ui.live.requested" = "Requested";
+"ui.live.requested_empty" = "No requested tracks are waiting.";

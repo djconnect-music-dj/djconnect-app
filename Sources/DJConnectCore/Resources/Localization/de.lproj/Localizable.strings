@@ -1937,3 +1937,6 @@
 
 "ui.live.tv_address" = "Adresse auf dem Fernseher";
 "ui.live.tv_code" = "Code auf dem Fernseher";
+
+"ui.live.requested" = "Gewünscht";
+"ui.live.requested_empty" = "Es sind keine Musikwünsche in der Warteschlange.";

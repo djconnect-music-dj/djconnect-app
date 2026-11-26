@@ -137,7 +137,7 @@ struct DJConnectLiveGuestView: View {
     @State private var mode: Mode = .flow
     @State private var artworkSample: (artwork: DJConnectLiveGuestModel.Artwork, color: Color)?
 
-    private enum Mode { case flow, horizon, vibeScape }
+    private enum Mode { case flow, horizon, vibeScape, requested }
 
     private let spacing: CGFloat = 12
     private let gutter: CGFloat = 20
@@ -156,6 +156,8 @@ struct DJConnectLiveGuestView: View {
                     flow(at: clock.date, tint: tint)
                 case .horizon:
                     horizon(tint: tint)
+                case .requested:
+                    requestedTracks
                 case .vibeScape:
                     DJConnectGuestVibescape(guest: guest, language: language)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -208,6 +210,19 @@ struct DJConnectLiveGuestView: View {
                 .font(.headline)
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 8)
+            if guest.requestedTracks != nil {
+                Menu {
+                    Button { mode = .requested } label: {
+                        Label(text("ui.live.requested"), systemImage: "music.note.list")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel(text("ui.live.requested"))
+                .accessibilityIdentifier("live-guest-requested-menu")
+            }
             Image(systemName: "person.2.wave.2.fill")
                 .font(.subheadline)
                 .foregroundStyle(.white.opacity(0.78))
@@ -230,9 +245,43 @@ struct DJConnectLiveGuestView: View {
     private var modeSelector: some View {
         SessionModeToggleButtons(
             showsForecast: Binding(get: { mode == .horizon }, set: { mode = $0 ? .horizon : .flow }),
-            language: language, openVibeScape: { mode = .vibeScape }, isVibeScape: mode == .vibeScape
+            language: language, openVibeScape: { mode = .vibeScape }, isVibeScape: mode == .vibeScape,
+            showsAnotherPage: mode == .requested
         )
         .padding(.horizontal, gutter)
+    }
+
+    private var requestedTracks: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: spacing) {
+                Text(text("ui.live.requested"))
+                    .font(.title2.bold())
+                    .accessibilityAddTraits(.isHeader)
+                if let tracks = guest.requestedTracks, !tracks.isEmpty {
+                    ForEach(tracks) { track in
+                        QueueTrackRow(
+                            title: track.title,
+                            subtitle: track.artist.isEmpty ? nil : track.artist
+                        ) {
+                            if let artwork = track.artwork {
+                                DJConnectGuestArtwork(guest: guest, artwork: artwork, queueCover: true)
+                            } else {
+                                QueueArtworkView(url: nil)
+                            }
+                        } accessory: {
+                            EmptyView()
+                        }
+                    }
+                } else {
+                    Text(text("ui.live.requested_empty")).foregroundStyle(.secondary)
+                }
+            }
+            .frame(maxWidth: 1000)
+            .padding(.horizontal, gutter)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity)
+        }
+        .accessibilityIdentifier("live-guest-requested")
     }
 
     private func clock(_ date: Date) -> some View {
@@ -521,6 +570,7 @@ private struct DJConnectGuestArtwork: View {
     let artwork: DJConnectLiveGuestModel.Artwork
     var currentPlayback = false
     var isPlaying = false
+    var queueCover = false
     var onTint: ((Color) -> Void)? = nil
     @State private var loadedCover: (artwork: DJConnectLiveGuestModel.Artwork, image: CGImage, tint: Color?)?
 
@@ -531,6 +581,8 @@ private struct DJConnectGuestArtwork: View {
                     .accessibilityIdentifier("live-guest-artwork")
                 if currentPlayback {
                     cover.djAlbumArtworkGlassCard(tint: loadedCover.tint)
+                } else if queueCover {
+                    cover.clipShape(RoundedRectangle(cornerRadius: 10))
                 } else {
                     cover.clipShape(RoundedRectangle(cornerRadius: 9))
                         .padding(4)
@@ -539,6 +591,8 @@ private struct DJConnectGuestArtwork: View {
             } else if currentPlayback {
                 AlbumArtworkPlaceholder(tint: .gray, isPlaying: isPlaying)
                     .djAlbumArtworkGlassCard(tint: nil)
+            } else if queueCover {
+                QueueArtworkView(url: nil)
             }
         }
         .task(id: artwork) {

@@ -1937,3 +1937,6 @@
 
 "ui.live.tv_address" = "Adresse affichée sur le téléviseur";
 "ui.live.tv_code" = "Code affiché sur le téléviseur";
+
+"ui.live.requested" = "Demandés";
+"ui.live.requested_empty" = "Aucun morceau demandé n’est en attente.";
