@@ -1903,6 +1903,13 @@
 
 "ui.live.help_title" = "Ayuda para invitados";
 
+"ui.live.help_requests" = "Peticiones de canciones";
+"ui.live.help_request_track" = "Pon la canción Promise de HAEVN";
+"ui.live.help_request_title" = "Pon Hello";
+"ui.live.help_questions" = "Preguntas sobre música";
+"ui.live.help_question_playing" = "¿Qué está sonando ahora?";
+"ui.live.help_question_artist" = "¿Quiénes son los miembros de HAEVN?";
+
 "ui.live.help" = "Pide una canción o pregunta sobre la música. No puedes controlar la reproducción ni cambiar los ajustes del anfitrión. Tu conversación es temporal y desaparece al salir.";
 
 "ui.live.composer" = "Pregunta musical o petición de canción…";

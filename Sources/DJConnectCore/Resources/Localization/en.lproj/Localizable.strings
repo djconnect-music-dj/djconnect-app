@@ -1903,6 +1903,13 @@
 
 "ui.live.help_title" = "Guest help";
 
+"ui.live.help_requests" = "Song requests";
+"ui.live.help_request_track" = "Could you play Promise by HAEVN?";
+"ui.live.help_request_title" = "Play Hello";
+"ui.live.help_questions" = "Music questions";
+"ui.live.help_question_playing" = "What is playing now?";
+"ui.live.help_question_artist" = "Who are the band members of HAEVN?";
+
 "ui.live.help" = "Request a song or ask about the music. You cannot control playback or change the host’s session settings. Your conversation is temporary and disappears when you leave.";
 
 "ui.live.composer" = "Ask about music or request a song…";

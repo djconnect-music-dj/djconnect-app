@@ -1903,6 +1903,13 @@
 
 "ui.live.help_title" = "Gästehilfe";
 
+"ui.live.help_requests" = "Musikwünsche";
+"ui.live.help_request_track" = "Spiel den Titel Promise von HAEVN";
+"ui.live.help_request_title" = "Spiel Hello";
+"ui.live.help_questions" = "Fragen zur Musik";
+"ui.live.help_question_playing" = "Was läuft gerade?";
+"ui.live.help_question_artist" = "Wer sind die Mitglieder von HAEVN?";
+
 "ui.live.help" = "Wünsche dir ein Lied oder frage nach der Musik. Du kannst die Wiedergabe und Sitzungseinstellungen des Gastgebers nicht steuern. Dein Gespräch ist vorübergehend und wird beim Verlassen gelöscht.";
 
 "ui.live.composer" = "Musikfrage oder Liedwunsch…";

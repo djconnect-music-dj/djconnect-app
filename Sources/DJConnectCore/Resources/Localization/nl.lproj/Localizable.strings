@@ -1903,6 +1903,13 @@
 
 "ui.live.help_title" = "Hulp voor gasten";
 
+"ui.live.help_requests" = "Verzoeknummers";
+"ui.live.help_request_track" = "Kun je Promise van HAEVN draaien?";
+"ui.live.help_request_title" = "Speel Hello";
+"ui.live.help_questions" = "Muziekvragen";
+"ui.live.help_question_playing" = "Welk nummer speelt er nu?";
+"ui.live.help_question_artist" = "Wie zijn de bandleden van HAEVN?";
+
 "ui.live.help" = "Vraag een nummer aan of stel een vraag over de muziek. Je kunt het afspelen niet bedienen of sessie-instellingen van de host wijzigen. Je gesprek is tijdelijk en verdwijnt als je vertrekt.";
 
 "ui.live.composer" = "Muziekvraag of verzoeknummer…";
