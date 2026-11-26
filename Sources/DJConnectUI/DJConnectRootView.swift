@@ -1317,15 +1317,16 @@ public struct DJConnectRootView: View {
         )
         return NativeBottomTabBar(
             screens: [
-                iPadTabScreen(.djSession) { DJSessionView(model: model) { selectedSection = .queue } },
-                iPadTabScreen(.queue) { QueueView(model: model) },
-                iPadTabScreen(.trackInsight) { TrackInsightView(model: model) },
-                iPadTabScreen(.discovery) { MusicDiscoveryView(model: model) },
-                AnyView(MoreView(model: model, requestedSection: isMoreSectionSelected && selectedSection != .more ? selectedSection : nil) {
-                    selectedSection = .djSession
-                }.id(moreResetID)
-                    .environment(\.djConnectContentSizeClass, horizontalSizeClass)
-                    .safeAreaInset(edge: .bottom, spacing: 0) { nativeTabOfflineNotice })
+                iPadTabScreen { DJSessionView(model: model) { selectedSection = .queue } },
+                iPadTabScreen { QueueView(model: model) },
+                iPadTabScreen { TrackInsightView(model: model) },
+                iPadTabScreen { MusicDiscoveryView(model: model) },
+                iPadTabScreen {
+                    MoreView(model: model, requestedSection: isMoreSectionSelected && selectedSection != .more ? selectedSection : nil) {
+                        selectedSection = .djSession
+                    }
+                    .id(moreResetID)
+                }
             ],
             titles: [localizedKey(model.language, "ui.session.title"), localizedKey(model.language, "ui.queue"), "Track Insight",
                      localizedKey(model.language, "ui.discover"), localizedKey(model.language, "ui.more")],
@@ -1333,12 +1334,11 @@ public struct DJConnectRootView: View {
             scenePhase: scenePhase, selection: selection)
     }
 
-    private func iPadTabScreen<Content: View>(_ section: DJConnectSection, @ViewBuilder content: () -> Content) -> AnyView {
-        AnyView(DJConnectDetailViewport(section: section, mood: model.activeDJSession?.selectedMood) {
-            content()
-        }
-        .environment(\.djConnectContentSizeClass, horizontalSizeClass)
-        .safeAreaInset(edge: .bottom, spacing: 0) { nativeTabOfflineNotice })
+    private func iPadTabScreen<Content: View>(@ViewBuilder content: () -> Content) -> AnyView {
+        // Let each navigation stack paint its background across the tab host.
+        AnyView(content()
+            .environment(\.djConnectContentSizeClass, horizontalSizeClass)
+            .safeAreaInset(edge: .bottom, spacing: 0) { nativeTabOfflineNotice })
     }
 
     private var isMoreSectionSelected: Bool {
@@ -4256,7 +4256,9 @@ struct TrackInsightView: View {
 
     private func maxContentWidth(for size: CGSize) -> CGFloat {
         #if os(iOS)
-        if UIDevice.current.userInterfaceIdiom == .pad { return size.width }
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            return djConnectListViewportLimit(for: size) ?? size.width
+        }
         #endif
         return shouldUseWideLayout(for: size) ? djConnectMacDetailContentMaxWidth : djConnectContentMaxWidth
     }
@@ -17308,16 +17310,7 @@ private struct MoreView: View {
             .background(DJConnectMainScreenBackground())
             .navigationTitle(screenTitle(model.language, key: "More", isDemoMode: model.isDemoMode))
             .navigationDestination(item: $destinationSelection) { section in
-                #if os(iOS)
-                if UIDevice.current.userInterfaceIdiom == .pad && section.usesConstrainedDetail {
-                    DJConnectDetailViewport(section: section, mood: nil) { destination(section) }
-                        .djConnectMouseBackNavigation()
-                } else {
-                    destination(section).djConnectMouseBackNavigation()
-                }
-                #else
                 destination(section).djConnectMouseBackNavigation()
-                #endif
             }
         }
     }
