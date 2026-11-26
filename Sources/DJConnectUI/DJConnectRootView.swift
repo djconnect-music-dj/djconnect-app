@@ -18211,6 +18211,26 @@ struct SettingsView: View {
         .djCompactSettingsListRow()
     }
 
+    private var retainedWidgetConsentToggle: some View {
+        let enabled = model.passiveSurfaces.retainedWidgetEnabled
+        let sessionID = model.activeDJSession?.id
+        let offered = sessionID != nil && retainedWidgetSessionID == sessionID
+        return Toggle(isOn: Binding(
+            get: { model.passiveSurfaces.retainedWidgetEnabled },
+            set: { enabled in Task { await model.setRetainedWidgetContributionEnabled(enabled) } }
+        )) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(localizedKey(model.language, "ui.widget.retained.title"))
+                Text(localizedKey(model.language, "ui.widget.retained.detail"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .disabled(model.passiveSurfaces.busy(.widget) || (!offered && !enabled))
+        .accessibilityIdentifier("settings-widget-retained-contribution")
+        .djCompactSettingsListRow()
+    }
+
     private static func localizedAskDJHistoryExportFallback(language: String) -> String {
         localizedKey(language, "ui.ask.dj.history.export.failed")
     }
@@ -18233,22 +18253,6 @@ struct SettingsView: View {
                     .djMusicDNASettingsListRow()
                     DJConnectGlassPreferenceToggle(language: model.language)
                         .djMusicDNASettingsListRow()
-                    if model.passiveSurfaces.retainedWidgetEnabled ||
-                        (retainedWidgetSessionID != nil && retainedWidgetSessionID == model.activeDJSession?.id) {
-                        Toggle(isOn: Binding(get: { model.passiveSurfaces.retainedWidgetEnabled }, set: { enabled in
-                            Task { await model.setRetainedWidgetContributionEnabled(enabled) }
-                        })) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(localizedKey(model.language, "ui.widget.retained.title"))
-                                Text(localizedKey(model.language, "ui.widget.retained.detail"))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .disabled(model.passiveSurfaces.busy(.widget))
-                        .accessibilityIdentifier("settings-widget-retained-contribution")
-                        .djMusicDNASettingsListRow()
-                    }
                     if model.isDemoMode {
                         LabeledContent(localizedKey(model.language, "ui.demo.mode")) {
                             Button(localizedKey(model.language, "ui.stop.demo.mode"), role: .destructive) {
@@ -18414,6 +18418,7 @@ struct SettingsView: View {
                         nativePushConsentToggle(.liveActivityUpdate, title: "ui.surface.push.activity")
                         #endif
                     }
+                    retainedWidgetConsentToggle
                     PermissionStatusRow(
                         title: localizedKey(model.language, "ui.microphone"),
                         detail: localizedKey(model.language, "ui.needed.for.push.to.talk.voice.requests"),
@@ -18581,11 +18586,13 @@ struct SettingsView: View {
                 model.startPairingWait()
             }
             .task(id: model.activeDJSession?.id) {
-                retainedWidgetSessionID = nil
-                let sessionID = model.activeDJSession?.id
-                if await model.supportsRetainedWidgetContribution(), !Task.isCancelled {
-                    retainedWidgetSessionID = sessionID
+                guard let sessionID = model.activeDJSession?.id else {
+                    retainedWidgetSessionID = nil
+                    return
                 }
+                let offered = await model.supportsRetainedWidgetContribution()
+                guard !Task.isCancelled, model.activeDJSession?.id == sessionID else { return }
+                retainedWidgetSessionID = offered ? sessionID : nil
             }
         }
         .djConnectButtonStyle(DJConnectButtonStyle(usesDestructiveGlass: true))
