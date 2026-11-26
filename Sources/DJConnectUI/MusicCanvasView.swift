@@ -186,6 +186,7 @@ struct MusicCanvasView: View {
                     .accessibilityIdentifier("music-canvas-screen-settings-" + target.id)
                 }
                 .buttonStyle(.plain)
+                .padding(.vertical, 8)
                 .background(.white.opacity(isSelected ? 0.15 : 0.06), in: RoundedRectangle(cornerRadius: 12))
                 .disabled(busy)
             }
