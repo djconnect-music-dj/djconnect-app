@@ -9725,53 +9725,55 @@ private struct VibeCastDestinationPicker: View {
 
     private var card: some View {
         VStack(alignment: .leading, spacing: 16) {
-            VibeCastDialogHero(title: localizedKey(language, "ui.vibecast.destinations.title"))
+            VibeCastDialogHero(title: "VibeCast")
                 .accessibilityIdentifier("vibecast-destination-hero")
             Text(localizedKey(language, "ui.vibecast.destinations.description"))
-                .font(.subheadline)
                 .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity)
-            VStack(spacing: 4) {
-                Button { openScreen(false) } label: {
-                    destinationRow(localizedKey(language, "ui.vibecast.destinations.screen")) {
-                        Image(systemName: "tv.badge.wifi")
+            VStack(alignment: .leading, spacing: 8) {
+                Text(localizedKey(language, "ui.vibecast.destinations.choose_screen"))
+                    .font(.headline)
+                    .accessibilityAddTraits(.isHeader)
+                VStack(spacing: 4) {
+                    Button { openScreen(false) } label: {
+                        destinationRow(localizedKey(language, "ui.vibecast.destinations.screen")) {
+                            Image(systemName: "tv.badge.wifi")
+                        }
                     }
-                }
-                .buttonStyle(.plain)
-                .disabled(castTarget != nil)
-                .accessibilityIdentifier("vibecast-destination-screen")
+                    .buttonStyle(.plain)
+                    .disabled(castTarget != nil)
+                    .accessibilityIdentifier("vibecast-destination-screen")
                 #if os(iOS)
-                ForEach(model.legacyCastDevices) { device in
-                    Button { model.connectLegacyCast(deviceID: device.id) } label: {
-                        destinationRow(device.name, isConnecting: model.legacyCastConnectingDeviceID == device.id) {
-                            GoogleCastDeviceGlyph()
+                    ForEach(model.legacyCastDevices) { device in
+                        Button { model.connectLegacyCast(deviceID: device.id) } label: {
+                            destinationRow(device.name, isConnecting: model.legacyCastConnectingDeviceID == device.id) {
+                                GoogleCastDeviceGlyph()
+                            }
                         }
+                        .buttonStyle(.plain)
+                        .disabled(!model.canConnectLegacyCast || model.legacyCastConnectingDeviceID != nil)
+                        .accessibilityIdentifier("vibecast-cast-device-" + device.id)
                     }
-                    .buttonStyle(.plain)
-                    .disabled(!model.canConnectLegacyCast || model.legacyCastConnectingDeviceID != nil)
-                    .accessibilityIdentifier("vibecast-cast-device-" + device.id)
-                }
-                if model.legacyCastState != .idle && model.legacyCastState != .stopped {
-                    Button(localizedKey(language, "ui.vibecast.cast.stop")) { model.stopLegacyCast() }
-                        .accessibilityIdentifier("vibecast-cast-stop")
-                }
+                    if model.legacyCastState != .idle && model.legacyCastState != .stopped {
+                        Button(localizedKey(language, "ui.vibecast.cast.stop")) { model.stopLegacyCast() }
+                            .accessibilityIdentifier("vibecast-cast-stop")
+                    }
                 #else
-                ForEach(discovery.devices) { device in
-                    Button {
-                        castFailed = false
-                        castTarget = device.receiverID
-                    } label: {
-                        destinationRow(device.name, isConnecting: castTarget != nil && castTarget == device.receiverID) {
-                            GoogleCastDeviceGlyph()
+                    ForEach(discovery.devices) { device in
+                        Button {
+                            castFailed = false
+                            castTarget = device.receiverID
+                        } label: {
+                            destinationRow(device.name, isConnecting: castTarget != nil && castTarget == device.receiverID) {
+                                GoogleCastDeviceGlyph()
+                            }
                         }
+                        .buttonStyle(.plain)
+                        .disabled(castTarget != nil || device.receiverID == nil || !model.canResolveDisplayConsent)
+                        .accessibilityIdentifier("vibecast-cast-device-" + device.id)
                     }
-                    .buttonStyle(.plain)
-                    .disabled(castTarget != nil || device.receiverID == nil || !model.canResolveDisplayConsent)
-                    .accessibilityIdentifier("vibecast-cast-device-" + device.id)
-                }
                 #endif
+                }
             }
             if let statusKey {
                 VStack(alignment: .leading, spacing: 6) {

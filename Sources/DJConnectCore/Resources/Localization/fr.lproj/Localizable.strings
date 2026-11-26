@@ -1742,8 +1742,8 @@
 "ui.surface.push.activity" = "Autoriser les mises à jour des activités en direct en arrière-plan";
 "ui.surface.push.activity.detail" = "Actualisez votre activité en direct sur l’écran verrouillé et, si disponible, dans la Dynamic Island.";
 
-"ui.vibecast.destinations.title" = "Choisir un écran";
-"ui.vibecast.destinations.description" = "VibeCast affiche ta session DJ sur un téléviseur ou un autre écran. Choisis un écran ci-dessous.";
+"ui.vibecast.destinations.choose_screen" = "Choisis ton écran";
+"ui.vibecast.destinations.description" = "VibeCast affiche ta session DJ sur un téléviseur ou un autre écran.";
 "ui.vibecast.destinations.screen" = "Écran VibeCast";
 "ui.vibecast.destinations.scanning" = "Recherche d’appareils Google Cast…";
 "ui.vibecast.destinations.empty" = "Aucun appareil Google Cast détecté.";

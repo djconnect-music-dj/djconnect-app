@@ -1742,8 +1742,8 @@
 "ui.surface.push.activity" = "Live-Aktivitäten im Hintergrund aktualisieren";
 "ui.surface.push.activity.detail" = "Aktualisiere deine Live-Aktivität auf dem Sperrbildschirm und, falls verfügbar, in der Dynamic Island.";
 
-"ui.vibecast.destinations.title" = "Bildschirm auswählen";
-"ui.vibecast.destinations.description" = "Mit VibeCast zeigst du deine DJ-Session auf einem Fernseher oder einem anderen Bildschirm. Wähle unten einen Bildschirm aus.";
+"ui.vibecast.destinations.choose_screen" = "Wähle deinen Bildschirm";
+"ui.vibecast.destinations.description" = "Mit VibeCast zeigst du deine DJ-Session auf einem Fernseher oder einem anderen Bildschirm.";
 "ui.vibecast.destinations.screen" = "VibeCast-Bildschirm";
 "ui.vibecast.destinations.scanning" = "Google Cast-Geräte werden gesucht…";
 "ui.vibecast.destinations.empty" = "Keine Google Cast-Geräte gefunden.";
