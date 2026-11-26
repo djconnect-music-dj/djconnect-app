@@ -286,7 +286,13 @@ struct DJConnectLiveGuestView: View {
                                 QueueArtworkView(url: nil)
                             }
                         } accessory: {
-                            EmptyView()
+                            if track.scheduled == true {
+                                Text(text("ui.live.requested_scheduled"))
+                                    .font(.caption2.weight(.semibold))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(.white.opacity(0.14), in: Capsule())
+                            }
                         }
                     }
                 } else {

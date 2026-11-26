@@ -21,6 +21,7 @@ import DJConnectCore
         let title: String
         let artist: String
         let artwork: Artwork?
+        let scheduled: Bool?
         var id: String { request_id }
     }
     struct Playback: Decodable {

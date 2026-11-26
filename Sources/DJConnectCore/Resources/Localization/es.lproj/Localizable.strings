@@ -1945,3 +1945,4 @@
 
 "ui.live.requested" = "Solicitadas";
 "ui.live.requested_empty" = "No hay canciones solicitadas en espera.";
+"ui.live.requested_scheduled" = "Programada";

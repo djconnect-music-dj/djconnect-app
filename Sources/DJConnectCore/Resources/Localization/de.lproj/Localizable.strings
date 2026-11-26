@@ -1945,3 +1945,4 @@
 
 "ui.live.requested" = "Gewünscht";
 "ui.live.requested_empty" = "Es sind keine Musikwünsche in der Warteschlange.";
+"ui.live.requested_scheduled" = "Eingeplant";

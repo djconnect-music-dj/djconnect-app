@@ -1945,3 +1945,4 @@
 
 "ui.live.requested" = "Aangevraagd";
 "ui.live.requested_empty" = "Er staan nog geen verzoeknummers klaar.";
+"ui.live.requested_scheduled" = "Ingepland";
