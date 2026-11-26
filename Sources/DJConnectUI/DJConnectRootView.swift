@@ -18412,13 +18412,31 @@ struct SettingsView: View {
                     ))
                     .accessibilityIdentifier("settings-moment-notifications")
                     .djCompactSettingsListRow()
-                    if model.canChooseNativePushConsent {
-                        nativePushConsentToggle(.widget, title: "ui.surface.push.widget")
-                        #if os(iOS)
-                        nativePushConsentToggle(.liveActivityUpdate, title: "ui.surface.push.activity")
-                        #endif
+                    if model.canChooseNativePushConsent || model.passiveSurfaces.retainedWidgetEnabled || retainedWidgetSessionID != nil {
+                        DisclosureGroup {
+                            VStack(alignment: .leading, spacing: 12) {
+                                if model.canChooseNativePushConsent {
+                                    nativePushConsentToggle(.widget, title: "ui.surface.push.widget")
+                                    #if os(iOS)
+                                    nativePushConsentToggle(.liveActivityUpdate, title: "ui.surface.push.activity")
+                                    #endif
+                                }
+                                if model.passiveSurfaces.retainedWidgetEnabled || retainedWidgetSessionID != nil {
+                                    retainedWidgetConsentToggle
+                                }
+                            }
+                            .padding(.top, 8)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(localizedKey(model.language, "ui.surface.visibility"))
+                                Text(localizedKey(model.language, "ui.surface.visibility.detail"))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .accessibilityIdentifier("settings-session-visibility")
+                        .djCompactSettingsListRow()
                     }
-                    retainedWidgetConsentToggle
                     PermissionStatusRow(
                         title: localizedKey(model.language, "ui.microphone"),
                         detail: localizedKey(model.language, "ui.needed.for.push.to.talk.voice.requests"),

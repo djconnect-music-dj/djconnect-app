@@ -1737,10 +1737,12 @@
 "ui.widget.retained.title" = "Laatste DJ-bijdrage in de widget";
 "ui.widget.retained.detail" = "Sta toe dat de grote widget de laatste beschikbare DJ-bijdrage uit deze sessie toont.";
 
-"ui.surface.push.widget" = "Sta widgetupdates op de achtergrond toe";
-"ui.surface.push.widget.detail" = "Ververs de DJConnect-widget terwijl de app op de achtergrond staat.";
-"ui.surface.push.activity" = "Sta Live Activity-updates op de achtergrond toe";
-"ui.surface.push.activity.detail" = "Ververs je Live Activity op het toegangsscherm en, waar beschikbaar, in het Dynamic Island.";
+"ui.surface.visibility" = "Sessieweergave";
+"ui.surface.visibility.detail" = "Kies waar dit apparaat je sessie mag tonen.";
+"ui.surface.push.widget" = "Widget";
+"ui.surface.push.widget.detail" = "Toon je huidige sessie in de DJConnect-widget.";
+"ui.surface.push.activity" = "Live Activity";
+"ui.surface.push.activity.detail" = "Toon je huidige sessie op het toegangsscherm en, waar beschikbaar, in het Dynamic Island.";
 
 "ui.vibecast.destinations.choose_screen" = "Kies je scherm";
 "ui.vibecast.destinations.description" = "Met VibeCast toon je je DJ-sessie op een tv of ander scherm.";

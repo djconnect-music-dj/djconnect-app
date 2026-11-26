@@ -1737,10 +1737,12 @@
 "ui.widget.retained.title" = "Dernière intervention du DJ dans le widget";
 "ui.widget.retained.detail" = "Autorisez le grand widget à afficher la dernière intervention disponible du DJ pour cette session.";
 
-"ui.surface.push.widget" = "Autoriser les mises à jour du widget en arrière-plan";
-"ui.surface.push.widget.detail" = "Actualisez le widget DJConnect pendant que l’app est en arrière-plan.";
-"ui.surface.push.activity" = "Autoriser les mises à jour des activités en direct en arrière-plan";
-"ui.surface.push.activity.detail" = "Actualisez votre activité en direct sur l’écran verrouillé et, si disponible, dans la Dynamic Island.";
+"ui.surface.visibility" = "Affichage de la session";
+"ui.surface.visibility.detail" = "Choisissez où cet appareil peut afficher votre session.";
+"ui.surface.push.widget" = "Widget";
+"ui.surface.push.widget.detail" = "Affichez votre session en cours dans le widget DJConnect.";
+"ui.surface.push.activity" = "Activité en direct";
+"ui.surface.push.activity.detail" = "Affichez votre session en cours sur l’écran verrouillé et, si disponible, dans la Dynamic Island.";
 
 "ui.vibecast.destinations.choose_screen" = "Choisis ton écran";
 "ui.vibecast.destinations.description" = "VibeCast affiche ta session DJ sur un téléviseur ou un autre écran.";
