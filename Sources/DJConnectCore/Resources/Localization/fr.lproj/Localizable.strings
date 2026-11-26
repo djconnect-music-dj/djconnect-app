@@ -1908,6 +1908,13 @@
 
 "ui.live.help_title" = "Aide invités";
 
+"ui.live.help_requests" = "Morceaux à demander";
+"ui.live.help_request_track" = "Joue le titre Promise de HAEVN";
+"ui.live.help_request_title" = "Joue Hello";
+"ui.live.help_questions" = "Questions sur la musique";
+"ui.live.help_question_playing" = "Qu’est-ce qui passe maintenant ?";
+"ui.live.help_question_artist" = "Qui sont les membres de HAEVN ?";
+
 "ui.live.help" = "Demande un morceau ou pose une question sur la musique. Tu ne peux pas contrôler la lecture ni modifier les réglages de l’hôte. Ta conversation est temporaire et disparaît quand tu quittes la session.";
 
 "ui.live.composer" = "Question musicale ou demande de morceau…";

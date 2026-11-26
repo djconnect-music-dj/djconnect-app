@@ -127,6 +127,7 @@ struct DJConnectLiveGuestView: View {
     @ObservedObject var guest: DJConnectLiveGuestModel
     let language: String
     @Environment(\.dynamicTypeSize) private var dynamicType
+    @FocusState private var isComposerFocused: Bool
     @State private var showsHelp = false
     @State private var confirmsLeaving = false
     @State private var mode: Mode = .flow
@@ -519,44 +520,64 @@ struct DJConnectLiveGuestView: View {
     }
 
     private var helpPopover: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Text(vibeCastPartyTitle)
-                    .font(.title2.bold())
-                    .accessibilityAddTraits(.isHeader)
-                Spacer(minLength: 0)
-                Button { showsHelp = false } label: {
-                    Image(systemName: "xmark").frame(width: 44, height: 44)
-                }
-                .djConnectButtonStyle(DJConnectButtonStyle(shape: .icon))
-                .accessibilityLabel(text("ui.close"))
-            }
-            ViewThatFits(in: .vertical) {
-                helpText
-                ScrollView { helpText }
-                    .scrollBounceBehavior(.basedOnSize)
-            }
+        ViewThatFits(in: .vertical) {
+            helpContent.fixedSize(horizontal: false, vertical: true)
+            ScrollView { helpContent }
+                .scrollBounceBehavior(.basedOnSize)
         }
-        .padding(16)
-        .frame(idealWidth: 340, maxWidth: 400, maxHeight: 420)
+        .frame(idealWidth: 340, maxHeight: 450)
+        .presentationCompactAdaptation(.popover)
         .djConnectGlassPopoutSurface(nativePresentation: true)
         .accessibilityIdentifier("live-guest-help-popover")
     }
 
-    private var helpText: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(text(guest.requestSongsAllowed ? "ui.live.help" : "ui.live.help_information_only"))
-            Text(text("ui.ask_dj.accuracy_notice"))
-                .font(.caption)
-                .foregroundStyle(.secondary)
+    private var helpContent: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text(text("ui.ask.dj"))
+                    .font(.title2.bold())
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 8)
+                Button { showsHelp = false } label: {
+                    Image(systemName: "xmark").frame(width: 36, height: 36)
+                }
+                .djConnectButtonStyle(DJConnectButtonStyle(shape: .icon))
+                .accessibilityLabel(text("ui.close"))
+            }
+
+            if guest.requestSongsAllowed {
+                helpExamples("ui.live.help_requests", examples: ["ui.live.help_request_track", "ui.live.help_request_title"])
+            }
+            helpExamples("ui.live.help_questions", examples: ["ui.live.help_question_playing", "ui.live.help_question_artist"])
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(text(guest.requestSongsAllowed ? "ui.live.help" : "ui.live.help_information_only"))
+                Text(text("ui.ask_dj.accuracy_notice"))
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func helpExamples(_ title: String, examples: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(text(title))
+                .font(.subheadline.bold())
+                .accessibilityAddTraits(.isHeader)
+            ForEach(examples, id: \.self) { key in
+                Text(text(key)).font(.subheadline)
+            }
+        }
     }
 
     private var composer: some View {
         HStack(spacing: 12) {
-            Button { showsHelp = true } label: {
+            Button {
+                isComposerFocused = false
+                showsHelp = true
+            } label: {
                 Image(systemName: "questionmark.circle").frame(width: 32, height: 32)
             }
                 .buttonStyle(.plain)
@@ -569,6 +590,7 @@ struct DJConnectLiveGuestView: View {
             TextField(text(guest.requestSongsAllowed ? "ui.live.composer" : "ui.live.composer_information_only"), text: $guest.draft, axis: .vertical)
                 .lineLimit(1...4)
                 .textFieldStyle(.plain)
+                .focused($isComposerFocused)
                 .accessibilityIdentifier("live-guest-composer")
             Button { Task { await guest.send(language: language) } } label: {
                 Group {
