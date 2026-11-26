@@ -342,8 +342,7 @@ func horizonPreviewProducerCases() throws -> [HorizonPreviewProducerFixture.Case
     defer { if needsMark { mark.setName(nil) } }
     for item in try horizonPreviewProducerCases() {
         for width: CGFloat in [320, 768] {
-            let view = SessionHorizonMomentContent(preview: item.owner_payload.horizon_moment, mood: "groove",
-                                                   language: item.locale, artworkURL: nil, isPlaying: false)
+            let view = SessionHorizonMomentContent(preview: item.owner_payload.horizon_moment, mood: "groove", language: item.locale, artworkURL: nil)
                 .frame(width: width).environment(\.dynamicTypeSize, .accessibility2).environment(\.colorScheme, .dark)
             let renderer = ImageRenderer(content: view.foregroundStyle(.white).background(Color(red: 0.08, green: 0.06, blue: 0.18)))
             let rendered = try #require(renderer.nsImage)
