@@ -66,22 +66,24 @@ class PrivateAppleArtifactTests(unittest.TestCase):
         binding["paired_watch_validation"] = "disabled"
         with self.assertRaisesRegex(ValueError, "Watch validation"):
             verified_asset(**fixture)
-        for manifest_id in (
-            "release-apple-internal-4.1.0-40546-iphone-only",
-            "release-apple-internal-4.1.0-40547-private-devices",
-        ):
-            with self.subTest(manifest_id=manifest_id):
-                manifest["manifest_id"] = fixture["manifest_id"] = manifest_id
-                manifest.pop("deployment_constraints", None)
-                binding["paired_watch_validation"] = "disabled"
-                with self.assertRaisesRegex(ValueError, "Standalone iPhone"):
-                    verified_asset(**fixture)
-                manifest["deployment_constraints"] = {"iphone_only_route": "APPROVED"}
-                fixture["archive"].seek(0)
-                self.assertEqual(verified_asset(**fixture), 456)
-                binding["paired_watch_validation"] = "required"
-                with self.assertRaisesRegex(ValueError, "Watch validation"):
-                    verified_asset(**fixture)
+        manifest_id = "release-apple-internal-4.1.0-40546-iphone-only"
+        manifest["manifest_id"] = fixture["manifest_id"] = manifest_id
+        with self.assertRaisesRegex(ValueError, "Standalone iPhone"):
+            verified_asset(**fixture)
+        manifest["deployment_constraints"] = {"iphone_only_route": "APPROVED"}
+        self.assertEqual(verified_asset(**fixture), 456)
+        binding["paired_watch_validation"] = "required"
+        with self.assertRaisesRegex(ValueError, "Watch validation"):
+            verified_asset(**fixture)
+
+    def test_40547_iphone_requires_paired_watch(self):
+        fixture = self.fixture("iphone")
+        manifest = fixture["manifest"]
+        manifest["manifest_id"] = fixture["manifest_id"] = "release-apple-internal-4.1.0-40547-private-devices"
+        self.assertEqual(verified_asset(**fixture), 456)
+        manifest["artifact_bindings"][0]["paired_watch_validation"] = "disabled"
+        with self.assertRaisesRegex(ValueError, "Watch validation"):
+            verified_asset(**fixture)
 
     def test_source_owner_must_match_manifest_and_allowlist(self):
         fixture = self.fixture("ipad")
