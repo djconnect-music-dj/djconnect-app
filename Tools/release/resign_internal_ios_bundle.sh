@@ -41,12 +41,35 @@ sign_bundle() {
   entitlements="$scratch/${identifier}.entitlements.plist"
   security cms -D -i "$profile" > "$decoded"
   plutil -extract Entitlements xml1 -o "$entitlements" "$decoded"
+  if [[ "$identifier" = dev.djconnect.ios ]]; then
+    # A provisioning profile lists allowed values. The signed application
+    # requests a single App Attest environment, matching the iOS target.
+    /usr/bin/python3 - "$entitlements" <<'PYTHON'
+import plistlib
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+values = plistlib.loads(path.read_bytes())
+key = "com.apple.developer.devicecheck.appattest-environment"
+provided = values.get(key)
+if provided != "development" and not (
+    isinstance(provided, list) and "development" in provided
+):
+    raise SystemExit("The selected iOS profile does not allow App Attest development")
+values[key] = "development"
+path.write_bytes(plistlib.dumps(values))
+PYTHON
+  fi
   cp "$profile" "$bundle/embedded.mobileprovision"
   /usr/bin/codesign --force --sign "$signing_identity" --entitlements "$entitlements" --timestamp=none --generate-entitlement-der "$bundle"
   case "$identifier" in
     dev.djconnect.ios|dev.djconnect.ios.watch)
       /usr/bin/codesign -d --entitlements - --xml "$bundle" > "$scratch/signed.plist"
       test "$(/usr/libexec/PlistBuddy -c 'Print :aps-environment' "$scratch/signed.plist")" = development
+      if [[ "$identifier" = dev.djconnect.ios ]]; then
+        test "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.developer.devicecheck.appattest-environment' "$scratch/signed.plist")" = development
+      fi
       ;;
   esac
 }
