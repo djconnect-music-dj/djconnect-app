@@ -9752,9 +9752,15 @@ private struct VibeCastDestinationPicker: View {
                 #endif
             }
             if let statusKey {
-                Text(localizedKey(language, statusKey))
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(localizedKey(language, statusKey))
+                    if statusKey == "ui.vibecast.cast.failed" {
+                        Text(localizedKey(language, "ui.vibecast.cast.known_hosts_help"))
+                    }
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             }
             DJConnectNotNowLinkButton(language: language, key: "ui.not.now.b1e535") { dismiss() }
         }

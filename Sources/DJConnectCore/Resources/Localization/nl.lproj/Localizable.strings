@@ -1929,6 +1929,7 @@
 "ui.vibecast.cast.presenting" = "VibeCast wordt door het scherm weergegeven.";
 "ui.vibecast.cast.waiting" = "Wachten op bevestiging van het scherm…";
 "ui.vibecast.cast.failed" = "Verbinden is niet gelukt. Probeer het opnieuw.";
+"ui.vibecast.cast.known_hosts_help" = "Staat de tv niet bij Google Cast in Home Assistant? Ga naar Instellingen → Apparaten en diensten → Google Cast → Configureren. Voeg het IP-adres van de tv toe bij Bekende hosts en probeer daarna opnieuw in DJConnect.";
 "ui.vibecast.cast.choose" = "Kies je Google Cast-scherm.";
 
 "ui.canvas.not_offered" = "Deze Home Assistant biedt Music Canvas nu niet aan.";
