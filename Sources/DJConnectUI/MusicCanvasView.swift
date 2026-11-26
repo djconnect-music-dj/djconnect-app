@@ -59,14 +59,16 @@ struct MusicCanvasView: View {
         let loadScope = scope
         let request = previewRequest
         let settingsTitle = DJConnectLocalization.localized(key: "ui.settings", language: model.language)
+        let back: (label: String, action: () -> Void)? = if selected != nil {
+            (DJConnectLocalization.localized(key: "ui.session.intro.back", language: model.language), returnToScreens)
+        } else {
+            nil
+        }
         DJConnectGlassDialogSurface(
             title: selected == nil ? "Music Canvas" : settingsTitle,
             icon: DJConnectHeroGlyph(systemImage: "photo.artframe"),
             keepsCardMounted: true,
-            back: selected == nil ? nil : (
-                DJConnectLocalization.localized(key: "ui.session.intro.back", language: model.language),
-                returnToScreens
-            )
+            back: back
         ) {
             VStack(alignment: .leading, spacing: 16) {
                 if let selected, let snapshot {
@@ -259,6 +261,32 @@ struct MusicCanvasView: View {
         }
     }
 
+    @ViewBuilder
+    private func screenPreview(_ target: DJConnectCanvasTarget, finish: String?) -> some View {
+        if target.preview_available {
+            let isSwitchBot = target.adapter == "switchbot"
+            let screenRatio: CGFloat = if let width = target.screen.width, let height = target.screen.height,
+                                 width > 0, height > 0 {
+                CGFloat(width) / CGFloat(height)
+            } else {
+                isSwitchBot ? 3.0 / 4.0 : 16.0 / 9.0
+            }
+            // Keep the menu anchors steady while an updated preview is being fetched.
+            Color.clear
+                .aspectRatio(screenRatio, contentMode: .fit)
+                .overlay {
+                    if let preview {
+                        MusicCanvasFramedPreview(
+                            artwork: preview,
+                            isSwitchBot: isSwitchBot,
+                            finish: finish
+                        )
+                    }
+                }
+                .accessibilityHidden(true)
+        }
+    }
+
     private func targetSettings(_ target: DJConnectCanvasTarget, snapshot: DJConnectCanvasSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(spacing: 4) {
@@ -268,28 +296,7 @@ struct MusicCanvasView: View {
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
             .accessibilityElement(children: .combine)
-            if target.preview_available {
-                let isSwitchBot = target.adapter == "switchbot"
-                let screenRatio = if let width = target.screen.width, let height = target.screen.height,
-                                     width > 0, height > 0 {
-                    CGFloat(width) / CGFloat(height)
-                } else {
-                    isSwitchBot ? 3.0 / 4.0 : 16.0 / 9.0
-                }
-                // Keep the menu anchors steady while an updated preview is being fetched.
-                Color.clear
-                    .aspectRatio(screenRatio, contentMode: .fit)
-                    .overlay {
-                        if let preview {
-                            MusicCanvasFramedPreview(
-                                artwork: preview,
-                                isSwitchBot: isSwitchBot,
-                                finish: snapshot.preferences.presentation(for: target).frame_finish
-                            )
-                        }
-                    }
-                    .accessibilityHidden(true)
-            }
+            screenPreview(target, finish: snapshot.preferences.presentation(for: target).frame_finish)
             if snapshot.preferences.presentation_overrides != nil {
                 let style = snapshot.preferences.presentation(for: target)
                 if snapshot.per_screen_composition_and_cadence == true {
