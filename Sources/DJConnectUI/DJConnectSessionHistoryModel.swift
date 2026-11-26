@@ -272,7 +272,13 @@ public final class DJConnectSessionHistoryModel: ObservableObject {
     }
     @Published public private(set) var pendingTurns: [PendingTurn] = []
     @Published public var selectedEntry: DJConnectSessionEntryReference?
-    @Published public var openTarget: DJConnectSessionEntryReference?
+    @Published public var openTarget: DJConnectSessionEntryReference? {
+        didSet {
+            if openTarget == nil { notificationMomentTarget = nil }
+        }
+    }
+    @Published private(set) var notificationMomentTarget: DJConnectSessionEntryReference?
+    @Published var notificationMomentReturnTarget: DJConnectSessionEntryReference?
     @Published public private(set) var navigationErrorKey: String?
     @Published public private(set) var searchMatches: [DJConnectHistoryEntry] = [] {
         didSet { searchArtworkIndex = nil }
@@ -581,7 +587,7 @@ public final class DJConnectSessionHistoryModel: ObservableObject {
         available = false; searchAvailable = false; momentInsightAvailable = false; profileScopeActive = false; ownerScope = nil
         sessions = []; timelines = [:]; historicalMatches = [:]; pendingTurns = []; readingAnchors = [:]
         host?.setProfileConversationSending(false)
-        selectedEntry = nil; openTarget = nil; voiceContext = nil; voiceClientID = nil; voicePayload = nil
+        selectedEntry = nil; openTarget = nil; notificationMomentTarget = nil; notificationMomentReturnTarget = nil; voiceContext = nil; voiceClientID = nil; voicePayload = nil
         listNextCursor = nil; listRevision = nil; listLoading = false; listErrorKey = nil
         clearSearch(); navigationErrorKey = nil; timelineGenerations = [:]; timelineNavigations = [:]
     }
@@ -1166,13 +1172,13 @@ public final class DJConnectSessionHistoryModel: ObservableObject {
     }
 
     func openNotificationMoment(_ intent: DJConnectWatchMomentOpenIntent, isCurrent: @escaping @MainActor () -> Bool) async -> Bool {
-        await openSession(sessionID: intent.sessionID, entryID: nil, navigate: true, isCurrent: isCurrent) {
+        await openSession(sessionID: intent.sessionID, entryID: nil, navigate: true, notificationMomentID: intent.momentID, isCurrent: isCurrent) {
             try await $0.openRetainedMomentSession(.init(sessionID: intent.sessionID, momentID: intent.momentID))
         }
     }
 
     private func openSession(
-        sessionID: String, entryID: String?, navigate: Bool,
+        sessionID: String, entryID: String?, navigate: Bool, notificationMomentID: String? = nil,
         isCurrent: @escaping @MainActor () -> Bool = { true },
         resolve: @escaping (DJConnectClient) async throws -> DJConnectSessionOpenResponse
     ) async -> Bool {
@@ -1185,7 +1191,7 @@ public final class DJConnectSessionHistoryModel: ObservableObject {
         defer { if timelineNavigations[sessionID] == generation { timelineNavigations[sessionID] = nil } }
         do {
             let response = try await host.withHomeAssistantClient { try await resolve($0) }
-            return try acceptOpenSession(response, sessionID: sessionID, navigate: navigate, isCurrent: isCurrent, captured: captured, owner: owner, generation: generation)
+            return try acceptOpenSession(response, sessionID: sessionID, navigate: navigate, notificationMomentID: notificationMomentID, isCurrent: isCurrent, captured: captured, owner: owner, generation: generation)
         } catch {
             return handleOpenSessionFailure(error, sessionID: sessionID, entryID: entryID, navigate: navigate, isCurrent: isCurrent, captured: captured, owner: owner, generation: generation)
         }
@@ -1706,16 +1712,23 @@ public final class DJConnectSessionHistoryModel: ObservableObject {
         timelines[sessionID] = retained
     }
 
-    private func acceptOpenSession(_ response: DJConnectSessionOpenResponse, sessionID: String, navigate: Bool, isCurrent: () -> Bool, captured: UUID, owner: String, generation: UUID) throws -> Bool {
+    private func acceptOpenSession(_ response: DJConnectSessionOpenResponse, sessionID: String, navigate: Bool, notificationMomentID: String?, isCurrent: () -> Bool, captured: UUID, owner: String, generation: UUID) throws -> Bool {
         guard !Task.isCancelled, isCurrent(), captured == epoch, ownerScope == owner, generation == navigationGeneration,
               timelineGenerations[sessionID] == generation, response.entry.isRetained() else { return false }
+        if let notificationMomentID {
+            guard response.entry.sessionID == sessionID, response.entry.kind == .djMoment,
+                  response.entry.momentID == notificationMomentID else { return false }
+        }
         var timeline = timelines[sessionID] ?? Timeline()
         if navigate && timeline.revision != response.session.revision.value { timeline.entries = [] }
         timeline.session = response.session; timeline.revision = response.session.revision.value
         timeline.entries = try mergeEntries(timeline.entries, [response.entry])
         timeline.loading = false
         timelines[sessionID] = timeline
-        if navigate { openTarget = response.entry.reference }
+        if navigate {
+            notificationMomentTarget = notificationMomentID == nil ? nil : response.entry.reference
+            openTarget = response.entry.reference
+        }
         return true
     }
 

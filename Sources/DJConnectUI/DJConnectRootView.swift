@@ -1520,17 +1520,66 @@ public struct DJConnectRootView: View {
             }
         case .sessionHistory:
             if let target = history.openTarget {
-                NavigationStack {
-                    SessionTimelineScreen(model: model, sessionID: target.sessionID,
-                                          initialAnchor: target.entryID)
-                        .id(target)
-                        .navigationTitle(savedSessionNavigationTitle(target.sessionID, history: history, language: model.language))
-                        .toolbar { Button(localizedKey(model.language, "ui.close")) { history.openTarget = nil } }
+                if history.notificationMomentTarget == target {
+                    notificationMomentCard(target)
+                } else {
+                    NavigationStack {
+                        SessionTimelineScreen(model: model, sessionID: target.sessionID,
+                                              initialAnchor: target.entryID)
+                            .id(target)
+                            .navigationTitle(savedSessionNavigationTitle(target.sessionID, history: history, language: model.language))
+                            .toolbar { Button(localizedKey(model.language, "ui.close")) { history.openTarget = nil } }
+                    }
+                    #if os(macOS)
+                    .frame(minWidth: 500, idealWidth: 900, minHeight: 550, idealHeight: 800)
+                    #endif
                 }
-                #if os(macOS)
-                .frame(minWidth: 500, idealWidth: 900, minHeight: 550, idealHeight: 800)
-                #endif
             }
+        }
+    }
+
+    private func notificationMomentCard(_ target: DJConnectSessionEntryReference) -> some View {
+        let entry = history.timelines[target.sessionID]?.entries.first { $0.reference == target }
+        let now = Date()
+        let expiry = entry.flatMap { DJConnectHistoryEntry.date($0.retainedUntil) }
+        let refreshDates = [now] + [expiry].compactMap { $0 }.filter { $0 > now }
+        return NavigationStack {
+            ZStack {
+                DJConnectCanvasBackground()
+                TimelineView(.explicit(refreshDates)) { context in
+                    ScrollView {
+                        if let entry, entry.isRetained(at: context.date) {
+                            SessionEntryView(entry: entry, language: model.language, artworkModel: model)
+                                .accessibilityIdentifier("notification-moment-card")
+                        } else {
+                            Text(localizedKey(model.language, "ui.session.history.contribution_unavailable"))
+                        }
+                    }
+                    .padding(djConnectScreenHorizontalPadding)
+                }
+            }
+            .toolbar {
+                Button(localizedKey(model.language, "ui.close")) { closeSessionHistory() }
+            }
+        }
+        #if os(iOS)
+        .presentationDetents([.large])
+        .presentationSizing(.page)
+        #else
+        .frame(minWidth: 500, idealWidth: 900, minHeight: 550, idealHeight: 800)
+        #endif
+    }
+
+    private func closeSessionHistory() {
+        defer { history.openTarget = nil }
+        guard let target = history.openTarget, history.notificationMomentTarget == target else { return }
+        if model.activeDJSession?.id == target.sessionID {
+            selectSidebarSection(.djSession)
+            model.isShowingVibeScape = false
+            history.notificationMomentReturnTarget = target
+        } else {
+            selectSidebarSection(.savedSessions)
+            openedSavedSession = SavedSessionDestination(sessionID: target.sessionID, searchQuery: "", initialAnchor: target.entryID)
         }
     }
 
@@ -1562,7 +1611,7 @@ public struct DJConnectRootView: View {
         case .pushSetup:
             pushSetupSession = nil
         case .sessionHistory:
-            history.openTarget = nil
+            closeSessionHistory()
         }
     }
 
@@ -1584,11 +1633,7 @@ public struct DJConnectRootView: View {
         case .djSession:
             DJSessionView(model: model) { selectedSection = .queue }
         case .savedSessions:
-            #if os(macOS)
             SavedSessionsView(model: model, openedSession: $openedSavedSession)
-            #else
-            SavedSessionsView(model: model)
-            #endif
         case .trackInsight:
             TrackInsightView(model: model)
         case .discovery:

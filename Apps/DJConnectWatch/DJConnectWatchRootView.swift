@@ -4502,6 +4502,16 @@ private struct DJConnectWatchCompanionPages: View {
         }
     }
 
+    private func closeNotificationMoment(_ intent: DJConnectWatchMomentOpenIntent) {
+        page = 0
+        if session?.id == intent.sessionID,
+           let index = currentFlowRows.firstIndex(where: { $0.momentID == intent.momentID }) {
+            flowPosition = Double(index + 1)
+        }
+        destination = nil
+        model.clearWatchMomentIntent()
+    }
+
     private var mainPageOrder: [Int] {
         if isLoadingSession { return [0] }
         let hasSession = demoSession != nil || (!model.isDemoMode && (scope ?? confirmedScope)?.sessionID != nil)
@@ -4628,6 +4638,9 @@ private struct DJConnectWatchCompanionPages: View {
                 DJConnectWatchMomentNotificationView(intent: intent, headingColor: accent, state: state)
                     .watchStandardBackground(theme: theme)
                     .tint(accent)
+                    .toolbar {
+                        Button(text("ui.close")) { closeNotificationMoment(intent) }
+                    }
             case .demoFlow(let id, let row):
                 ScrollView {
                     if demoSession?.id == id {
@@ -6359,7 +6372,10 @@ private struct DJConnectWatchMomentNotificationView: View {
             originalBinding = binding
             let entry = await model.loadOriginalHistoryEntry(
                 .init(binding: binding, sessionID: intent.sessionID, originalID: intent.momentID), isMoment: true)
-            if intent.isPending(), !Task.isCancelled { retained = entry }
+            if intent.isPending(), !Task.isCancelled, let entry, entry.kind == .djMoment,
+               entry.sessionID == intent.sessionID, entry.momentID == intent.momentID {
+                retained = entry
+            }
         }
         .onChange(of: state.current()?.settings.binding) { _, binding in
             if binding != originalBinding { retained = nil }
