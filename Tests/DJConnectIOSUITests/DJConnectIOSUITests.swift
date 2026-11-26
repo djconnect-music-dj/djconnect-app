@@ -1975,6 +1975,28 @@ extension DJConnectIOSUITests {
         return app
     }
 
+    func testActiveSessionToolbarOpensPartyQRJoinAndReturnsToSession() {
+        let app = launchSessionUIDemo()
+        let endSession = app.buttons["session-end-button"]
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            app.buttons["session-more-menu"].tap()
+        }
+
+        let join = app.buttons["session-join-party"]
+        XCTAssertTrue(join.waitForExistence(timeout: 5))
+        XCTAssertEqual(join.label, "Deelnemen aan VibeCast Party")
+        join.tap()
+
+        let dialog = app.descendants(matching: .any)["live-guest-join"].firstMatch
+        XCTAssertTrue(dialog.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["live-guest-scan"].isHittable)
+        XCTAssertFalse(app.buttons["live-guest-confirm"].exists)
+        app.buttons["live-guest-leave"].tap()
+
+        XCTAssertTrue(dialog.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(endSession.isHittable)
+    }
+
     func testPausedPlaybackHasDistinctSessionPresentationAndResumes() {
         let app = launchSessionUIDemo()
         XCTAssertTrue(app.buttons["session-end-button"].waitForExistence(timeout: 10))
@@ -2525,7 +2547,7 @@ extension DJConnectIOSUITests {
         let app = launchSessionUIDemo()
         defer { XCUIDevice.shared.orientation = .portrait }
         let identifiers = ["session-connection-toggle", "session-search-toggle", "session-mood-toggle",
-                           "session-presence-toggle", "session-end-button", "screen-refresh"]
+                           "session-presence-toggle", "session-join-party", "session-end-button", "screen-refresh"]
         for orientation in [UIDeviceOrientation.portrait, .landscapeLeft] {
             XCUIDevice.shared.orientation = orientation
             let landscape = orientation == .landscapeLeft
