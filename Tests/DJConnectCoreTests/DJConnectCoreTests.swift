@@ -13507,9 +13507,8 @@ func gamesKeepRoundSpritesAndMapTouchesIntoCenteredBoard(_ size: CGSize) {
     #expect(resigning.contains("/usr/bin/codesign --force --sign \"$signing_identity\""))
     #expect(!resigning.contains("security login-keychain"))
     #expect(!resigning.contains("--keychain \"$signing_keychain\""))
-    #expect(resigning.contains("wildcard_conflict=false"))
-    #expect(resigning.contains("test -n \"$exact_match\" && { printf '%s\\n' \"$exact_match\"; return; }"))
-    #expect(resigning.contains("\"$wildcard_conflict\" && { echo \"multiple wildcard profiles"))
+    #expect(resigning.contains("select_internal_ios_profile.py"))
+    #expect(resigning.contains(#""$identifier" "$required_udid" "$signing_identity" "${profiles[@]}""#))
     #expect(resigning.contains("rm -rf \"$app_bundle/Watch\""))
     #expect(releaseDocs.contains("Internal Release: iPad"))
 }

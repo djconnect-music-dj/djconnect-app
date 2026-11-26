@@ -26,10 +26,27 @@ sign_bundle() {
   test "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.developer.aps-environment' "$scratch/signed.plist")" = development
 }
 
+widget_identifier=dev.djconnect.mac.track-insight-widget
+widget_bundle=""
+for extension in "$app_bundle"/Contents/PlugIns/*.appex; do
+  test -d "$extension" || continue
+  identifier="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$extension/Contents/Info.plist")"
+  test "$identifier" = "$widget_identifier" || continue
+  if test -n "$widget_bundle"; then
+    echo "Multiple extensions match the approved macOS widget bundle identifier." >&2
+    exit 1
+  fi
+  widget_bundle="$extension"
+done
+if test -z "$widget_bundle"; then
+  echo "No extension matches the approved macOS widget bundle identifier." >&2
+  exit 1
+fi
+
 find "$app_bundle" -depth -type d -name '*.framework' -print0 | while IFS= read -r -d '' framework; do
   /usr/bin/codesign --force --sign "$signing_identity" --timestamp=none "$framework"
 done
-sign_bundle "$app_bundle/Contents/PlugIns/TrackInsightWidget.appex" "$MAC_WIDGET_PROFILE" \
-  Apps/DJConnectTrackInsightWidgets/DJConnectTrackInsightWidgetsMac.entitlements dev.djconnect.mac.track-insight-widget
+sign_bundle "$widget_bundle" "$MAC_WIDGET_PROFILE" \
+  Apps/DJConnectTrackInsightWidgets/DJConnectTrackInsightWidgetsMac.entitlements "$widget_identifier"
 sign_bundle "$app_bundle" "$MAC_APP_PROFILE" Apps/DJConnectMac/DJConnectMac.entitlements dev.djconnect.mac
 /usr/bin/codesign --verify --deep --strict "$app_bundle"

@@ -25,41 +25,7 @@ profiles=(
 scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
 
-profile_for_bundle() {
-  local bundle_identifier="$1" required_udid="$2" profile decoded app_identifier exact_match="" wildcard_match="" wildcard_conflict=false devices
-  for directory in "${profiles[@]}"; do
-    test -d "$directory" || continue
-    while IFS= read -r -d '' profile; do
-      decoded="$scratch/$(basename "$profile").plist"
-      security cms -D -i "$profile" > "$decoded" 2>/dev/null || continue
-      app_identifier="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:application-identifier' "$decoded" 2>/dev/null || true)"
-      devices="$(/usr/libexec/PlistBuddy -c 'Print :ProvisionedDevices' "$decoded" 2>/dev/null || true)"
-      printf '%s' "$devices" | grep -F -- "$required_udid" >/dev/null || continue
-      case "$app_identifier" in
-        *".$bundle_identifier")
-          test -z "$exact_match" || { echo "multiple exact profiles for $bundle_identifier" >&2; exit 1; }
-          exact_match="$profile"
-          ;;
-        *'.*')
-          case "$bundle_identifier" in
-            ${app_identifier#*.})
-              if test -n "$wildcard_match"; then
-                wildcard_conflict=true
-              else
-                wildcard_match="$profile"
-              fi
-              ;;
-          esac
-          ;;
-      esac
-    done < <(find "$directory" -maxdepth 1 -type f \( -name '*.mobileprovision' -o -name '*.provisionprofile' \) -print0)
-  done
-  test -n "$exact_match" && { printf '%s\n' "$exact_match"; return; }
-  "$wildcard_conflict" && { echo "multiple wildcard profiles for $bundle_identifier" >&2; exit 1; }
-  test -n "$wildcard_match" && { printf '%s\n' "$wildcard_match"; return; }
-  echo "no development profile for $bundle_identifier covering the approved device" >&2
-  exit 1
-}
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 
 sign_bundle() {
   local bundle="$1" identifier required_udid profile decoded entitlements
@@ -69,7 +35,8 @@ sign_bundle() {
     test -n "$watch_udid" || { echo "watch bundle found without an approved Watch UDID" >&2; exit 1; }
     required_udid="$watch_udid"
   fi
-  profile="$(profile_for_bundle "$identifier" "$required_udid")"
+  profile="$(/usr/bin/python3 "$script_dir/select_internal_ios_profile.py" \
+    "$identifier" "$required_udid" "$signing_identity" "${profiles[@]}")"
   decoded="$scratch/${identifier}.profile.plist"
   entitlements="$scratch/${identifier}.entitlements.plist"
   security cms -D -i "$profile" > "$decoded"
