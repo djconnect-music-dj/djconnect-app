@@ -13492,7 +13492,10 @@ func gamesKeepRoundSpritesAndMapTouchesIntoCenteredBoard(_ size: CGSize) {
 
     #expect(deployment.contains("DJCONNECT_APPLE_IPAD_UDID"))
     #expect(deployment.contains(".hardwareProperties.deviceType == \"iPad\""))
-    #expect(deployment.contains(#"private_apple_artifact.py "$manifest" ipad"#))
+    #expect(deployment.contains("DJCONNECT_APPLE_IPAD_MINI_UDID"))
+    #expect(deployment.contains(#"private_apple_artifact.py "$manifest" "$TARGET_DEVICE""#))
+    #expect(smoke.contains(#".target_device == $target"#))
+    #expect(smoke.contains(#".bundleVersion == $build"#))
     #expect(deployment.contains(#"test ! -e "$app_bundle/Watch""#))
     #expect(!deployment.contains("PUBLIC_RELEASES_TOKEN"))
     #expect(!deployment.contains("gh release download"))

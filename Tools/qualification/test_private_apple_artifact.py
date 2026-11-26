@@ -25,7 +25,7 @@ class PrivateAppleArtifactTests(unittest.TestCase):
             "artifact_sha256": digest,
             "signing": "local_developer_provisioning_required",
         }
-        if device != "ipad":
+        if device not in {"ipad", "ipad-mini"}:
             binding["paired_watch_validation"] = "required" if device == "iphone" else "disabled"
         return {
             "manifest": {
@@ -49,9 +49,15 @@ class PrivateAppleArtifactTests(unittest.TestCase):
         }
 
     def test_routes_accept_only_verified_bytes(self):
-        for device in ("macbook", "iphone", "ipad"):
+        for device in ("macbook", "iphone", "ipad", "ipad-mini"):
             with self.subTest(device=device):
                 self.assertEqual(verified_asset(**self.fixture(device)), 456)
+
+    def test_ipad_and_ipad_mini_bindings_cannot_be_interchanged(self):
+        for device, wrong_target in [("ipad", "ipad-mini"), ("ipad-mini", "ipad")]:
+            fixture = self.fixture(device)
+            with self.subTest(device=device), self.assertRaisesRegex(ValueError, "requested device"):
+                verified_asset(**(fixture | {"device": wrong_target}))
 
     def test_source_owner_must_match_manifest_and_allowlist(self):
         fixture = self.fixture("ipad")
