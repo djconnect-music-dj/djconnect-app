@@ -84,11 +84,13 @@ private struct SavedSessionListRow: View, Equatable {
 struct SavedSessionDestination: Hashable, Identifiable {
     let sessionID: String
     let searchQuery: String
+    let initialAnchor: String?
     var id: Self { self }
 
-    init(sessionID: String, searchQuery: String) {
+    init(sessionID: String, searchQuery: String, initialAnchor: String? = nil) {
         self.sessionID = sessionID
         self.searchQuery = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.initialAnchor = initialAnchor
     }
 }
 
@@ -281,7 +283,7 @@ struct SavedSessionsView: View {
             }
             .navigationDestination(item: openedSession) { destination in
                 SessionTimelineScreen(model: model, sessionID: destination.sessionID,
-                    initialSearchQuery: destination.searchQuery)
+                    initialAnchor: destination.initialAnchor, initialSearchQuery: destination.searchQuery)
                     .id(destination)
                     .navigationTitle(detailTitle(sessionID: destination.sessionID))
                     .djConnectMouseBackNavigation()
@@ -1110,6 +1112,16 @@ struct SessionTimelineScreen: View {
                 else if let anchor = history.readingAnchor(sessionID: sessionID) {
                     if ["current", "tail"].contains(anchor) { jump(anchor, proxy: proxy) }
                     else { await selectAnchor(anchor, proxy: proxy, restoreRequest: true) }
+                }
+            }
+            .task(id: history.notificationMomentReturnTarget) {
+                guard activeSession != nil, let target = history.notificationMomentReturnTarget,
+                      target.sessionID == sessionID else { return }
+                showsForecast = false
+                if searching { closeSearch(proxy: proxy) }
+                await selectAnchor(target.entryID, proxy: proxy)
+                if !Task.isCancelled, history.notificationMomentReturnTarget == target {
+                    history.notificationMomentReturnTarget = nil
                 }
             }
             .task(id: activeSession?.id) {
