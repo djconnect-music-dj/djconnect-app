@@ -62,7 +62,11 @@ struct MusicCanvasView: View {
         DJConnectGlassDialogSurface(
             title: selected == nil ? "Music Canvas" : settingsTitle,
             icon: DJConnectHeroGlyph(systemImage: "photo.artframe"),
-            keepsCardMounted: true
+            keepsCardMounted: true,
+            back: selected == nil ? nil : (
+                DJConnectLocalization.localized(key: "ui.session.intro.back", language: model.language),
+                returnToScreens
+            )
         ) {
             VStack(alignment: .leading, spacing: 16) {
                 if let selected, let snapshot {
@@ -118,16 +122,6 @@ struct MusicCanvasView: View {
                     .accessibilityValue(isRequestingArtwork ? text("working") : "")
                     .accessibilityIdentifier("music-canvas-new-artwork")
                 }
-                if selected != nil {
-                    Button(DJConnectLocalization.localized(key: "ui.session.intro.back", language: model.language)) {
-                        selected = nil
-                        preview = nil
-                        shownArtworkPreviewRevision = nil
-                    }
-                    .djConnectButtonStyle(DJConnectButtonStyle(expands: true))
-                    .controlSize(.large)
-                    .accessibilityIdentifier("music-canvas-back")
-                }
                 Button(text("done")) { dismiss() }
                     .djConnectButtonStyle(DJConnectButtonStyle(emphasis: .primary, expands: true))
                     .controlSize(.large)
@@ -155,6 +149,12 @@ struct MusicCanvasView: View {
                 snapshot = nil; selected = nil; preview = nil; shownArtworkPreviewRevision = nil
             }
         }
+    }
+
+    private func returnToScreens() {
+        selected = nil
+        preview = nil
+        shownArtworkPreviewRevision = nil
     }
 
     private func screenChooser(_ snapshot: DJConnectCanvasSnapshot) -> some View {
@@ -268,12 +268,27 @@ struct MusicCanvasView: View {
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
             .accessibilityElement(children: .combine)
-            if target.preview_available, selected?.id == target.id, let preview {
-                MusicCanvasFramedPreview(
-                    artwork: preview,
-                    isSwitchBot: target.adapter == "switchbot",
-                    finish: snapshot.preferences.presentation(for: target).frame_finish
-                )
+            if target.preview_available {
+                let isSwitchBot = target.adapter == "switchbot"
+                let screenRatio = if let width = target.screen.width, let height = target.screen.height,
+                                     width > 0, height > 0 {
+                    CGFloat(width) / CGFloat(height)
+                } else {
+                    isSwitchBot ? 3.0 / 4.0 : 16.0 / 9.0
+                }
+                // Keep the menu anchors steady while an updated preview is being fetched.
+                Color.clear
+                    .aspectRatio(screenRatio, contentMode: .fit)
+                    .overlay {
+                        if let preview {
+                            MusicCanvasFramedPreview(
+                                artwork: preview,
+                                isSwitchBot: isSwitchBot,
+                                finish: snapshot.preferences.presentation(for: target).frame_finish
+                            )
+                        }
+                    }
+                    .accessibilityHidden(true)
             }
             if snapshot.preferences.presentation_overrides != nil {
                 let style = snapshot.preferences.presentation(for: target)
@@ -608,6 +623,7 @@ private struct MusicCanvasFramedPreview: View {
     let title: String
     let icon: Icon
     var keepsCardMounted = false
+    var back: (label: String, action: () -> Void)? = nil
     @ViewBuilder var content: () -> Content
 
     private var card: some View {
@@ -623,6 +639,17 @@ private struct MusicCanvasFramedPreview: View {
         .padding(24)
         .frame(maxWidth: .infinity)
         .djSessionFrostedSurface()
+        .overlay(alignment: .topLeading) {
+            if let back {
+                Button(action: back.action) {
+                    Image(systemName: "chevron.backward")
+                }
+                .djConnectButtonStyle(DJConnectButtonStyle(shape: .icon))
+                .accessibilityLabel(back.label)
+                .accessibilityIdentifier("music-canvas-back")
+                .padding(12)
+            }
+        }
         .padding(28)
     }
 
