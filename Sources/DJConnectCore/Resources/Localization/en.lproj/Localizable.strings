@@ -1835,6 +1835,13 @@
 "ui.canvas.off" = "Off";
 "ui.canvas.matching" = "Matching";
 "ui.canvas.contrast" = "Contrasting";
+"ui.canvas.frame" = "Match the frame";
+"ui.canvas.frame_finish" = "Frame finish";
+"ui.canvas.frame_finish.white" = "White";
+"ui.canvas.frame_finish.teak" = "Teak";
+"ui.canvas.frame_finish.walnut" = "Walnut";
+"ui.canvas.frame_finish.sand_gold" = "Sand Gold Metal";
+"ui.canvas.frame_finish.terracotta" = "Terracotta";
 "ui.canvas.show_track_title" = "Show track title";
 "ui.canvas.cadence" = "Change artwork";
 "ui.canvas.cadence.track" = "Every track";

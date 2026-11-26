@@ -46,9 +46,57 @@ private func canvasFixture() throws -> Data {
     #expect(saved.presentation(for: frame).cadence == nil)
     #expect(snapshot.per_screen_composition_and_cadence == nil)
     #expect(snapshot.per_screen_matte_size == nil)
+    #expect(snapshot.frame_matching_matte == nil)
     #expect(saved.presentation(for: frame).matte_size == nil)
     preferences.updatePresentation(for: tv) { $0.matte_size = "unknown" }
     #expect(!preferences.isValid)
+}
+
+@Test func musicCanvasFrameMatteRoundTripsAsAnAdditiveMatchingOption() throws {
+    let snapshot = try JSONDecoder().decode(DJConnectCanvasSnapshot.self, from: canvasFixture())
+    let tv = try #require(snapshot.targets.first { $0.adapter == "samsung" })
+    var preferences = snapshot.preferences
+    preferences.presentation_overrides = [:]
+    preferences.updatePresentation(for: tv) {
+        $0.selectMatte(DJConnectCanvasPresentation.frameMatte)
+        $0.frame_finish = "walnut"
+    }
+
+    let data = try JSONEncoder().encode(preferences)
+    var saved = try JSONDecoder().decode(DJConnectCanvasPreferences.self, from: data)
+    #expect(saved.isValid)
+    #expect(saved.presentation(for: tv).matte == "matching")
+    #expect(saved.presentation(for: tv).matteChoice == DJConnectCanvasPresentation.frameMatte)
+    #expect(saved.presentation(for: tv).match_frame == true)
+    #expect(saved.presentation(for: tv).frame_finish == "walnut")
+
+    saved.updatePresentation(for: tv) { $0.selectMatte("matching") }
+    #expect(saved.presentation(for: tv).match_frame == false)
+    #expect(saved.presentation(for: tv).matteChoice == "matching")
+    #expect(saved.presentation(for: tv).frame_finish == "walnut")
+    saved.updatePresentation(for: tv) { $0.frame_finish = "unknown" }
+    #expect(!saved.isValid)
+}
+
+@Test func musicCanvasReplacementPreviewRevisionIsOptionalAndBounded() throws {
+    var raw = try #require(JSONSerialization.jsonObject(with: canvasFixture()) as? [String: Any])
+    var targets = try #require(raw["targets"] as? [[String: Any]])
+    let revision = String(repeating: "a", count: 64)
+    targets[0]["artwork_request_pending"] = true
+    targets[0]["artwork_preview_revision"] = revision
+    raw["targets"] = targets
+    let snapshot = try JSONDecoder().decode(DJConnectCanvasSnapshot.self,
+        from: JSONSerialization.data(withJSONObject: raw))
+    #expect(snapshot.isValid)
+    #expect(snapshot.targets[0].artwork_request_pending == true)
+    #expect(snapshot.targets[0].artwork_preview_revision == revision)
+    #expect(snapshot.targets[1].artwork_request_pending == nil)
+    var request = DJConnectCanvasRequest(device_id: "djconnect-ios-SYNTHETIC", client_type: "ios")
+    request.target_id = snapshot.targets[0].id
+    request.preview_revision = revision
+    let body = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as? [String: Any])
+    #expect(Set(body.keys) == ["contract_version", "device_id", "client_type", "target_id", "preview_revision"])
+    #expect(body["preview_revision"] as? String == revision)
 }
 
 @Test func musicCanvasPreviewRevisionIsOptionalAndRequiresAnAvailablePreview() throws {
@@ -96,10 +144,11 @@ func musicCanvasRejectsMalformedPreferences(field: String) throws {
 @Test(arguments: ["nl", "en", "de", "fr", "es"])
 func musicCanvasLocalizesTheEntirePanel(language: String) {
     for key in ["open", "description", "enabled", "screens", "provider_required",
-                "composition", "matte", "cadence", "cadence.track", "cadence.900",
+                "composition", "matte", "frame", "cadence", "cadence.track", "cadence.900",
                 "cadence.1800", "cadence.3600", "forget", "cleanup_remote",
                 "state.delivered_unknown", "uncertain", "tv_permission", "not_offered",
-                "new_artwork", "state.alternative_unchanged"] {
+                "new_artwork", "state.alternative_unchanged", "frame_finish"]
+                + DJConnectCanvasPresentation.frameFinishes.map({ "frame_finish." + $0 }) {
         let full = "ui.canvas." + key
         let value = DJConnectLocalization.localized(key: full, language: language)
         #expect(!value.isEmpty && value != full)

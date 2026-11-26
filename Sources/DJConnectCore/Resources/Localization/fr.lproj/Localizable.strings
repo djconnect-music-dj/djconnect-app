@@ -1835,6 +1835,13 @@
 "ui.canvas.off" = "Désactivé";
 "ui.canvas.matching" = "Assorti";
 "ui.canvas.contrast" = "Contrasté";
+"ui.canvas.frame" = "Assorti au cadre";
+"ui.canvas.frame_finish" = "Finition du cadre";
+"ui.canvas.frame_finish.white" = "Blanc";
+"ui.canvas.frame_finish.teak" = "Teck";
+"ui.canvas.frame_finish.walnut" = "Noyer";
+"ui.canvas.frame_finish.sand_gold" = "Sand Gold Metal";
+"ui.canvas.frame_finish.terracotta" = "Terracotta";
 "ui.canvas.show_track_title" = "Afficher le titre du morceau";
 "ui.canvas.cadence" = "Changer d’œuvre";
 "ui.canvas.cadence.track" = "À chaque titre";

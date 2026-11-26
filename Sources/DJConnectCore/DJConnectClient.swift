@@ -1327,8 +1327,10 @@ public final class DJConnectClient: Sendable {
         return try await canvasReceipt("forget", body: body)
     }
 
-    public func musicCanvasPreview(targetID: String) async throws -> DJConnectSessionArtworkImage {
-        var body = canvasIdentity(); body.target_id = targetID
+    public func musicCanvasPreview(targetID: String, artworkRevision: String? = nil) async throws -> DJConnectSessionArtworkImage {
+        var body = canvasIdentity()
+        body.target_id = targetID
+        body.preview_revision = artworkRevision
         return try await sessionArtworkTransport.loadForecast(canvasRequest("preview", body: body))
     }
 

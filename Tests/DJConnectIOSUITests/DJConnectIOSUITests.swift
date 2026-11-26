@@ -1975,6 +1975,32 @@ extension DJConnectIOSUITests {
         return app
     }
 
+    func testIdleSessionToolbarMenuOpensPartyQRJoin() {
+        let app = launchRuntimeFixtureApp("review_demo", screen: "dj-session")
+        let start = app.buttons["session-welcome-start"]
+        XCTAssertTrue(start.waitForExistence(timeout: 8))
+        XCTAssertFalse(app.buttons["session-welcome-join"].exists)
+
+        let menu = app.buttons["session-idle-party-menu"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 5))
+        XCTAssertTrue(menu.isHittable)
+        XCTAssertLessThan(menu.frame.midX, app.frame.midX)
+        XCTAssertLessThan(menu.frame.midY, start.frame.midY)
+        menu.tap()
+
+        let join = app.buttons["session-idle-join-party"]
+        XCTAssertTrue(join.waitForExistence(timeout: 5))
+        XCTAssertEqual(join.label, "Deelnemen aan VibeCast Party")
+        join.tap()
+
+        let dialog = app.descendants(matching: .any)["live-guest-join"].firstMatch
+        XCTAssertTrue(dialog.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["live-guest-scan"].isHittable)
+        app.buttons["live-guest-leave"].tap()
+        XCTAssertTrue(dialog.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(start.exists)
+    }
+
     func testActiveSessionToolbarOpensPartyQRJoinAndReturnsToSession() {
         let app = launchSessionUIDemo()
         let endSession = app.buttons["session-end-button"]

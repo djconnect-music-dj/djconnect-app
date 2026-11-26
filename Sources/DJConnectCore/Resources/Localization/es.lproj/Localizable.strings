@@ -1835,6 +1835,13 @@
 "ui.canvas.off" = "Desactivado";
 "ui.canvas.matching" = "A juego";
 "ui.canvas.contrast" = "En contraste";
+"ui.canvas.frame" = "A juego con el marco";
+"ui.canvas.frame_finish" = "Acabado del marco";
+"ui.canvas.frame_finish.white" = "Blanco";
+"ui.canvas.frame_finish.teak" = "Teca";
+"ui.canvas.frame_finish.walnut" = "Nogal";
+"ui.canvas.frame_finish.sand_gold" = "Sand Gold Metal";
+"ui.canvas.frame_finish.terracotta" = "Terracotta";
 "ui.canvas.show_track_title" = "Mostrar el título de la canción";
 "ui.canvas.cadence" = "Cambiar obra";
 "ui.canvas.cadence.track" = "Cada canción";

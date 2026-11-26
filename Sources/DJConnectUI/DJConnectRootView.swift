@@ -915,7 +915,7 @@ public struct DJConnectRootView: View {
                         .padding(12)
                     .navigationTitle(screenTitle(model.language, key: "ui.djconnect", isDemoMode: model.isDemoMode))
                     .scrollContentBackgroundIfAvailable(.hidden)
-                    .scrollIndicators(.hidden)
+                    .scrollIndicators(.never)
                     .toolbar(removing: .sidebarToggle)
                     .focusSection()
                     .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 280)
@@ -9087,6 +9087,11 @@ private struct DJSessionView: View {
             .djSessionNavigationTitleStyle()
             .toolbar {
                 #if os(iOS)
+                if model.activeDJSession == nil {
+                    ToolbarItem(placement: .topBarLeading) {
+                        partyJoinMenu
+                    }
+                }
                 if model.shouldShowAppleWatchPairingReminder {
                     ToolbarItem(placement: .topBarLeading) {
                         AppleWatchPairingReminderButton(model: model)
@@ -9100,6 +9105,24 @@ private struct DJSessionView: View {
         }
         .accessibilityIdentifier("screen-dj-session")
     }
+
+    #if os(iOS)
+    private var partyJoinMenu: some View {
+        let title = localizedKey(model.language, "ui.live.join")
+        return Menu {
+            Button {
+                model.isShowingGuestJoin = true
+            } label: {
+                Label(title, systemImage: "qrcode.viewfinder")
+            }
+            .accessibilityIdentifier("session-idle-join-party")
+        } label: {
+            Image(systemName: "party.popper")
+        }
+        .accessibilityLabel(title)
+        .accessibilityIdentifier("session-idle-party-menu")
+    }
+    #endif
 
     private func idleSessionContent(contentTop: CGFloat) -> some View {
         #if os(iOS)
@@ -9188,19 +9211,6 @@ private struct IdleDJSessionView: View {
                     dimsWhenDisabled: !refreshing && !model.isSchedulingProfileDJChoice && model.profileDJSettings.phase != .saving))
                 .disabled(model.isLoadingDJSession || (!model.isDemoMode && model.pairingStatus != .paired) || !model.canUsePlaybackFeatures || model.isSchedulingProfileDJChoice || (!model.isDemoMode && [.saving, .uncertain].contains(model.profileDJSettings.phase)))
                 .accessibilityIdentifier("session-welcome-start")
-                #if os(iOS)
-                Text(localizedKey(model.language, "ui.session.welcome.join_separator"))
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
-                Button {
-                    model.isShowingGuestJoin = true
-                } label: {
-                    VibeCastPartyJoinLabel(title: localizedKey(model.language, "ui.live.join"))
-                }
-                    .djConnectButtonStyle(DJConnectButtonStyle(expands: true))
-                    .accessibilityIdentifier("session-welcome-join")
-                #endif
                 welcomeInstruction
                 if !model.isDemoMode && (model.pairingStatus != .paired || !model.canUsePlaybackFeatures) {
                     Text(localizedKey(model.language, "ui.session.requires_connection")).font(.footnote).foregroundStyle(.secondary)

@@ -1835,6 +1835,13 @@
 "ui.canvas.off" = "Uit";
 "ui.canvas.matching" = "Passend";
 "ui.canvas.contrast" = "Contrasterend";
+"ui.canvas.frame" = "Matchen met rand";
+"ui.canvas.frame_finish" = "Randafwerking";
+"ui.canvas.frame_finish.white" = "Wit";
+"ui.canvas.frame_finish.teak" = "Teakhout";
+"ui.canvas.frame_finish.walnut" = "Walnoothout";
+"ui.canvas.frame_finish.sand_gold" = "Sand Gold Metal";
+"ui.canvas.frame_finish.terracotta" = "Terracotta";
 "ui.canvas.show_track_title" = "Tracktitel weergeven";
 "ui.canvas.cadence" = "Kunstwerk wisselen";
 "ui.canvas.cadence.track" = "Ieder nummer";

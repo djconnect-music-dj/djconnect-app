@@ -1835,6 +1835,13 @@
 "ui.canvas.off" = "Aus";
 "ui.canvas.matching" = "Passend";
 "ui.canvas.contrast" = "Kontrastierend";
+"ui.canvas.frame" = "Passend zum Rahmen";
+"ui.canvas.frame_finish" = "Rahmenoberfläche";
+"ui.canvas.frame_finish.white" = "Weiß";
+"ui.canvas.frame_finish.teak" = "Teakholz";
+"ui.canvas.frame_finish.walnut" = "Walnussholz";
+"ui.canvas.frame_finish.sand_gold" = "Sand Gold Metal";
+"ui.canvas.frame_finish.terracotta" = "Terracotta";
 "ui.canvas.show_track_title" = "Songtitel anzeigen";
 "ui.canvas.cadence" = "Kunstwerk wechseln";
 "ui.canvas.cadence.track" = "Bei jedem Titel";
