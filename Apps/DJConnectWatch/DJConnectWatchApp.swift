@@ -60,8 +60,11 @@ final class DJConnectWatchApplicationDelegate: NSObject, WKApplicationDelegate, 
         willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
         guard let intent = try? DJConnectWatchMomentOpenIntent(notification: notification.request.content.userInfo)
         else { return [] }
-        let allowed = await MainActor.run { model?.canPresentWatchMomentNotification(intent) == true }
-        return allowed ? [.banner] : []
+        let currentModel = await MainActor.run {
+            model?.shouldRefreshForForegroundWatchMoment(intent) == true ? model : nil
+        }
+        await currentModel?.refreshForegroundSession(force: true)
+        return []
     }
 
     func didRegisterForRemoteNotifications(withDeviceToken deviceToken: Data) {

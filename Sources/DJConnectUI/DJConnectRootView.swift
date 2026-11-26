@@ -243,6 +243,7 @@ private enum DJConnectRootSheet: String, Identifiable {
     case rendezvous
     case permissionExplanation
     case musicDNAOptIn
+    case pushSetup
     case sessionHistory
 
     var id: String { rawValue }
@@ -759,6 +760,8 @@ public struct DJConnectRootView: View {
     #endif
     @State private var moreResetID = UUID()
     @State private var showingFeedback = false
+    @State private var pushSetupSession: String?
+    @State private var submittedPushChoices: FirstSessionPushChoices?
 
     public init(model: DJConnectAppModel) {
         self.model = model
@@ -1051,7 +1054,14 @@ public struct DJConnectRootView: View {
         .onChange(of: model.activeDJSession?.id) { _, sessionID in
             if sessionID == nil { model.dismissSessionIntroduction() }
         }
-        .djConnectPopup(item: rootSheetBinding) { sheet in
+        .task(id: firstPushSetupSessionID) {
+            if let sessionID = firstPushSetupSessionID, !model.completedFirstSessionPushSetup {
+                pushSetupSession = sessionID
+            } else {
+                pushSetupSession = nil
+            }
+        }
+        .djConnectPopup(item: rootSheetBinding, onDismiss: applyFirstSessionPushChoices) { sheet in
             rootSheetView(sheet)
             #if os(iOS)
                 .djConnectPopup(isPresented: guestJoinBinding(above: sheet)) {
@@ -1383,6 +1393,26 @@ public struct DJConnectRootView: View {
             dismissOther: { dismiss(rootSheet: $0) })
     }
 
+    private var firstPushSetupSessionID: String? {
+        guard scenePhase == .active, model.pairingStatus == .paired, !model.isDemoMode,
+              let active = model.activeDJSession, active.runtimeState == "active" else { return nil }
+        return active.id
+    }
+
+    private func applyFirstSessionPushChoices() {
+        guard let choices = submittedPushChoices else { return }
+        submittedPushChoices = nil
+        guard let sessionID = firstPushSetupSessionID, sessionID == choices.sessionID else { return }
+        model.markFirstSessionPushSetupCompleted()
+        if model.canChooseNativePushConsent {
+            model.setUpdatesPlacedWidgets(choices.widget)
+            #if os(iOS)
+            model.setNativePushAllowed(choices.activity, for: .liveActivityUpdate)
+            #endif
+        }
+        model.setVisiblePushChoices(askDJ: choices.askDJ, moments: choices.moments)
+    }
+
     private var activeRootSheet: DJConnectRootSheet? {
         if model.updateRequiredMessage != nil {
             return .updateRequired
@@ -1416,6 +1446,7 @@ public struct DJConnectRootView: View {
             return .musicDNAOptIn
         }
         if history.openTarget != nil { return .sessionHistory }
+        if let pushSetupSession, pushSetupSession == firstPushSetupSessionID { return .pushSetup }
         return nil
     }
 
@@ -1480,6 +1511,13 @@ public struct DJConnectRootView: View {
                 .presentationBackground {
                     DJConnectCanvasBackground()
                 }
+        case .pushSetup:
+            if let sessionID = pushSetupSession {
+                FirstSessionPushChoicesView(model: model, sessionID: sessionID) { choices in
+                    submittedPushChoices = choices
+                    pushSetupSession = nil
+                }
+            }
         case .sessionHistory:
             if let target = history.openTarget {
                 if history.notificationMomentTarget == target {
@@ -1570,6 +1608,8 @@ public struct DJConnectRootView: View {
             model.cancelPermissionExplanation()
         case .musicDNAOptIn:
             model.dismissMusicDNAOptInPrompt()
+        case .pushSetup:
+            pushSetupSession = nil
         case .sessionHistory:
             closeSessionHistory()
         }
@@ -1629,6 +1669,85 @@ public struct DJConnectRootView: View {
         case .privacy:
             PrivacyView(language: model.language)
         }
+    }
+}
+
+private struct FirstSessionPushChoices {
+    let sessionID: String
+    var askDJ = false
+    var moments = false
+    var widget = false
+    var activity = false
+}
+
+private struct FirstSessionPushChoicesView: View {
+    @ObservedObject var model: DJConnectAppModel
+    let apply: (FirstSessionPushChoices) -> Void
+    @State private var choices: FirstSessionPushChoices
+
+    init(model: DJConnectAppModel, sessionID: String, apply: @escaping (FirstSessionPushChoices) -> Void) {
+        self.model = model
+        self.apply = apply
+        _choices = State(initialValue: FirstSessionPushChoices(
+            sessionID: sessionID, askDJ: model.askDJNotificationsEnabled, moments: model.momentNotificationsEnabled,
+            widget: model.updatesPlacedWidgets, activity: model.nativePushAllowed(.liveActivityUpdate)))
+    }
+
+    private func text(_ key: String) -> String { localizedKey(model.language, key) }
+
+    private func option(_ key: String, _ enabled: Binding<Bool>) -> some View {
+        Toggle(isOn: enabled) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(text(key))
+                Text(text(key + ".detail")).font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func selectAll(_ enabled: Bool) {
+        choices.askDJ = enabled
+        choices.moments = enabled
+        if model.canChooseNativePushConsent {
+            choices.widget = enabled
+            #if os(iOS)
+            choices.activity = enabled
+            #endif
+        }
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(text("ui.push.setup.title")).font(.title2.weight(.semibold))
+                Text(text("ui.push.setup.detail")).foregroundStyle(.secondary)
+                option("ui.settings.moment.notifications", $choices.moments)
+                option("ui.push.setup.ask_dj", $choices.askDJ)
+                if model.canChooseNativePushConsent {
+                    option("ui.surface.push.widget", $choices.widget)
+                    #if os(iOS)
+                    option("ui.surface.push.activity", $choices.activity)
+                    #endif
+                }
+                ViewThatFits(in: .horizontal) {
+                    HStack { selectAllButtons }
+                    VStack(alignment: .leading) { selectAllButtons }
+                }
+                Button(text("ui.done")) { apply(choices) }
+                    .djConnectButtonStyle(DJConnectButtonStyle(emphasis: .primary, expands: true))
+            }
+            .padding(24)
+            .frame(maxWidth: 520, alignment: .leading)
+            .djSessionFrostedSurface()
+            .padding(20)
+            .frame(maxWidth: .infinity)
+        }
+        .background { DJConnectCanvasBackground() }
+        .accessibilityIdentifier("first-session-push-choices")
+    }
+
+    @ViewBuilder private var selectAllButtons: some View {
+        Button(text("ui.push.setup.enable_all")) { selectAll(true) }
+        Button(text("ui.push.setup.disable_all")) { selectAll(false) }
     }
 }
 
@@ -18249,8 +18368,11 @@ struct SettingsView: View {
 
     private func nativePushConsentToggle(_ role: DJConnectSurfacePushTaskOwner.Role, title: String) -> some View {
         pushSettingsToggle(title: title, isOn: Binding(
-            get: { model.nativePushAllowed(role) },
-            set: { model.setNativePushAllowed($0, for: role) }
+            get: { role == .widget ? model.updatesPlacedWidgets : model.nativePushAllowed(role) },
+            set: { enabled in
+                if role == .widget { model.setUpdatesPlacedWidgets(enabled) }
+                else { model.setNativePushAllowed(enabled, for: role) }
+            }
         ))
         .accessibilityIdentifier("settings-surface-push-\(role.rawValue)")
         .djCompactSettingsListRow()
@@ -18451,12 +18573,20 @@ struct SettingsView: View {
                     )
                     .accessibilityIdentifier("settings-permission-notifications")
                     .djCompactSettingsListRow()
-                    pushSettingsToggle(title: "ui.settings.moment.notifications", isOn: Binding(
-                        get: { model.momentNotificationsEnabled },
-                        set: { model.setMomentNotificationsEnabled($0) }
-                    ))
-                    .accessibilityIdentifier("settings-moment-notifications")
-                    .djCompactSettingsListRow()
+                    if model.completedFirstSessionPushSetup {
+                        pushSettingsToggle(title: "ui.settings.moment.notifications", isOn: Binding(
+                            get: { model.momentNotificationsEnabled },
+                            set: { model.setMomentNotificationsEnabled($0) }
+                        ))
+                        .accessibilityIdentifier("settings-moment-notifications")
+                        .djCompactSettingsListRow()
+                        pushSettingsToggle(title: "ui.push.setup.ask_dj", isOn: Binding(
+                            get: { model.askDJNotificationsEnabled },
+                            set: { model.setAskDJNotificationsEnabled($0) }
+                        ))
+                        .accessibilityIdentifier("settings-ask-dj-notifications")
+                        .djCompactSettingsListRow()
+                    }
                     if model.canChooseNativePushConsent || model.passiveSurfaces.retainedWidgetEnabled || retainedWidgetSessionID != nil {
                         DisclosureGroup {
                             VStack(alignment: .leading, spacing: 12) {
@@ -18498,7 +18628,8 @@ struct SettingsView: View {
                     )
                     .accessibilityIdentifier("settings-permission-speech")
                     .djCompactSettingsListRow()
-                    if model.notificationPermissionStatus != .granted {
+                    if model.completedFirstSessionPushSetup, model.notificationPermissionStatus != .granted,
+                       model.askDJNotificationsEnabled || model.momentNotificationsEnabled {
                         Button {
                             model.requestAppPermissions()
                         } label: {

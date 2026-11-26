@@ -1737,10 +1737,17 @@
 "ui.widget.retained.title" = "Dernière intervention du DJ dans le widget";
 "ui.widget.retained.detail" = "Autorisez le grand widget à afficher la dernière intervention disponible du DJ pour cette session.";
 
+"ui.push.setup.watch_settings" = "Autorisez les notifications de DJConnect dans l’app Watch de votre iPhone, puis réactivez cette option.";
+"ui.push.setup.title" = "Notifications et affichage de la session";
+"ui.push.setup.ask_dj" = "Réponses d’Ask DJ";
+"ui.push.setup.ask_dj.detail" = "Recevez une notification lorsque DJConnect répond à votre question.";
+"ui.push.setup.detail" = "Choisissez les fonctions à utiliser sur cet appareil. Chaque choix peut être modifié dans les réglages.";
+"ui.push.setup.enable_all" = "Tout activer";
+"ui.push.setup.disable_all" = "Tout désactiver";
 "ui.surface.visibility" = "Affichage de la session";
 "ui.surface.visibility.detail" = "Choisissez où cet appareil peut afficher votre session.";
 "ui.surface.push.widget" = "Widget";
-"ui.surface.push.widget.detail" = "Affichez votre session en cours dans le widget DJConnect.";
+"ui.surface.push.widget.detail" = "Gardez votre session à jour lorsque vous ajoutez le widget DJConnect.";
 "ui.surface.push.activity" = "Activité en direct";
 "ui.surface.push.activity.detail" = "Affichez votre session en cours sur l’écran verrouillé et, si disponible, dans la Dynamic Island.";
 

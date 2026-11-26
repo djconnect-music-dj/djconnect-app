@@ -325,8 +325,9 @@ extension View {
         }
     }
 
-    func djConnectPopup<Item: Identifiable, Popup: View>(item: Binding<Item?>, @ViewBuilder content: @escaping (Item) -> Popup) -> some View {
-        sheet(item: item) { item in
+    func djConnectPopup<Item: Identifiable, Popup: View>(item: Binding<Item?>, onDismiss: (() -> Void)? = nil,
+        @ViewBuilder content: @escaping (Item) -> Popup) -> some View {
+        sheet(item: item, onDismiss: onDismiss) { item in
             content(item).interactiveDismissDisabled()
         }
     }

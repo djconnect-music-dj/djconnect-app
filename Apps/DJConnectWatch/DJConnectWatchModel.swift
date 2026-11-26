@@ -623,7 +623,8 @@ final class DJConnectWatchModel: NSObject, ObservableObject {
     func requestRemoteNotificationRegistration(allowSystemPrompt: Bool = false) {
         let pairing = companionPairingIntent?.identifier
         Task { @MainActor in
-            guard paired, !isDemoMode, companionPairingIntent?.identifier == pairing else { return }
+            guard paired, !isDemoMode, companionPairingIntent?.identifier == pairing,
+                  !watchNotificationCategories.isEmpty else { return }
             let center = UNUserNotificationCenter.current()
             logPush("init platform=\(identity.platform.rawValue) client_type=\(identity.clientType.rawValue) bundle_id=\(Bundle.main.bundleIdentifier ?? "<missing>") app_version=\(identity.appVersion ?? "<missing>") app_build=\(DJConnectApplicationVersion.buildVersion) protocol_version=\(identity.protocolVersion ?? identity.firmware) env=\(Self.pushEnvironment.rawValue)")
             let authorized = await requestRemoteNotificationAuthorizationIfNeeded(
@@ -2598,26 +2599,67 @@ final class DJConnectWatchModel: NSObject, ObservableObject {
 
     // Only an explicit notification tap is retained. This is opaque navigation
     // intent, not text, bearer, admission or permission to speak/start playback.
-    @Published var watchMomentNotificationsEnabled = UserDefaults.standard.bool(forKey: "watch.moment.notifications.v1") {
-        didSet {
-            guard oldValue != watchMomentNotificationsEnabled else { return }
-            UserDefaults.standard.set(watchMomentNotificationsEnabled, forKey: "watch.moment.notifications.v1")
-            if !watchMomentNotificationsEnabled { clearWatchMomentIntent() }
-            UserDefaults.standard.removeObject(forKey: registeredPushSignatureKey)
-            registerStoredPushTokenIfPossible()
-        }
-    }
+    @Published private(set) var watchMomentNotificationsEnabled = UserDefaults.standard.bool(forKey: "watch.moment.notifications.v1")
+    @Published private(set) var watchAskDJNotificationsEnabled = UserDefaults.standard.bool(forKey: "watch.ask_dj.notifications.v1")
+    @Published private(set) var watchNotificationSettingsRequired = false
     private var pushRegistrationTask: Task<Void, Never>?
     private var watchNotificationCategories: [String] {
-        DJConnectPushRegistrationRequest.defaultNotificationCategories + (watchMomentNotificationsEnabled ? ["dj_moments_v1"] : [])
+        (watchAskDJNotificationsEnabled ? DJConnectPushRegistrationRequest.defaultNotificationCategories : [])
+            + (watchMomentNotificationsEnabled ? ["dj_moments_v1"] : [])
     }
+
     func requestWatchNotificationPermission() {
+        guard paired, !isDemoMode, UserDefaults.standard.bool(forKey: "DJConnectWatchFirstSessionPushSetupCompleted") else { return }
         Task { @MainActor in
             if await requestAskDJNotificationAuthorization(center: .current()) { registerStoredPushTokenIfPossible() }
         }
     }
 
-    func canPresentWatchMomentNotification(_ intent: DJConnectWatchMomentOpenIntent) -> Bool {
+    private var watchNotificationPreferenceRequest = UUID()
+
+    func setWatchMomentNotificationsAllowed(_ enabled: Bool) {
+        setWatchVisiblePushChoices(askDJ: watchAskDJNotificationsEnabled, moments: enabled)
+    }
+
+    func setWatchAskDJNotificationsAllowed(_ enabled: Bool) {
+        setWatchVisiblePushChoices(askDJ: enabled, moments: watchMomentNotificationsEnabled)
+    }
+
+    func setWatchVisiblePushChoices(askDJ: Bool, moments: Bool) {
+        guard paired, !isDemoMode, UserDefaults.standard.bool(forKey: "DJConnectWatchFirstSessionPushSetupCompleted") else { return }
+        let request = UUID()
+        watchNotificationPreferenceRequest = request
+        if !askDJ || !moments {
+            saveWatchVisiblePushChoices(askDJ: askDJ && watchAskDJNotificationsEnabled,
+                                        moments: moments && watchMomentNotificationsEnabled)
+        }
+        guard askDJ != watchAskDJNotificationsEnabled || moments != watchMomentNotificationsEnabled else { return }
+        let pairing = companionPairingIntent?.identifier
+        Task { @MainActor in
+            guard !Task.isCancelled, paired, !isDemoMode, companionPairingIntent?.identifier == pairing,
+                  await requestAskDJNotificationAuthorizationIfNeeded(center: .current(), explicitChoice: true),
+                  watchNotificationPreferenceRequest == request,
+                  paired, !isDemoMode, companionPairingIntent?.identifier == pairing else { return }
+            saveWatchVisiblePushChoices(askDJ: askDJ, moments: moments)
+        }
+    }
+
+    private func saveWatchVisiblePushChoices(askDJ: Bool, moments: Bool) {
+        watchAskDJNotificationsEnabled = askDJ
+        watchMomentNotificationsEnabled = moments
+        UserDefaults.standard.set(askDJ, forKey: "watch.ask_dj.notifications.v1")
+        UserDefaults.standard.set(moments, forKey: "watch.moment.notifications.v1")
+        if !moments { clearWatchMomentIntent() }
+        UserDefaults.standard.removeObject(forKey: registeredPushSignatureKey)
+        if watchNotificationCategories.isEmpty {
+            pushRegistrationTask?.cancel()
+            unregisterPushNotifications()
+        } else {
+            requestRemoteNotificationRegistration()
+        }
+    }
+
+    func shouldRefreshForForegroundWatchMoment(_ intent: DJConnectWatchMomentOpenIntent) -> Bool {
         watchMomentNotificationsEnabled && isAppForeground && canUseBackend && !isDemoMode &&
             intent.isPending() && foregroundSession.current()?.session?.id == intent.sessionID
     }
@@ -4776,6 +4818,7 @@ final class DJConnectWatchModel: NSObject, ObservableObject {
 
     private func notifyAskDJResponse(_ text: String) {
         playVoiceHaptic(.response)
+        guard watchAskDJNotificationsEnabled else { return }
         let preview = Self.notificationPreview(from: text)
         Task {
             let center = UNUserNotificationCenter.current()
@@ -4805,13 +4848,15 @@ final class DJConnectWatchModel: NSObject, ObservableObject {
         }
     }
 
-    private func requestAskDJNotificationAuthorizationIfNeeded(center: UNUserNotificationCenter) async -> Bool {
+    private func requestAskDJNotificationAuthorizationIfNeeded(center: UNUserNotificationCenter, explicitChoice: Bool = false) async -> Bool {
+        guard paired, !isDemoMode, UserDefaults.standard.bool(forKey: "DJConnectWatchFirstSessionPushSetupCompleted") else { return false }
         let settings = await center.notificationSettings()
         switch settings.authorizationStatus {
         case .authorized, .provisional, .ephemeral:
+            watchNotificationSettingsRequired = false
             return true
         case .notDetermined:
-            guard !hasRequestedAskDJNotificationPermission else {
+            guard explicitChoice || !hasRequestedAskDJNotificationPermission else {
                 return false
             }
             let shouldRequestSystemPermission = await withCheckedContinuation { continuation in
@@ -4824,6 +4869,7 @@ final class DJConnectWatchModel: NSObject, ObservableObject {
             }
             return await requestAskDJNotificationAuthorization(center: center)
         case .denied:
+            watchNotificationSettingsRequired = true
             return false
         @unknown default:
             return false
@@ -4849,6 +4895,7 @@ final class DJConnectWatchModel: NSObject, ObservableObject {
     ) async -> Bool {
         do {
             let granted = try await center.requestAuthorization(options: [.alert, .sound])
+            watchNotificationSettingsRequired = !granted
             if granted, registerWithSystem {
                 WKApplication.shared().registerForRemoteNotifications()
             }
@@ -4893,6 +4940,10 @@ final class DJConnectWatchModel: NSObject, ObservableObject {
         let locale = Locale.current.identifier
         let bootstrapProof: String? = nil
         let categories = watchNotificationCategories
+        guard !categories.isEmpty else {
+            unregisterPushNotifications()
+            return
+        }
         let registrationSignature = pushRegistrationSignature(
             pushToken: token,
             pushEnvironment: environment,

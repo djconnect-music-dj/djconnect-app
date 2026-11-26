@@ -4388,6 +4388,12 @@ private struct DJConnectWatchScrollingTitle: View {
 /// Session modes are paged from home. Flow Moments use their own navigation.
 private struct DJConnectWatchCompanionPages: View {
     private static let avatarSize: CGFloat = 60
+    @AppStorage("DJConnectWatchFirstSessionPushSetupCompleted") private var pushSetupCompleted = false
+    @State private var pushSetupSession: String?
+    @State private var submittedPushSetup = false
+    @State private var wantsWatchAskDJAlerts = false
+    @State private var wantsWatchMoments = false
+    @State private var wantsSmartStack = false
     @ObservedObject var model: DJConnectWatchModel
     @ObservedObject var state: DJConnectWatchForegroundSession
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -4445,6 +4451,55 @@ private struct DJConnectWatchCompanionPages: View {
         let rows = currentFlowRows
         let index = min(Int(flowPosition.rounded()), rows.count)
         return index > 0 ? rows[index - 1] : nil
+    }
+
+    private var firstRealPushSetupSession: String? {
+        guard scenePhase == .active, model.connectionState == .paired, !model.isDemoMode,
+              session?.runtimeState == "active" else { return nil }
+        return session?.id
+    }
+
+    private func applyWatchPushSetup() {
+        guard submittedPushSetup else { return }
+        submittedPushSetup = false
+        guard firstRealPushSetupSession != nil else { return }
+        pushSetupCompleted = true
+        if model.canChooseWatchWidgetDisplay || model.watchWidgetDisplayEnabled {
+            model.setWatchWidgetDisplayEnabled(wantsSmartStack)
+        }
+        model.setWatchVisiblePushChoices(askDJ: wantsWatchAskDJAlerts, moments: wantsWatchMoments)
+    }
+
+    private var watchPushSetup: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(text("ui.push.setup.title")).font(.headline)
+                Text(text("ui.push.setup.detail")).font(.caption2).foregroundStyle(.secondary)
+                Toggle(text("ui.push.setup.ask_dj"), isOn: $wantsWatchAskDJAlerts)
+                Text(text("ui.push.setup.ask_dj.detail")).font(.caption2).foregroundStyle(.secondary)
+                Toggle(text("watch.v2.moments"), isOn: $wantsWatchMoments)
+                Text(text("ui.settings.moment.notifications.detail")).font(.caption2).foregroundStyle(.secondary)
+                if model.canChooseWatchWidgetDisplay || model.watchWidgetDisplayEnabled {
+                    Toggle("Smart Stack", isOn: $wantsSmartStack)
+                    Text(text("watch.widget.locked_explanation")).font(.caption2).foregroundStyle(.secondary)
+                }
+                Button(text("ui.push.setup.enable_all")) {
+                    wantsWatchAskDJAlerts = true
+                    wantsWatchMoments = true
+                    wantsSmartStack = model.canChooseWatchWidgetDisplay || model.watchWidgetDisplayEnabled
+                }
+                Button(text("ui.push.setup.disable_all")) {
+                    wantsWatchAskDJAlerts = false
+                    wantsWatchMoments = false
+                    wantsSmartStack = false
+                }
+                Button(text("ui.done")) {
+                    submittedPushSetup = true
+                    pushSetupSession = nil
+                }
+            }
+            .padding(.horizontal, watchRowInset)
+        }
     }
 
     private func closeNotificationMoment(_ intent: DJConnectWatchMomentOpenIntent) {
@@ -4627,6 +4682,18 @@ private struct DJConnectWatchCompanionPages: View {
                     .accessibilityLabel(text("ui.session.intro.back"))
                 }
             }
+        }
+        .task(id: firstRealPushSetupSession) {
+            guard !pushSetupCompleted, let sessionID = firstRealPushSetupSession else { return }
+            pushSetupSession = sessionID
+            wantsWatchAskDJAlerts = model.watchAskDJNotificationsEnabled
+            wantsWatchMoments = model.watchMomentNotificationsEnabled
+            wantsSmartStack = model.watchWidgetDisplayEnabled
+        }
+        .sheet(isPresented: Binding(get: { pushSetupSession != nil }, set: { if !$0 { pushSetupSession = nil } }),
+               onDismiss: applyWatchPushSetup) {
+            watchPushSetup
+                .interactiveDismissDisabled()
         }
         .onChange(of: model.watchHomeOpenSequence) { _, _ in page = 0; flowPosition = 0; destination = nil }
         .onChange(of: model.watchMomentOpenIntent, initial: true) { _, intent in
@@ -6321,11 +6388,24 @@ private struct DJConnectWatchCompanionNotificationsView: View {
     @EnvironmentObject private var model: DJConnectWatchModel
     var body: some View {
         DJConnectWatchList {
-            Toggle(watchLocalizedKey(model.language, "watch.v2.moments"), isOn: $model.watchMomentNotificationsEnabled)
+            Toggle(watchLocalizedKey(model.language, "ui.push.setup.ask_dj"), isOn: Binding(
+                get: { model.watchAskDJNotificationsEnabled },
+                set: { model.setWatchAskDJNotificationsAllowed($0) }
+            ))
+            Toggle(watchLocalizedKey(model.language, "watch.v2.moments"), isOn: Binding(
+                get: { model.watchMomentNotificationsEnabled },
+                set: { model.setWatchMomentNotificationsAllowed($0) }
+            ))
             // Ordinary push registration does not acknowledge the Moment preference.
             Text(watchLocalizedKey(model.language, "watch.v2.notification.pending"))
                 .font(.caption).foregroundStyle(.secondary)
-            Button(watchLocalizedKey(model.language, "watch.v2.notification.permission")) { model.requestWatchNotificationPermission() }
+            if model.watchNotificationSettingsRequired {
+                Text(watchLocalizedKey(model.language, "ui.push.setup.watch_settings"))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            } else {
+                Button(watchLocalizedKey(model.language, "watch.v2.notification.permission")) { model.requestWatchNotificationPermission() }
+            }
                 .buttonStyle(.plain)
         }
         .watchStandardBackground()

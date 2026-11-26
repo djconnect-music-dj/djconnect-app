@@ -376,7 +376,7 @@ public enum DJConnectPermissionExplanationKind: Equatable, Sendable {
 
 private enum DJConnectPendingPermissionRequest {
     case appPermissions
-    case momentNotifications
+    case functionalNotifications(askDJ: Bool, moments: Bool)
     case voiceRecording
 }
 
@@ -2762,12 +2762,29 @@ public final class DJConnectAppModel: ObservableObject {
     @Published public private(set) var wakeWordStatus: DJConnectWakeWordStatus = .idle
     @Published public private(set) var microphonePermissionStatus: DJConnectPermissionStatus = .unknown
     @Published public private(set) var speechPermissionStatus: DJConnectPermissionStatus = .unknown
-    @Published public private(set) var notificationPermissionStatus: DJConnectPermissionStatus = .unknown
+    @Published public private(set) var notificationPermissionStatus: DJConnectPermissionStatus = .unknown {
+        didSet {
+            if notificationPermissionStatus == .granted, let requested = requestedNotificationSettings {
+                requestedNotificationSettings = nil
+                if pairingStatus == .paired, !isDemoMode, requested.pairing == pairingTaskGeneration {
+                    saveVisiblePushChoices(askDJ: requested.askDJ, moments: requested.moments)
+                }
+            }
+        }
+    }
     @Published public private(set) var momentNotificationsEnabled: Bool
+    @Published private(set) var askDJNotificationsEnabled: Bool
+    private static let askDJNotificationsKey = "DJConnectAskDJNotificationsEnabled"
+    private var requestedNotificationSettings: (pairing: UUID, askDJ: Bool, moments: Bool)?
     @Published private(set) var pendingMomentOpen: DJConnectWatchMomentOpenIntent?
     private var pendingMomentPairing: UUID?
     private var lastOpenedMoment: DJConnectWatchMomentOpenIntent?
     private static let momentNotificationsKey = "DJConnectMomentNotificationsEnabled"
+    private static let pushSetupCompletedKey = "DJConnectFirstSessionPushSetupCompleted"
+    var completedFirstSessionPushSetup: Bool { defaults.bool(forKey: Self.pushSetupCompletedKey) }
+    func markFirstSessionPushSetupCompleted() {
+        defaults.set(true, forKey: Self.pushSetupCompletedKey)
+    }
     @Published var isShowingLocalNetworkExplanation = false
     private var pendingLocalNetworkAction: (() -> Void)?
     private let localNetworkExplanationAcceptedKey = "djconnect.local-network.explanation-accepted.v1"
@@ -3540,6 +3557,7 @@ public final class DJConnectAppModel: ObservableObject {
         self.nativePushConsent = defaults.data(forKey: Self.nativePushConsentKey)
             .flatMap { try? JSONDecoder().decode([String: NativePushChoice].self, from: $0) } ?? [:]
         self.momentNotificationsEnabled = defaults.bool(forKey: Self.momentNotificationsKey)
+        self.askDJNotificationsEnabled = defaults.bool(forKey: Self.askDJNotificationsKey)
         // Retire the old auto-suggestion preference. Help is always manual.
         defaults.removeObject(forKey: "DJConnectAutomaticHelpHidden")
         self.startBackgroundTasks = startBackgroundTasks
@@ -13171,6 +13189,20 @@ public final class DJConnectAppModel: ObservableObject {
 
     var canChooseNativePushConsent: Bool { nativePushConsentPairing != nil }
 
+    private static let suppressPlacedWidgetPushKey = "DJConnectSuppressPlacedWidgetPush"
+    private var observedWidgetPlacement: (pairing: String, placed: Bool)?
+    var updatesPlacedWidgets: Bool { !defaults.bool(forKey: Self.suppressPlacedWidgetPushKey) }
+
+    func setUpdatesPlacedWidgets(_ enabled: Bool) {
+        defaults.set(!enabled, forKey: Self.suppressPlacedWidgetPushKey)
+        if !enabled { setNativePushAllowed(false, for: .widget) }
+        observedWidgetPlacement = nil
+        lastAutomaticPassiveQueryAt = nil
+        scheduleAutomaticPassiveSessionSurfaces()
+        objectWillChange.send()
+    }
+
+
     func nativePushAllowed(_ role: DJConnectSurfacePushTaskOwner.Role) -> Bool {
         if role == .widget {
             if let queued = queuedWidgetEnableIntent, queued.pairing == nativePushConsentPairing { return true }
@@ -13672,7 +13704,16 @@ public final class DJConnectAppModel: ObservableObject {
                 let configured = try await WidgetCenter.shared.currentConfigurations()
                 guard isCurrentNativePushInventory(inventoryAttempt, role: .widget) else { return }
                 let widgetKind = DJConnectSessionSurfaceSnapshot.widgetKind
-                if configured.contains(where: { $0.kind == widgetKind }) { surfaces.insert(.widget) }
+                let hasPlacedWidget = configured.contains { $0.kind == widgetKind }
+                if hasPlacedWidget { surfaces.insert(.widget) }
+                if completedFirstSessionPushSetup, let pairing = nativePushConsentPairing,
+                   observedWidgetPlacement?.pairing != pairing || observedWidgetPlacement?.placed != hasPlacedWidget {
+                    observedWidgetPlacement = (pairing, hasPlacedWidget)
+                    let wantsWidgetPush = hasPlacedWidget && updatesPlacedWidgets
+                    if wantsWidgetPush != nativePushAllowed(.widget) {
+                        setNativePushAllowed(wantsWidgetPush, for: .widget)
+                    }
+                }
                 // Installation-local WidgetKit token, separate from app APNs.
                 // Server registration waits for the owning Core widget contract.
                 if let shared = UserDefaults(suiteName: DJConnectLocalization.appGroupIdentifier) {
@@ -14517,6 +14558,8 @@ public final class DJConnectAppModel: ObservableObject {
 
     #if canImport(UserNotifications)
     private func requestAskDJNotificationAuthorizationIfNeeded(center: UNUserNotificationCenter, preview: String) async -> Bool {
+        guard pairingStatus == .paired, !isDemoMode, completedFirstSessionPushSetup,
+              askDJNotificationsEnabled else { return false }
         let settings = await center.notificationSettings()
         switch settings.authorizationStatus {
         case .authorized, .provisional, .ephemeral:
@@ -14607,13 +14650,17 @@ public final class DJConnectAppModel: ObservableObject {
               !token.isEmpty else {
             return
         }
+        guard !visiblePushCategories.isEmpty else {
+            unregisterPushNotifications(retireHostWake: false)
+            return
+        }
         currentAPNsPushToken = token
         defaults.removeObject(forKey: legacyPushTokenKey)
         let environment = Self.pushEnvironment
         let tokenHash = Self.pushTokenHash(token)
         let appBundleID = Bundle.main.bundleIdentifier ?? "dev.djconnect.\(identity.clientType.rawValue)"
         let locale = Locale.current.identifier
-        let categories = DJConnectPushRegistrationRequest.defaultNotificationCategories
+        let categories = visiblePushCategories
         let registrationSignature = pushRegistrationSignature(
             pushToken: token,
             pushEnvironment: environment,
@@ -15068,6 +15115,7 @@ public final class DJConnectAppModel: ObservableObject {
             appBundleID,
             appVersion,
             locale,
+            visiblePushCategories.joined(separator: ","),
             localHomeAssistantURL()
         ].joined(separator: "|")
     }
@@ -15977,7 +16025,7 @@ public final class DJConnectAppModel: ObservableObject {
 
     public func requestRemoteNotificationRegistration() {
         #if canImport(UserNotifications)
-        guard pairingStatus == .paired, !isDemoMode else { return }
+        guard pairingStatus == .paired, !isDemoMode, !visiblePushCategories.isEmpty else { return }
         let pairing = pairingTaskGeneration
         guard !remoteNotificationRegistrationInProgress else { return }
         remoteNotificationRegistrationInProgress = true
@@ -16028,38 +16076,62 @@ public final class DJConnectAppModel: ObservableObject {
         logPush("system remote notification registration failed error=\(error.localizedDescription)", level: .warning)
     }
 
+    private var visiblePushCategories: [String] {
+        (askDJNotificationsEnabled ? DJConnectPushRegistrationRequest.defaultNotificationCategories : [])
+            + (momentNotificationsEnabled ? ["dj_moments_v1"] : [])
+    }
+
     func setMomentNotificationsEnabled(_ enabled: Bool) {
-        guard enabled != momentNotificationsEnabled else { return }
-        if enabled {
-            guard !isRequestingPermissions, pendingPermissionRequest == nil else { return }
-            switch notificationPermissionStatus {
-            case .granted:
-                saveMomentNotificationsEnabled(true)
-                requestRemoteNotificationRegistration()
-            case .denied, .restricted:
-                openAppPermissionSettings()
-                schedulePermissionStatusRefreshes()
-            case .unknown, .unavailable:
-                pendingPermissionRequest = .momentNotifications
-                permissionExplanationKind = .momentNotifications
-                isShowingPermissionExplanation = true
-            }
-        } else {
-            saveMomentNotificationsEnabled(false)
-            pendingMomentOpen = nil
-            pendingMomentPairing = nil
+        setVisiblePushChoices(askDJ: askDJNotificationsEnabled, moments: enabled)
+    }
+
+    func setAskDJNotificationsEnabled(_ enabled: Bool) {
+        setVisiblePushChoices(askDJ: enabled, moments: momentNotificationsEnabled)
+    }
+
+    func setVisiblePushChoices(askDJ: Bool, moments: Bool) {
+        guard pairingStatus == .paired, !isDemoMode, completedFirstSessionPushSetup else { return }
+        requestedNotificationSettings = nil
+        if !askDJ || !moments {
+            saveVisiblePushChoices(askDJ: askDJ && askDJNotificationsEnabled,
+                                   moments: moments && momentNotificationsEnabled)
+        }
+        guard askDJ || moments else { return }
+        if askDJ == askDJNotificationsEnabled, moments == momentNotificationsEnabled { return }
+        guard !isRequestingPermissions, pendingPermissionRequest == nil else { return }
+        switch notificationPermissionStatus {
+        case .granted:
+            saveVisiblePushChoices(askDJ: askDJ, moments: moments)
+        case .denied, .restricted:
+            requestedNotificationSettings = (pairingTaskGeneration, askDJ, moments)
+            openNotificationSettings()
+            schedulePermissionStatusRefreshes()
+        case .unknown, .unavailable:
+            pendingPermissionRequest = .functionalNotifications(askDJ: askDJ, moments: moments)
+            permissionExplanationKind = moments && !askDJ ? .momentNotifications : .notifications
+            isShowingPermissionExplanation = true
         }
     }
 
-    private func saveMomentNotificationsEnabled(_ enabled: Bool) {
-        defaults.set(enabled, forKey: Self.momentNotificationsKey)
-        momentNotificationsEnabled = enabled
+    private func saveVisiblePushChoices(askDJ: Bool, moments: Bool) {
+        defaults.set(askDJ, forKey: Self.askDJNotificationsKey)
+        defaults.set(moments, forKey: Self.momentNotificationsKey)
+        askDJNotificationsEnabled = askDJ
+        momentNotificationsEnabled = moments
+        if !moments {
+            pendingMomentOpen = nil
+            pendingMomentPairing = nil
+        }
+        if visiblePushCategories.isEmpty {
+            unregisterPushNotifications(retireHostWake: false)
+        } else {
+            requestRemoteNotificationRegistration()
+        }
     }
 
     public func shouldPresentRemoteNotification(_ userInfo: [AnyHashable: Any]) -> Bool {
-        guard Self.pushEventType(in: userInfo) == "dj_moment_published" else { return true }
-        return momentNotificationsEnabled && pairingStatus == .paired && !isDemoMode &&
-            (try? DJConnectWatchMomentOpenIntent(notification: userInfo)) != nil
+        // This method is used only by UNUserNotificationCenter.willPresent.
+        Self.pushEventType(in: userInfo) != "dj_moment_published" && askDJNotificationsEnabled
     }
 
     public func queueMomentOpen(_ intent: DJConnectWatchMomentOpenIntent) {
@@ -16108,8 +16180,11 @@ public final class DJConnectAppModel: ObservableObject {
         }
         let event = Self.pushEventType(in: userInfo)
         if event == "dj_moment_published" {
-            if openedFromTap, let intent = try? DJConnectWatchMomentOpenIntent(notification: userInfo) {
+            guard let intent = try? DJConnectWatchMomentOpenIntent(notification: userInfo) else { return false }
+            if openedFromTap {
                 queueMomentOpen(intent)
+            } else if isAppInForeground, canRefreshSessionHistory, activeDJSession?.id == intent.sessionID {
+                await sessionHistory.refreshVisibleTimeline(intent.sessionID, anchor: nil)
             }
             return true
         }
@@ -16127,9 +16202,11 @@ public final class DJConnectAppModel: ObservableObject {
         return true
     }
 
-    public func unregisterPushNotifications() {
-        hostWakeOriginalAPNSToken = nil; hostWakeAPNSTokenEpoch = UUID()
-        hostWakePreparingOwner?.closeOriginalOperation()
+    public func unregisterPushNotifications(retireHostWake: Bool = true) {
+        if retireHostWake {
+            hostWakeOriginalAPNSToken = nil; hostWakeAPNSTokenEpoch = UUID()
+            hostWakePreparingOwner?.closeOriginalOperation()
+        }
         guard let token = currentAPNsPushToken ?? defaults.string(forKey: legacyPushTokenKey), !token.isEmpty else {
             return
         }
@@ -19322,6 +19399,7 @@ public final class DJConnectAppModel: ObservableObject {
     }
 
     public func requestAppPermissions() {
+        guard pairingStatus == .paired, !isDemoMode, completedFirstSessionPushSetup else { return }
         guard !isRequestingPermissions, pendingPermissionRequest == nil else {
             log(.debug, "Ignoring permission request because one is already running")
             return
@@ -19354,8 +19432,8 @@ public final class DJConnectAppModel: ObservableObject {
         switch pending {
         case .appPermissions:
             requestAppPermissionsAfterExplanation()
-        case .momentNotifications:
-            requestAppPermissionsAfterExplanation(enablesMomentNotifications: true)
+        case let .functionalNotifications(askDJ, moments):
+            requestAppPermissionsAfterExplanation(choices: (askDJ, moments))
         case .voiceRecording:
             shouldBypassPermissionExplanationOnce = true
             startVoiceRecording()
@@ -19375,12 +19453,14 @@ public final class DJConnectAppModel: ObservableObject {
         log(.debug, "User cancelled permission explanation")
     }
 
-    private func requestAppPermissionsAfterExplanation(enablesMomentNotifications: Bool = false) {
+    private func requestAppPermissionsAfterExplanation(choices: (askDJ: Bool, moments: Bool)? = nil) {
         guard !isRequestingPermissions else {
             return
         }
         isRequestingPermissions = true
+        let pairing = pairingTaskGeneration
         Task { @MainActor in
+            defer { isRequestingPermissions = false }
             log(.debug, "Notification permission request started: notifications_status=\(notificationPermissionStatus.rawValue)")
             log(.debug, "Permission request step: notifications begin")
             let notificationGranted: Bool
@@ -19389,16 +19469,21 @@ public final class DJConnectAppModel: ObservableObject {
                 center: UNUserNotificationCenter.current(),
                 allowSystemPrompt: true
             )
+            guard pairingStatus == .paired, pairingTaskGeneration == pairing, !isDemoMode else {
+                pendingAskDJNotificationPreview = nil
+                return
+            }
             let askDJNotificationPreview = pendingAskDJNotificationPreview
             if askDJNotificationPreview != nil {
                 pendingAskDJNotificationPreview = nil
                 hasRequestedAskDJNotificationPermission = true
             }
             if notificationGranted {
-                if enablesMomentNotifications {
-                    saveMomentNotificationsEnabled(true)
+                if let choices {
+                    saveVisiblePushChoices(askDJ: choices.askDJ, moments: choices.moments)
+                } else if !visiblePushCategories.isEmpty {
+                    registerForSystemRemoteNotifications()
                 }
-                registerForSystemRemoteNotifications()
                 if let preview = askDJNotificationPreview {
                     await scheduleAskDJLocalNotification(center: UNUserNotificationCenter.current(), preview: preview)
                 }
@@ -19408,7 +19493,6 @@ public final class DJConnectAppModel: ObservableObject {
             #endif
             log(.debug, "Permission request step: notifications completed granted=\(notificationGranted)")
             refreshPermissionStatuses()
-            isRequestingPermissions = false
             if notificationGranted {
                 log(.info, "Notification permission granted")
             } else {

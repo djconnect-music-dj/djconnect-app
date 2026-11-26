@@ -1737,10 +1737,17 @@
 "ui.widget.retained.title" = "Laatste DJ-bijdrage in de widget";
 "ui.widget.retained.detail" = "Sta toe dat de grote widget de laatste beschikbare DJ-bijdrage uit deze sessie toont.";
 
+"ui.push.setup.watch_settings" = "Sta DJConnect-meldingen toe in de Watch-app op je iPhone en zet deze keuze daarna weer aan.";
+"ui.push.setup.title" = "Meldingen en sessieweergave";
+"ui.push.setup.ask_dj" = "Antwoorden van Ask DJ";
+"ui.push.setup.ask_dj.detail" = "Ontvang een melding wanneer DJConnect je vraag beantwoordt.";
+"ui.push.setup.detail" = "Kies welke functies je op dit apparaat wilt gebruiken. Je kunt elke keuze later aanpassen in Instellingen.";
+"ui.push.setup.enable_all" = "Alles inschakelen";
+"ui.push.setup.disable_all" = "Alles uitschakelen";
 "ui.surface.visibility" = "Sessieweergave";
 "ui.surface.visibility.detail" = "Kies waar dit apparaat je sessie mag tonen.";
 "ui.surface.push.widget" = "Widget";
-"ui.surface.push.widget.detail" = "Toon je huidige sessie in de DJConnect-widget.";
+"ui.surface.push.widget.detail" = "Houd je sessie actueel zodra je de DJConnect-widget plaatst.";
 "ui.surface.push.activity" = "Live Activity";
 "ui.surface.push.activity.detail" = "Toon je huidige sessie op het toegangsscherm en, waar beschikbaar, in het Dynamic Island.";
 
