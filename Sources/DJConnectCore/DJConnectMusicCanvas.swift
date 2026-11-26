@@ -78,6 +78,7 @@ public struct DJConnectCanvasTarget: Decodable, Equatable, Identifiable, Sendabl
     public let screen: DJConnectCanvasScreen
     public let remote_cleanup: Bool
     public let preview_available: Bool
+    public let can_request_artwork: Bool?
     public let preview_revision: String?
     public let shared_profiles: Int
     public let forgetting: Bool?
@@ -91,6 +92,7 @@ public struct DJConnectCanvasSnapshot: Decodable, Equatable, Sendable {
     public let preferences: DJConnectCanvasPreferences
     public let targets: [DJConnectCanvasTarget]
     public let image_generation_available: Bool
+    public let manual_artwork_refresh: Bool?
     public let can_manage_devices: Bool
     public let per_screen_composition_and_cadence: Bool?
     public var isValid: Bool {
