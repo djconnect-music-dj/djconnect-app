@@ -91,7 +91,6 @@ struct SessionArtworkView: View {
                                height: 100 * CGFloat(pixels.image.height) / CGFloat(max(pixels.image.width, pixels.image.height)))
                         .accessibilityLabel(grant.altText?[language] ?? grant.altText?["en"] ?? "")
                         .accessibilityIdentifier("session-authorized-artwork")
-                        .djConnectBreathingArtwork(enabled: model.isPlaying && model.playback?.hasPlayback != false)
                         .djAlbumArtworkGlassCard(tint: artworkTint)
                     if showsAttribution { SessionSpotifyAttributionLinks(urls: [source]) }
                 }

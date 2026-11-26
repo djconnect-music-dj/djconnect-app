@@ -3744,8 +3744,7 @@ struct SessionHorizonMomentCard: View {
         TimelineView(.periodic(from: .now, by: 1)) { clock in
             if model.activeDJSession?.id == session.id, let preview = model.visibleHorizonMoment(at: clock.date) {
                 SessionHorizonMomentContent(preview: preview, mood: session.selectedMood, language: model.language,
-                    artworkURL: artworkURL(preview.track.artwork_url),
-                    isPlaying: model.isPlaying && model.playback?.hasPlayback != false)
+                    artworkURL: artworkURL(preview.track.artwork_url))
             }
         }
     }
@@ -3757,13 +3756,12 @@ struct SessionHorizonMomentContent: View {
     let mood: String
     let language: String
     let artworkURL: URL?
-    let isPlaying: Bool
     var body: some View {
         SessionHorizonTrackContent(
             heading: DJConnectLocalization.localized(key: "ui.session.forecast.up_next", language: language),
             mood: mood, language: language, title: preview.track.title, artist: preview.track.artist,
             intro: preview.text, artworkURL: artworkURL, sourceURL: URL(string: preview.track.source_url),
-            showsDJAvatar: true, isPlaying: isPlaying)
+            showsDJAvatar: true)
             .accessibilityIdentifier("session-horizon-up-next")
     }
 }
@@ -3780,7 +3778,6 @@ struct SessionHorizonTrackContent: View {
     let artworkURL: URL?
     let sourceURL: URL?
     let showsDJAvatar: Bool
-    let isPlaying: Bool
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
@@ -3796,7 +3793,6 @@ struct SessionHorizonTrackContent: View {
                 if let url = artworkURL {
                     CachedArtworkImage(url: url, mode: .fit, usesAlbumGlassFrame: true) { Color.clear }
                         .frame(width: 100, height: 100)
-                        .djConnectBreathingArtwork(enabled: isPlaying)
                 }
                 VStack(alignment: .leading, spacing: 6) {
                     Text(title).font(.title3.bold())

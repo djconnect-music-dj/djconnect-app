@@ -7865,7 +7865,6 @@ private struct TrackInsightHeroArtwork: View {
                 }
                 .frame(width: artworkSide, height: artworkSide)
                 .djAlbumArtworkGlassCard(tint: profile.colors.first)
-                .djConnectBreathingArtwork(enabled: isActive && !reduceMotion && playback?.hasPlayback != false)
                 .shadow(color: (profile.colors.last ?? djConnectAccent).opacity(0.42), radius: max(18, side * 0.16), x: 0, y: max(8, side * 0.08))
             }
         }
