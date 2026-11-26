@@ -27,7 +27,7 @@ private final class GuestFixtureTransport: DJConnectGuestTransporting, @unchecke
         let request: [String: Any] = ["request_id": "own-request", "title": "Strong", "state": snapshot.0]
         let value: [String: Any]
         switch action {
-        case .redeem, .redeemCode:
+        case .redeem:
             value = ["guest_id": "guest-one", "issuer_epoch": String(repeating: "A", count: 43),
                      "guest_token": "djcg_synthetic", "lease_expires_in": 60.0, "capabilities": caps]
         case .renew:

@@ -17,7 +17,6 @@ public protocol DJConnectGuestTransporting: Sendable {
 public final class DJConnectGuestTransport: DJConnectGuestTransporting, @unchecked Sendable {
     public enum Action: String, Sendable {
         case redeem, renew, leave, context, ask, request
-        case redeemCode = "redeem-code"
         case emotion, artwork
         case requestStatus = "request/status"
     }
@@ -38,7 +37,7 @@ public final class DJConnectGuestTransport: DJConnectGuestTransporting, @uncheck
     /// No automatic application retry. In particular a lost redemption never mints again.
     public func send(_ action: Action, body: Data, bearer: String? = nil) async throws -> Data {
         guard body.count <= 8192 else { throw Failure.invalidResponse }
-        if action == .redeem || action == .redeemCode {
+        if action == .redeem {
             guard bearer == nil else { throw Failure.invalidResponse }
         } else {
             guard let bearer, bearer.hasPrefix("djcg_"), bearer.utf8.count <= 256,

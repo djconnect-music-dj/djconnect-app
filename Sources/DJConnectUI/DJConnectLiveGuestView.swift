@@ -1,3 +1,4 @@
+#if os(iOS)
 import SwiftUI
 import DJConnectCore
 import ImageIO
@@ -37,14 +38,7 @@ struct VibeCastPartyJoinLabel: View {
 struct DJConnectLiveGuestJoinView: View {
     @ObservedObject var guest: DJConnectLiveGuestModel
     let language: String
-    @State private var pastedLink = ""
-    #if os(macOS)
-    @State private var address = ""
-    @State private var manualCode = ""
-    #endif
-    #if os(iOS)
     @State private var scanning = false
-    #endif
 
     private func text(_ key: String) -> String {
         DJConnectLocalization.localized(key: key, language: language)
@@ -65,33 +59,11 @@ struct DJConnectLiveGuestJoinView: View {
                 } else if guest.isBusy {
                     ProgressView()
                 } else {
-                    #if os(iOS)
                     Button { scanning = true } label: {
                         Label(text("ui.scan.qr.code"), systemImage: "qrcode.viewfinder")
                     }
                     .djConnectButtonStyle(DJConnectButtonStyle(emphasis: .primary, expands: true))
                     .accessibilityIdentifier("live-guest-scan")
-                    #elseif os(macOS)
-                    TextField(text("ui.live.tv_address"), text: $address)
-                        .textFieldStyle(.roundedBorder)
-                        .textContentType(.URL)
-                        .accessibilityIdentifier("live-guest-tv-address")
-                    TextField(text("ui.live.tv_code"), text: $manualCode)
-                        .textFieldStyle(.roundedBorder)
-                        .accessibilityIdentifier("live-guest-tv-code")
-                        .onSubmit(openCode)
-                    Button(text("ui.continue"), action: openCode)
-                        .djConnectButtonStyle(DJConnectButtonStyle(emphasis: .primary, expands: true))
-                        .disabled(address.isEmpty || manualCode.isEmpty)
-                    #endif
-                    TextField(text("ui.live.invitation_link"), text: $pastedLink)
-                        .textFieldStyle(.roundedBorder)
-                        .textContentType(.URL)
-                        .accessibilityIdentifier("live-guest-invitation")
-                        .onSubmit(openInvitation)
-                    Button(text("ui.live.open_invitation"), action: openInvitation)
-                        .djConnectButtonStyle(DJConnectButtonStyle(expands: true))
-                        .disabled(pastedLink.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
                 if let key = guest.statusKey { Text(text(key)).foregroundStyle(.secondary) }
                 DJConnectNotNowLinkButton(language: language, key: "ui.not.now.b1e535") {
@@ -101,7 +73,6 @@ struct DJConnectLiveGuestJoinView: View {
             }
         }
         .accessibilityIdentifier("live-guest-join")
-        #if os(iOS)
         .fullScreenCover(isPresented: $scanning) {
             PairingQRScannerView(language: language, instructionsKey: "ui.live.join_instructions",
                                  confirmsDetection: false) { value in
@@ -109,23 +80,7 @@ struct DJConnectLiveGuestJoinView: View {
                 guest.receiveScan(value)
             }
         }
-        #endif
     }
-
-    private func openInvitation() {
-        let link = pastedLink.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !link.isEmpty else { return }
-        pastedLink = ""
-        guest.receiveScan(link)
-    }
-
-    #if os(macOS)
-    private func openCode() {
-        guard !address.isEmpty, !manualCode.isEmpty else { return }
-        guest.receiveCode(manualCode, address: address)
-        if guest.invitation != nil { manualCode = "" }
-    }
-    #endif
 }
 
 /// Guest navigation has no paired model, owner controls or personal data sources.
@@ -563,3 +518,4 @@ private struct DJConnectGuestArtwork: View {
         .onDisappear { loadedCover = nil }
     }
 }
+#endif

@@ -748,7 +748,9 @@ public struct DJConnectRootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @StateObject private var introductionAnchors = SessionIntroductionAnchors()
+    #if os(iOS)
     @StateObject private var liveGuest = DJConnectLiveGuestModel()
+    #endif
     @State private var selectedSection = DJConnectSection.djSession
     @State private var openedSavedSession: SavedSessionDestination?
     #if os(macOS)
@@ -764,6 +766,7 @@ public struct DJConnectRootView: View {
     }
 
     public var body: some View {
+        #if os(iOS)
         Group {
             if liveGuest.isJoined {
                 DJConnectLiveGuestView(guest: liveGuest, language: model.language)
@@ -776,9 +779,7 @@ public struct DJConnectRootView: View {
         }
         .onOpenURL { url in
             guard !liveGuest.receive(url.absoluteString) else { return }
-            #if !os(macOS)
             if !model.handleAppNavigationDeepLink(url) { model.handlePairingDeepLink(url) }
-            #endif
         }
         .onChange(of: liveGuest.isPresented, initial:true) { _, shown in
             model.liveGuestPresentationDidChange(shown)
@@ -789,6 +790,9 @@ public struct DJConnectRootView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .background { liveGuest.disconnect() }
         }
+        #else
+        ordinaryRoot
+        #endif
     }
 
     private var ordinaryRoot: some View {
@@ -1049,9 +1053,11 @@ public struct DJConnectRootView: View {
         }
         .djConnectPopup(item: rootSheetBinding) { sheet in
             rootSheetView(sheet)
+            #if os(iOS)
                 .djConnectPopup(isPresented: guestJoinBinding(above: sheet)) {
                     DJConnectLiveGuestJoinView(guest: liveGuest, language: model.language)
                 }
+            #endif
         }
         .onChange(of: model.shouldShowPairingScreen) {
             if model.shouldShowPairingScreen {
@@ -1358,6 +1364,7 @@ public struct DJConnectRootView: View {
         }
     }
 
+    #if os(iOS)
     private func guestJoinBinding(above sheet: DJConnectRootSheet?) -> Binding<Bool> {
         Binding(
             get: { activeRootSheet == sheet && liveGuest.isPresented && !liveGuest.isJoined },
@@ -1369,6 +1376,7 @@ public struct DJConnectRootView: View {
         )
     }
 
+    #endif
     private var rootSheetBinding: Binding<DJConnectRootSheet?> {
         rendezvousOwnedSheetBinding(current: { activeRootSheet }, rendezvous: .rendezvous,
             dismissRendezvous: model.rendezvousPresentationDismissal(),
@@ -1758,9 +1766,11 @@ private struct PairingSheetView: View {
                         unpairedSessionOptions
                     }
                     pairingPending
+                    #if os(iOS)
                     if model.pairingFlowTarget == .appleWatch {
                         pairingGuestJoinButton
                     }
+                    #endif
                 }
             }
             .padding(28)
@@ -1864,6 +1874,7 @@ private struct PairingSheetView: View {
     }
     #endif
 
+    #if os(iOS)
     private var pairingGuestJoinButton: some View {
         Button {
             model.isShowingGuestJoin = true
@@ -1875,14 +1886,17 @@ private struct PairingSheetView: View {
         .accessibilityIdentifier("pairing-join-session")
     }
 
+    #endif
     private var unpairedSessionOptions: some View {
         VStack(spacing: 8) {
+            #if os(iOS)
             pairingGuestJoinButton
 
             Text(localizedKey(model.language, "ui.session.welcome.join_separator"))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
 
+            #endif
             Button {
                 model.startDemoMode()
             } label: {
@@ -3182,6 +3196,7 @@ private struct WelcomeView: View {
                             .djConnectButtonStyle(DJConnectButtonStyle(emphasis: isLastStep ? .primary : .tertiary, expands: true))
                             .controlSize(.large)
                             .accessibilityIdentifier("welcome-dismiss-button")
+                            #if os(iOS)
                             Button {
                                 model.isShowingGuestJoin = true
                             } label: {
@@ -3189,6 +3204,7 @@ private struct WelcomeView: View {
                             }
                                 .djConnectButtonStyle(DJConnectButtonStyle(emphasis: .secondary, expands: true))
                                 .accessibilityIdentifier("welcome-join-session")
+                            #endif
                         }
                         .frame(maxWidth: .infinity)
                     }
@@ -9172,6 +9188,7 @@ private struct IdleDJSessionView: View {
                     dimsWhenDisabled: !refreshing && !model.isSchedulingProfileDJChoice && model.profileDJSettings.phase != .saving))
                 .disabled(model.isLoadingDJSession || (!model.isDemoMode && model.pairingStatus != .paired) || !model.canUsePlaybackFeatures || model.isSchedulingProfileDJChoice || (!model.isDemoMode && [.saving, .uncertain].contains(model.profileDJSettings.phase)))
                 .accessibilityIdentifier("session-welcome-start")
+                #if os(iOS)
                 Text(localizedKey(model.language, "ui.session.welcome.join_separator"))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -9183,6 +9200,7 @@ private struct IdleDJSessionView: View {
                 }
                     .djConnectButtonStyle(DJConnectButtonStyle(expands: true))
                     .accessibilityIdentifier("session-welcome-join")
+                #endif
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "sparkles")
                         .font(.body.weight(.semibold))

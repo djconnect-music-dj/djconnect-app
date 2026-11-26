@@ -858,6 +858,7 @@ struct DJConnectLocalAudioRoute: Equatable, Sendable {
 
 @MainActor
 public final class DJConnectAppModel: ObservableObject {
+    #if os(iOS)
     @Published var isShowingGuestJoin = false
     @Published private(set) var isPresentingLiveGuest = false
     func liveGuestPresentationDidChange(_ presented: Bool) {
@@ -869,6 +870,9 @@ public final class DJConnectAppModel: ObservableObject {
             nativeWidgetPushOwner.withdrawLocally(); nativeActivityPushOwner.withdrawLocally()
         }
     }
+    #else
+    public let isPresentingLiveGuest = false
+    #endif
     // View-lifetime presentation only. Never a Profile/defaults/cache field.
     @Published var isShowingVibeScape = false {
         didSet {

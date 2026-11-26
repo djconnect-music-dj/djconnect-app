@@ -192,15 +192,6 @@ import DJConnectCore
         if !receive(raw) { statusKey = "ui.live.invalid_invitation" }
     }
 
-    func receiveCode(_ code: String, address: String) {
-        do {
-            invitation = try DJConnectGuestInvitation.manualCode(code, address: address)
-            statusKey = nil
-        } catch {
-            statusKey = "ui.live.invalid_invitation"
-        }
-    }
-
     func join() async {
         guard !isBusy, let invitation else { return }
         let original = generation, tick = ContinuousClock.now
@@ -209,11 +200,10 @@ import DJConnectCore
         isBusy = true
         defer { if generation == original { isBusy = false } }
         do {
-            let action: DJConnectGuestTransport.Action = invitation.usesManualCode ? .redeemCode : .redeem
-            let data = try await client.send(action, body: invitation.redemptionBody(), bearer: nil)
+            let data = try await client.send(.redeem, body: invitation.redemptionBody(), bearer: nil)
             let received = try JSONDecoder().decode(Grant.self, from: data)
             guard generation == original,
-                  (invitation.issuerEpoch.map { $0 == received.issuer_epoch } ?? true),
+                  invitation.issuerEpoch == received.issuer_epoch,
                   !received.guest_id.isEmpty, received.guest_id.utf8.count <= 128,
                   received.guest_token.hasPrefix("djcg_"), received.capabilities.isGuestOnly,
                   received.lease_expires_in.isFinite, received.lease_expires_in > 0, received.lease_expires_in <= 60,
