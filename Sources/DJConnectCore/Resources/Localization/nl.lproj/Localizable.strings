@@ -1743,6 +1743,7 @@
 "ui.surface.push.activity.detail" = "Ververs je Live Activity op het toegangsscherm en, waar beschikbaar, in het Dynamic Island.";
 
 "ui.vibecast.destinations.title" = "Kies een scherm";
+"ui.vibecast.destinations.description" = "Met VibeCast toon je je DJ-sessie op een tv of ander scherm. Kies hieronder waar je wilt kijken.";
 "ui.vibecast.destinations.screen" = "VibeCast scherm";
 "ui.vibecast.destinations.scanning" = "Zoeken naar Google Cast-apparaten…";
 "ui.vibecast.destinations.empty" = "Geen Google Cast-apparaten gevonden.";

@@ -1743,6 +1743,7 @@
 "ui.surface.push.activity.detail" = "Actualiza tu actividad en directo en la pantalla bloqueada y, si está disponible, en Dynamic Island.";
 
 "ui.vibecast.destinations.title" = "Elegir una pantalla";
+"ui.vibecast.destinations.description" = "VibeCast muestra tu sesión de DJ en un televisor u otra pantalla. Elige una pantalla abajo.";
 "ui.vibecast.destinations.screen" = "Pantalla de VibeCast";
 "ui.vibecast.destinations.scanning" = "Buscando dispositivos Google Cast…";
 "ui.vibecast.destinations.empty" = "No se encontraron dispositivos Google Cast.";

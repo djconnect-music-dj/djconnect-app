@@ -9727,6 +9727,12 @@ private struct VibeCastDestinationPicker: View {
         VStack(alignment: .leading, spacing: 16) {
             VibeCastDialogHero(title: localizedKey(language, "ui.vibecast.destinations.title"))
                 .accessibilityIdentifier("vibecast-destination-hero")
+            Text(localizedKey(language, "ui.vibecast.destinations.description"))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity)
             VStack(spacing: 4) {
                 Button { openScreen(false) } label: {
                     destinationRow(localizedKey(language, "ui.vibecast.destinations.screen")) {

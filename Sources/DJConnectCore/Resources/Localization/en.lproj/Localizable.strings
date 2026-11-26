@@ -1743,6 +1743,7 @@
 "ui.surface.push.activity.detail" = "Refresh your Live Activity on the Lock Screen and, where available, in the Dynamic Island.";
 
 "ui.vibecast.destinations.title" = "Choose a screen";
+"ui.vibecast.destinations.description" = "VibeCast shows your DJ session on a TV or other display. Choose a screen below.";
 "ui.vibecast.destinations.screen" = "VibeCast screen";
 "ui.vibecast.destinations.scanning" = "Looking for Google Cast devices…";
 "ui.vibecast.destinations.empty" = "No Google Cast devices found.";
