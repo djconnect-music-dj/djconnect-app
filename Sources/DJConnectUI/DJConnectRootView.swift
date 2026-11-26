@@ -18223,6 +18223,15 @@ struct SettingsView: View {
                             .accessibilityIdentifier("settings-stop-demo")
                         }
                         .djMusicDNASettingsListRow()
+                    } else if model.pairingStatus == .paired {
+                        LabeledContent(localizedKey(model.language, "ui.demo.mode")) {
+                            Button(localizedKey(model.language, "ui.start.demo.mode")) {
+                                returnToDJSession()
+                                model.startDemoMode()
+                            }
+                            .accessibilityIdentifier("settings-start-demo")
+                        }
+                        .djMusicDNASettingsListRow()
                     }
                     if !model.isDemoMode {
                         LabeledContent(localizedKey(model.language, "ui.pairing")) {

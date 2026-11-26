@@ -11488,6 +11488,33 @@ func transportFallsBackFromLocalToRemoteAfterPairing(device: String) async throw
 }
 
 @MainActor
+@Test(.isolatedClientResources) func pairedDemoModeRestoresSavedPairingWithoutPairingScreen() throws {
+    let defaults = try testDefaults()
+    defaults.set("http://homeassistant.local:8123", forKey: "DJConnectHALocalURL")
+    let tokens = DJConnectInMemoryTokenStore()
+    let model = DJConnectAppModel(defaults: defaults, tokenStore: tokens, startBackgroundTasks: false)
+    try tokens.saveToken("fixture-paired-token")
+    model.pairingStatus = .paired
+    model.dismissWelcome()
+    model.completePairingScreen()
+
+    model.startDemoMode()
+    #expect(model.isDemoMode)
+    #expect(model.pairingStatus == .unpaired)
+    #expect(model.playback?.trackName == "Midnight City")
+    #expect(try tokens.loadToken() == "fixture-paired-token")
+
+    model.stopDemoMode()
+    #expect(!model.isDemoMode)
+    #expect(model.pairingStatus == .paired)
+    #expect(!model.shouldShowPairingScreen)
+    #expect(model.playback == nil)
+    #expect(model.queueItems.isEmpty)
+    #expect(model.haLocalURL == "http://homeassistant.local:8123")
+    #expect(try tokens.loadToken() == "fixture-paired-token")
+}
+
+@MainActor
 @Test(.isolatedClientResources) func demoModeAskDJTextStaysLocalUntilPaired() throws {
     let suiteName = "DJConnectTests-\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: suiteName))
