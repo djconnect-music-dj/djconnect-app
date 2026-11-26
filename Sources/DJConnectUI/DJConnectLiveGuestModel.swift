@@ -16,6 +16,13 @@ import DJConnectCore
                 !item_id.isEmpty && DJConnectHistoryEntry.date(expires_at).map { $0 > date } == true
         }
     }
+    struct RequestedTrack: Decodable, Identifiable {
+        let request_id: String
+        let title: String
+        let artist: String
+        let artwork: Artwork?
+        var id: String { request_id }
+    }
     struct Playback: Decodable {
         let item_id: String?
         let title: String?
@@ -89,6 +96,7 @@ import DJConnectCore
     private struct Renewal: Decodable { let guest_id: String; let lease_expires_in: Double; let capabilities: Capabilities }
     private struct Context: Decodable {
         let guest_id: String; let capabilities: Capabilities
+        let requested_tracks: [RequestedTrack]?
         let playback: Playback; let moments: [Moment]
         let session: Session?; let shared_flow: [FlowItem]?; let observed_playback: [ObservedPlayback]?; let horizon: Horizon?; let view: ViewState?
     }
@@ -108,6 +116,7 @@ import DJConnectCore
     @Published private(set) var messages: [Message] = []
     @Published private(set) var moments: [Moment] = []
     @Published private(set) var playback: Playback?
+    @Published private(set) var requestedTracks: [RequestedTrack]?
     @Published private(set) var session: Session?
     @Published private(set) var sharedFlow: [FlowItem] = []
     @Published private(set) var observedPlayback: [ObservedPlayback] = []
@@ -149,7 +158,8 @@ import DJConnectCore
         guard current, artworkClock.accepts(art, wall: Date(), tick: .now) else { return false }
         return (playback?.artwork == art && playback?.item_id == art.item_id) ||
             sharedFlow.contains { $0.artwork == art && $0.playback_item_id == art.item_id && $0.isCurrent(at: Date()) } ||
-            observedPlayback.contains { $0.artwork == art && $0.playback_item_id == art.item_id && $0.isCurrent(at: Date()) }
+            observedPlayback.contains { $0.artwork == art && $0.playback_item_id == art.item_id && $0.isCurrent(at: Date()) } ||
+            (requestedTracks?.contains { $0.artwork == art && $0.id == art.item_id } ?? false)
     }
     func loadArtwork(_ art: Artwork) async -> Data? {
         guard admitsArtwork(art), let grant, let transport else { return nil }
@@ -277,9 +287,17 @@ import DJConnectCore
             session = value.session
             sharedFlow = Array((value.shared_flow ?? []).prefix(64))
             observedPlayback = Array((value.observed_playback ?? []).prefix(12))
+            requestedTracks = value.requested_tracks.map { tracks in
+                var seen = Set<String>()
+                return tracks.prefix(12).filter { track in
+                    !track.id.isEmpty && !track.title.isEmpty && seen.insert(track.id).inserted
+                }
+            }
             horizon = value.horizon.flatMap { $0.isCurrent && $0.sections.count <= 3 ? $0 : nil }
             viewState = value.view.flatMap { ["flow", "vibescape"].contains($0.mode) && $0.dynamics.isFinite && (0...1).contains($0.dynamics) ? $0 : nil }
-            artworkClock.observe(([playback?.artwork].compactMap { $0 }) + sharedFlow.compactMap(\.artwork) + observedPlayback.compactMap(\.artwork), wall: Date(), tick: .now)
+            let publicArtwork = [playback?.artwork].compactMap { $0 } +
+                sharedFlow.compactMap(\.artwork) + observedPlayback.compactMap(\.artwork)
+            artworkClock.observe(publicArtwork + (requestedTracks ?? []).compactMap(\.artwork), wall: Date(), tick: .now)
             artworkCache = artworkCache.filter { admitsArtwork($0.key) }
             requestSongsAllowed = value.capabilities.request_song
             for identifier in pendingRequests {
@@ -365,7 +383,7 @@ import DJConnectCore
         leaseTask?.cancel(); leaseTask = nil
         grant = nil; transport = nil; invitation = nil; leaseDeadline = nil
         messages = []; moments = []; playback = nil; choices = []; choiceSetID = nil
-        session = nil; sharedFlow = []; observedPlayback = []; horizon = nil; viewState = nil
+        session = nil; sharedFlow = []; observedPlayback = []; requestedTracks = nil; horizon = nil; viewState = nil
         pendingRequests = []; notifiedRequests = []; playingRequestTitle = nil
         draft = ""; renewSequence = 0; thread = UUID().uuidString
         isJoined = false; isBusy = false; isPresented = false; statusKey = nil

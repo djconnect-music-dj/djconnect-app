@@ -10983,19 +10983,9 @@ private struct QueueItemRow: View, Equatable {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
+        QueueTrackRow(title: item.title, subtitle: subtitle) {
             QueueArtworkView(url: item.albumImageURL)
-                .frame(width: 52, height: 52)
-            VStack(alignment: .leading, spacing: 4) {
-                QueueOverflowText(text: item.title)
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(.white)
-                if let subtitle {
-                    QueueOverflowText(text: subtitle)
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.78))
-                }
-            }
+        } accessory: {
             if isLoading {
                 ProgressView()
                     .controlSize(.large)
@@ -11004,16 +10994,40 @@ private struct QueueItemRow: View, Equatable {
                 RowPlayIndicator()
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 9)
-        .modifier(DJConnectMediaRowSurface())
-        .accessibilityElement(children: .combine)
         .accessibilityLabel(item.displayTitle)
     }
 
     private static func trimmedNonEmpty(_ value: String?) -> String? {
         let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed?.isEmpty == false ? trimmed : nil
+    }
+}
+
+struct QueueTrackRow<Artwork: View, Accessory: View>: View {
+    let title: String
+    let subtitle: String?
+    @ViewBuilder let artwork: () -> Artwork
+    @ViewBuilder let accessory: () -> Accessory
+
+    var body: some View {
+        HStack(spacing: 12) {
+            artwork().frame(width: 52, height: 52)
+            VStack(alignment: .leading, spacing: 4) {
+                QueueOverflowText(text: title)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(.white)
+                if let subtitle {
+                    QueueOverflowText(text: subtitle)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.78))
+                }
+            }
+            accessory()
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 9)
+        .modifier(DJConnectMediaRowSurface())
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -11081,7 +11095,7 @@ private struct RowPlayIndicator: View {
     }
 }
 
-private struct QueueArtworkView: View {
+struct QueueArtworkView: View {
     let url: URL?
     var fallbackSystemImage = "music.note"
 

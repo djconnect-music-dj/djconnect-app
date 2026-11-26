@@ -1942,3 +1942,6 @@
 
 "ui.live.tv_address" = "Adres op de tv";
 "ui.live.tv_code" = "Code op de tv";
+
+"ui.live.requested" = "Aangevraagd";
+"ui.live.requested_empty" = "Er staan nog geen verzoeknummers klaar.";

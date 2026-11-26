@@ -1708,6 +1708,7 @@ struct SessionModeToggleButtons: View {
     var openVibeScape: (() -> Void)? = nil
     var isVibeScape = false
     var mood: String? = nil
+    var showsAnotherPage = false
     private var selectionTheme: DJConnectSessionMoodTheme { .init(sessionMood: mood) }
 
     var body: some View {
@@ -1730,7 +1731,7 @@ struct SessionModeToggleButtons: View {
     }
 
     private func modeButton(forecast: Bool, key: String) -> some View {
-        let selected = !isVibeScape && showsForecast == forecast
+        let selected = !showsAnotherPage && !isVibeScape && showsForecast == forecast
         return modeButton(title: DJConnectLocalization.localized(key: key, language: language),
                           selected: selected,
                           identifier: forecast ? "session-forecast-toggle" : "session-flow-toggle") {

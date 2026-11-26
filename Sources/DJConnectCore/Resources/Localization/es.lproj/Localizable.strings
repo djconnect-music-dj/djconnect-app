@@ -1942,3 +1942,6 @@
 
 "ui.live.tv_address" = "Dirección en el televisor";
 "ui.live.tv_code" = "Código en el televisor";
+
+"ui.live.requested" = "Solicitadas";
+"ui.live.requested_empty" = "No hay canciones solicitadas en espera.";
