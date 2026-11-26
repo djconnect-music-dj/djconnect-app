@@ -295,6 +295,12 @@ The separately authorized smoke workflow requires both `dev.djconnect.ios`
 and the embedded `dev.djconnect.ios.watch` application to be present on their
 configured physical devices before publishing redacted evidence.
 
+Build 40546 also supports standalone iPhone installation through its dedicated
+approved manifest. The relay signs for the configured iPhone, omits the Watch
+companion from the staged app and installs on the iPhone. The smoke check
+verifies the installed iPhone build and reports Watch validation as not
+applicable.
+
 ### Internal Release: iPad
 
 `Apple iPad Secure Distribution Relay` is the separate, manifest-bound path
