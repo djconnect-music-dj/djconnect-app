@@ -1774,7 +1774,7 @@
 "ui.ask_moments.loading_inventory" = "Beschikbare Moments ophalen…";
 "ui.ask_moments.unavailable" = "Moments zijn hier nog niet beschikbaar.";
 "ui.ask_moments.subject" = "Onderwerp";
-"ui.ask_moments.choose" = "Kies een Moment";
+"ui.ask_moments.choose" = "Kies ander Moment";
 "ui.ask_moments.no_result" = "Ik kon geen goed onderbouwd Moment over dit onderwerp vinden.";
 "ui.ask_moments.temporary" = "Dit lukt nu even niet. Probeer het later nog eens.";
 "ui.ask_moments.denied" = "Dit Moment is niet beschikbaar voor deze sessie.";

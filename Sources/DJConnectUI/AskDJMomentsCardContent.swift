@@ -62,7 +62,12 @@ struct AskDJMomentsCardContent: View {
                 Toggle(text(reading ? "release_reading" : "keep_reading"), isOn: $reading)
                     .onChange(of: reading) { _, active in controller.hold(.reading, active, generation: generation) }
                     .frame(minHeight: 44)
-            case .notice:
+            case .notice, .idle: EmptyView()
+            }
+            if let notice = controller.noticeText {
+                Text(notice).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            if controller.presentation.phase == .notice {
                 if controller.canChooseAgain {
                     Button(text("choose")) { controller.chooseAgain() }
                         .djConnectButtonStyle(DJConnectButtonStyle())
@@ -70,9 +75,7 @@ struct AskDJMomentsCardContent: View {
                 } else if controller.operationID != nil {
                     Button(text("check_status")) { controller.checkStatus() }.frame(minHeight: 44)
                 }
-            case .idle: EmptyView()
             }
-            if let notice = controller.noticeText { Text(notice).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ask-moments-current-card")
