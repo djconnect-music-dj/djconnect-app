@@ -1941,6 +1941,7 @@
 "ui.vibecast.cast.presenting" = "The screen reports that VibeCast is displaying.";
 "ui.vibecast.cast.waiting" = "Waiting for confirmation from the screen…";
 "ui.vibecast.cast.failed" = "Could not connect. Try again.";
+"ui.vibecast.cast.known_hosts_help" = "Is the TV missing from Google Cast in Home Assistant? Go to Settings → Devices & services → Google Cast → Configure. Add the TV’s IP address under Known hosts, then try again in DJConnect.";
 "ui.vibecast.cast.choose" = "Choose your Google Cast screen.";
 
 "ui.canvas.not_offered" = "This Home Assistant does not currently offer Music Canvas.";
