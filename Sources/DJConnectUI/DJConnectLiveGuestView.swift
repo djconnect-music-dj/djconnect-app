@@ -424,7 +424,8 @@ struct DJConnectLiveGuestView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: spacing) {
                 if let horizon = guest.horizon, horizon.isCurrent, !horizon.sections.isEmpty {
-                    SessionHorizonHero(theme: .init(sessionMood: guest.session?.mood))
+                    SessionHorizonHero(theme: .init(sessionMood: guest.session?.mood),
+                                       isPlaying: guest.playback?.state == "playing")
                     ForEach(Array(horizon.sections.enumerated()), id: \.offset) { _, section in
                         Text(section.text)
                             .font(.body)
