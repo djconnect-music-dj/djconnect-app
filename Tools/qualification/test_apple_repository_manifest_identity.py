@@ -30,7 +30,7 @@ class AppleRepositoryManifestIdentityTests(unittest.TestCase):
         new = 'djconnect-music-dj/djconnect-app'
         manifest = {'repositories': [
             {'repository': old, 'source_sha': source, 'version': '4.0.0'},
-            {'repository': new, 'source_sha': 'b' * 40, 'version': '4.0.0'},
+            {'repository': new, 'source_sha': 'b' * 40, 'version': '4.1.0'},
         ]}
         for name in WORKFLOWS:
             with self.subTest(workflow=name):
@@ -39,15 +39,16 @@ class AppleRepositoryManifestIdentityTests(unittest.TestCase):
                 expressions = re.findall(r"'((?:\.repositories\[\]).*?select\(\.repository == \$repo.*?)(?:'\s+\"\$manifest\")", text)
                 self.assertEqual(len(expressions), 1)
                 expression = expressions[0]
-                def select(repository, sha):
+                def select(repository, sha, version):
                     return subprocess.run(
-                        ['jq', '-c', '--arg', 'repo', repository, '--arg', 'sha', sha, expression],
+                        ['jq', '-c', '--arg', 'repo', repository, '--arg', 'sha', sha, '--arg', 'version', version, expression],
                         input=json.dumps(manifest), text=True, capture_output=True, check=True,
                     ).stdout.strip()
-                self.assertTrue(select(old, source))
-                self.assertFalse(select(new, source))
-                self.assertTrue(select(new, 'b' * 40))
-                self.assertFalse(select('other/djconnect-app', source))
+                self.assertTrue(select(old, source, '4.0.0'))
+                self.assertFalse(select(new, source, '4.1.0'))
+                self.assertTrue(select(new, 'b' * 40, '4.1.0'))
+                self.assertFalse(select(new, 'b' * 40, '4.0.0'))
+                self.assertFalse(select('other/djconnect-app', source, '4.0.0'))
 
 
 if __name__ == '__main__':
