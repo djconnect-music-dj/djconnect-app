@@ -821,6 +821,7 @@ final class DJConnectIOSUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["live-guest-join"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["live-guest-scan"].exists)
         XCTAssertFalse(app.buttons["live-guest-confirm"].exists)
+        XCTAssertFalse(app.textFields["live-guest-invitation"].exists)
         let link = "djconnect://join#v=1&ha_url=https%3A%2F%2Fha.example.com&issuer_epoch=\(String(repeating: "A", count: 43))&invitation_id=\(String(repeating: "B", count: 32))&invitation_secret=\(String(repeating: "C", count: 43))"
         app.open(try XCTUnwrap(URL(string: link)))
         XCTAssertTrue(app.buttons["live-guest-confirm"].waitForExistence(timeout: 5))
@@ -1974,6 +1975,28 @@ extension DJConnectIOSUITests {
         return app
     }
 
+    func testActiveSessionToolbarOpensPartyQRJoinAndReturnsToSession() {
+        let app = launchSessionUIDemo()
+        let endSession = app.buttons["session-end-button"]
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            app.buttons["session-more-menu"].tap()
+        }
+
+        let join = app.buttons["session-join-party"]
+        XCTAssertTrue(join.waitForExistence(timeout: 5))
+        XCTAssertEqual(join.label, "Deelnemen aan VibeCast Party")
+        join.tap()
+
+        let dialog = app.descendants(matching: .any)["live-guest-join"].firstMatch
+        XCTAssertTrue(dialog.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["live-guest-scan"].isHittable)
+        XCTAssertFalse(app.buttons["live-guest-confirm"].exists)
+        app.buttons["live-guest-leave"].tap()
+
+        XCTAssertTrue(dialog.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(endSession.isHittable)
+    }
+
     func testPausedPlaybackHasDistinctSessionPresentationAndResumes() {
         let app = launchSessionUIDemo()
         XCTAssertTrue(app.buttons["session-end-button"].waitForExistence(timeout: 10))
@@ -2524,7 +2547,7 @@ extension DJConnectIOSUITests {
         let app = launchSessionUIDemo()
         defer { XCUIDevice.shared.orientation = .portrait }
         let identifiers = ["session-connection-toggle", "session-search-toggle", "session-mood-toggle",
-                           "session-presence-toggle", "session-end-button", "screen-refresh"]
+                           "session-presence-toggle", "session-join-party", "session-end-button", "screen-refresh"]
         for orientation in [UIDeviceOrientation.portrait, .landscapeLeft] {
             XCUIDevice.shared.orientation = orientation
             let landscape = orientation == .landscapeLeft

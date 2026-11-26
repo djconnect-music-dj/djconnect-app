@@ -1454,7 +1454,7 @@
 "ui.session.forecast.flow" = "Flow";
 "ui.session.forecast.tab" = "Horizon";
 "ui.session.forecast.title" = "Horizon · ±15 min";
-"ui.session.forecast.notice" = "Een richting voor de komende minuten. Muziek en bijdragen kunnen veranderen.";
+"ui.session.forecast.notice" = "Een richting voor de komende minuten.";
 "ui.session.forecast.loading" = "Horizon laden…";
 "ui.session.forecast.empty" = "Geen horizon";
 "ui.session.forecast.source" = "Bron";
@@ -1645,7 +1645,7 @@
 "ui.vibescape.world.home" = "Vloeibare wereld";
 "ui.vibescape.world.radio" = "Kinetisch atelier";
 "ui.vibescape.world.club" = "Lichtarchitectuur";
-"ui.vibescape.world.festival" = "Kosmische bloei";
+"ui.vibescape.world.festival" = "Lasershow";
 
 // Watch companion V2
 "watch.v2.moments" = "DJ moments";
@@ -1774,7 +1774,7 @@
 "ui.ask_moments.loading_inventory" = "Beschikbare Moments ophalen…";
 "ui.ask_moments.unavailable" = "Moments zijn hier nog niet beschikbaar.";
 "ui.ask_moments.subject" = "Onderwerp";
-"ui.ask_moments.choose" = "Kies een Moment";
+"ui.ask_moments.choose" = "Kies ander Moment";
 "ui.ask_moments.no_result" = "Ik kon geen goed onderbouwd Moment over dit onderwerp vinden.";
 "ui.ask_moments.temporary" = "Dit lukt nu even niet. Probeer het later nog eens.";
 "ui.ask_moments.denied" = "Dit Moment is niet beschikbaar voor deze sessie.";
@@ -1816,7 +1816,7 @@
 
 // Music Canvas v1
 "ui.canvas.open" = "Muziek als kunst tonen";
-"ui.canvas.description" = "Artwork, kleur en sfeer die je sessie volgen.";
+"ui.canvas.description" = "Music Canvas vertaalt de muziek die je afspeelt naar kunstcomposities op je Art Mode-scherm.";
 "ui.canvas.enabled" = "Toon op schermen";
 "ui.canvas.choose_screens" = "Kies je schermen";
 "ui.canvas.screens" = "Schermen";
@@ -1828,6 +1828,10 @@
 "ui.canvas.free" = "Vrij";
 "ui.canvas.full" = "Beeldvullend";
 "ui.canvas.matte" = "Passe-partout";
+"ui.canvas.matte_size" = "Dikte passe-partout";
+"ui.canvas.matte_size.small" = "Smal";
+"ui.canvas.matte_size.medium" = "Gemiddeld";
+"ui.canvas.matte_size.large" = "Breed";
 "ui.canvas.off" = "Uit";
 "ui.canvas.matching" = "Passend";
 "ui.canvas.contrast" = "Contrasterend";
@@ -1838,6 +1842,8 @@
 "ui.canvas.cadence.1800" = "Ieder half uur";
 "ui.canvas.cadence.3600" = "Ieder uur";
 "ui.canvas.details" = "Details";
+"ui.canvas.new_artwork" = "Nieuw kunstwerk";
+"ui.canvas.state.alternative_unchanged" = "De beeldgenerator gaf hetzelfde kunstwerk terug.";
 "ui.canvas.done" = "Gereed";
 "ui.canvas.cancel" = "Annuleren";
 "ui.canvas.working" = "Bezig";
@@ -1883,7 +1889,8 @@
 "ui.live.join" = "Deelnemen aan VibeCast Party";
 "ui.session.welcome.join_separator" = "of";
 
-"ui.live.leave" = "Gastsessie verlaten";
+"ui.live.leave" = "VibeCast Party verlaten";
+"ui.live.leave_confirmation" = "VibeCast Party verlaten?";
 
 "ui.live.connected" = "Verbonden met gastsessie";
 
@@ -1902,6 +1909,13 @@
 "ui.live.request_playing" = "Jouw verzoeknummer speelt: %@";
 
 "ui.live.help_title" = "Hulp voor gasten";
+
+"ui.live.help_requests" = "Verzoeknummers";
+"ui.live.help_request_track" = "Kun je Promise van HAEVN draaien?";
+"ui.live.help_request_title" = "Speel Hello";
+"ui.live.help_questions" = "Muziekvragen";
+"ui.live.help_question_playing" = "Welk nummer speelt er nu?";
+"ui.live.help_question_artist" = "Wie zijn de bandleden van HAEVN?";
 
 "ui.live.help" = "Vraag een nummer aan of stel een vraag over de muziek. Je kunt het afspelen niet bedienen of sessie-instellingen van de host wijzigen. Je gesprek is tijdelijk en verdwijnt als je vertrekt.";
 
@@ -1929,6 +1943,7 @@
 "ui.vibecast.cast.presenting" = "VibeCast wordt door het scherm weergegeven.";
 "ui.vibecast.cast.waiting" = "Wachten op bevestiging van het scherm…";
 "ui.vibecast.cast.failed" = "Verbinden is niet gelukt. Probeer het opnieuw.";
+"ui.vibecast.cast.known_hosts_help" = "Staat de tv niet bij Google Cast in Home Assistant? Ga naar Instellingen → Apparaten en diensten → Google Cast → Configureren. Voeg het IP-adres van de tv toe bij Bekende hosts en probeer daarna opnieuw in DJConnect.";
 "ui.vibecast.cast.choose" = "Kies je Google Cast-scherm.";
 
 "ui.canvas.not_offered" = "Deze Home Assistant biedt Music Canvas nu niet aan.";
@@ -1937,3 +1952,7 @@
 
 "ui.live.tv_address" = "Adres op de tv";
 "ui.live.tv_code" = "Code op de tv";
+
+"ui.live.requested" = "Aangevraagd";
+"ui.live.requested_empty" = "Er staan nog geen verzoeknummers klaar.";
+"ui.live.requested_scheduled" = "Ingepland";

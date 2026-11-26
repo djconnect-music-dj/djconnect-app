@@ -13,11 +13,17 @@ public struct DJConnectBulletinSource: Codable, Equatable, Sendable {
               let host = value.host, !host.isEmpty, value.user == nil, value.password == nil else { return nil }
         return value
     }
+    var isPrivateHeadline: Bool {
+        ["private_feed_headlines_v1", "private_feed_headline_v1"].contains(license)
+    }
+
+    public var attributedHeadline: String { "\(provider): \(title)" }
+
     /// Compact visible attribution; VoiceOver also names the supplied headline
     /// so multiple links from one publisher remain distinguishable.
     private var visibleLicense: String? {
         // These are internal feed-processing identifiers, not publisher credits.
-        ["private_feed_headlines_v1", "private_feed_headline_v1"].contains(license) ? nil : license
+        isPrivateHeadline ? nil : license
     }
     public var attributionLabel: String { [provider, visibleLicense].compactMap { $0 }.joined(separator: " · ") }
     public var accessibilityLabel: String { [provider, title, visibleLicense].compactMap { $0 }.joined(separator: " · ") }
@@ -43,6 +49,15 @@ public extension DJConnectMoment {
             settingsConfirmation == nil && sourceAttribution == nil && artwork == nil && actions.isEmpty &&
             (2...32).contains(sources.count) && sources.allSatisfy(\.isValid)
     }
+    /// The private feed projects one verbatim headline per source in the same order.
+    var privateBulletinHeadlines: [DJConnectBulletinSource] {
+        guard isBulletinV1, visibility == "owner_only", sources.count == 2,
+              sources.allSatisfy(\.isPrivateHeadline),
+              content == sources.map(\.attributedHeadline).joined(separator: "\n\n")
+        else { return [] }
+        return sources
+    }
+
     /// Exact current Core1328 tuple plus the previously qualified private tuple
     /// for older installations. Neither shape grants native display or speech.
     private var hasSupportedBulletinDelivery: Bool {

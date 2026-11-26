@@ -1454,7 +1454,7 @@
 "ui.session.forecast.flow" = "Flow";
 "ui.session.forecast.tab" = "Horizon";
 "ui.session.forecast.title" = "Horizon · env. 15 min";
-"ui.session.forecast.notice" = "Une direction pour les prochaines minutes. La musique et les interventions peuvent changer.";
+"ui.session.forecast.notice" = "Une direction pour les prochaines minutes.";
 "ui.session.forecast.loading" = "Chargement de Horizon…";
 "ui.session.forecast.empty" = "Pas d’horizon";
 "ui.session.forecast.source" = "Source";
@@ -1645,7 +1645,7 @@
 "ui.vibescape.world.home" = "Monde liquide";
 "ui.vibescape.world.radio" = "Atelier cinétique";
 "ui.vibescape.world.club" = "Architecture lumineuse";
-"ui.vibescape.world.festival" = "Floraison cosmique";
+"ui.vibescape.world.festival" = "Spectacle laser";
 
 // Watch companion V2
 "watch.v2.moments" = "Moments DJ";
@@ -1774,7 +1774,7 @@
 "ui.ask_moments.loading_inventory" = "Chargement des Moments disponibles…";
 "ui.ask_moments.unavailable" = "Les Moments ne sont pas encore disponibles ici.";
 "ui.ask_moments.subject" = "Sujet";
-"ui.ask_moments.choose" = "Choisissez un Moment";
+"ui.ask_moments.choose" = "Choisissez un autre Moment";
 "ui.ask_moments.no_result" = "Je n’ai pas trouvé de Moment suffisamment étayé sur ce sujet.";
 "ui.ask_moments.temporary" = "Cela ne fonctionne pas pour le moment. Réessayez plus tard.";
 "ui.ask_moments.denied" = "Ce Moment n’est pas disponible pour cette session.";
@@ -1816,7 +1816,7 @@
 
 // Music Canvas v1
 "ui.canvas.open" = "Afficher la musique en art";
-"ui.canvas.description" = "Des œuvres, des couleurs et une ambiance au fil de votre session.";
+"ui.canvas.description" = "Music Canvas transforme la musique que vous écoutez en compositions artistiques sur votre écran en mode Art.";
 "ui.canvas.enabled" = "Afficher sur les écrans";
 "ui.canvas.choose_screens" = "Choisissez vos écrans";
 "ui.canvas.screens" = "Écrans";
@@ -1828,6 +1828,10 @@
 "ui.canvas.free" = "Libre";
 "ui.canvas.full" = "Plein cadre";
 "ui.canvas.matte" = "Passe-partout";
+"ui.canvas.matte_size" = "Largeur du passe-partout";
+"ui.canvas.matte_size.small" = "Fin";
+"ui.canvas.matte_size.medium" = "Moyen";
+"ui.canvas.matte_size.large" = "Large";
 "ui.canvas.off" = "Désactivé";
 "ui.canvas.matching" = "Assorti";
 "ui.canvas.contrast" = "Contrasté";
@@ -1838,6 +1842,8 @@
 "ui.canvas.cadence.1800" = "Toutes les demi-heures";
 "ui.canvas.cadence.3600" = "Toutes les heures";
 "ui.canvas.details" = "Détails";
+"ui.canvas.new_artwork" = "Nouvelle œuvre";
+"ui.canvas.state.alternative_unchanged" = "Le générateur d’images a renvoyé la même œuvre.";
 "ui.canvas.done" = "Terminé";
 "ui.canvas.cancel" = "Annuler";
 "ui.canvas.working" = "En cours";
@@ -1883,7 +1889,8 @@
 "ui.live.join" = "Rejoindre VibeCast Party";
 "ui.session.welcome.join_separator" = "ou";
 
-"ui.live.leave" = "Quitter la session invitée";
+"ui.live.leave" = "Quitter VibeCast Party";
+"ui.live.leave_confirmation" = "Quitter VibeCast Party ?";
 
 "ui.live.connected" = "Connecté à la session invitée";
 
@@ -1902,6 +1909,13 @@
 "ui.live.request_playing" = "Le morceau que tu as demandé est en cours : %@";
 
 "ui.live.help_title" = "Aide invités";
+
+"ui.live.help_requests" = "Morceaux à demander";
+"ui.live.help_request_track" = "Joue le titre Promise de HAEVN";
+"ui.live.help_request_title" = "Joue Hello";
+"ui.live.help_questions" = "Questions sur la musique";
+"ui.live.help_question_playing" = "Qu’est-ce qui passe maintenant ?";
+"ui.live.help_question_artist" = "Qui sont les membres de HAEVN ?";
 
 "ui.live.help" = "Demande un morceau ou pose une question sur la musique. Tu ne peux pas contrôler la lecture ni modifier les réglages de l’hôte. Ta conversation est temporaire et disparaît quand tu quittes la session.";
 
@@ -1929,6 +1943,7 @@
 "ui.vibecast.cast.presenting" = "L’écran indique que VibeCast est affiché.";
 "ui.vibecast.cast.waiting" = "En attente de confirmation de l’écran…";
 "ui.vibecast.cast.failed" = "Connexion impossible. Réessaie.";
+"ui.vibecast.cast.known_hosts_help" = "Le téléviseur est absent de Google Cast dans Home Assistant ? Accède à Paramètres → Appareils et services → Google Cast → Configurer. Ajoute l’adresse IP du téléviseur dans Hôtes connus, puis réessaie dans DJConnect.";
 "ui.vibecast.cast.choose" = "Choisis ton écran Google Cast.";
 
 "ui.canvas.not_offered" = "Cette instance Home Assistant ne propose pas Music Canvas actuellement.";
@@ -1937,3 +1952,7 @@
 
 "ui.live.tv_address" = "Adresse affichée sur le téléviseur";
 "ui.live.tv_code" = "Code affiché sur le téléviseur";
+
+"ui.live.requested" = "Demandés";
+"ui.live.requested_empty" = "Aucun morceau demandé n’est en attente.";
+"ui.live.requested_scheduled" = "Programmé";

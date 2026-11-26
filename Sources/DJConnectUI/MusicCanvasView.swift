@@ -23,6 +23,17 @@ struct MusicCanvasView: View {
     @State private var orientation = "portrait"
     @State private var preview: DJConnectSessionArtworkImage?
 
+    private struct PreviewRequest: Equatable {
+        let targetID: String
+        let revision: String?
+        let scope: String
+    }
+
+    private var previewRequest: PreviewRequest? {
+        guard let selected, selected.preview_available, current(scope) else { return nil }
+        return PreviewRequest(targetID: selected.id, revision: selected.preview_revision, scope: scope)
+    }
+
     private var scope: String {
         Self.scope(for: model, scenePhase: scenePhase)
     }
@@ -42,6 +53,7 @@ struct MusicCanvasView: View {
 
     var body: some View {
         let loadScope = scope
+        let request = previewRequest
         let settingsTitle = DJConnectLocalization.localized(key: "ui.settings", language: model.language)
         DJConnectGlassDialogSurface(
             title: selected == nil ? "Music Canvas" : settingsTitle,
@@ -72,6 +84,17 @@ struct MusicCanvasView: View {
                 }
             }
             VStack(spacing: 12) {
+                if let selected, let snapshot, snapshot.manual_artwork_refresh == true {
+                    Button(text("new_artwork")) {
+                        perform(snapshot) { client, id in
+                            try await client.requestNewMusicCanvasArtwork(snapshot, targetID: selected.id, operationID: id)
+                        }
+                    }
+                    .djConnectButtonStyle(DJConnectButtonStyle(expands: true))
+                    .controlSize(.large)
+                    .disabled(busy || !snapshot.image_generation_available || selected.can_request_artwork != true)
+                    .accessibilityIdentifier("music-canvas-new-artwork")
+                }
                 if selected != nil {
                     Button(DJConnectLocalization.localized(key: "ui.session.intro.back", language: model.language)) {
                         selected = nil
@@ -88,6 +111,7 @@ struct MusicCanvasView: View {
             }
         }
         .accessibilityIdentifier(selected == nil ? "music-canvas-popup" : "music-canvas-settings-page")
+        .task(id: request) { await loadPreview(request) }
         .task(id: loadScope) {
             guard !Task.isCancelled, scope == loadScope else { return }
             snapshot = nil; selected = nil; preview = nil; notice = nil
@@ -149,7 +173,6 @@ struct MusicCanvasView: View {
                         selected = target
                         cleanupRemote = false; allowRemaining = false
                         width = ""; height = ""; orientation = "portrait"; preview = nil
-                        if target.preview_available { loadPreview(target.id) }
                     } label: {
                         Image(systemName: "chevron.forward")
                             .font(.subheadline.weight(.semibold))
@@ -243,6 +266,20 @@ struct MusicCanvasView: View {
                 matteSetting(style.matte) { value in
                     change { $0.updatePresentation(for: target) { $0.matte = value } }
                 }
+                if snapshot.per_screen_matte_size == true, style.matte != "off" {
+                    settingRow(text("matte_size")) {
+                        Picker(text("matte_size"), selection: Binding(get: { style.matte_size ?? "medium" }, set: { value in
+                            change { $0.updatePresentation(for: target) { $0.matte_size = value } }
+                        })) {
+                            ForEach(DJConnectCanvasPresentation.matteSizes, id: \.self) { size in
+                                Text(text("matte_size." + size)).tag(size)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        .accessibilityIdentifier("music-canvas-matte-size-" + target.id)
+                    }
+                }
                 trackTitleSetting(style.show_track_title, identifier: "music-canvas-show-track-title-" + target.id) { enabled in
                     change { $0.updatePresentation(for: target) { $0.show_track_title = enabled } }
                 }
@@ -308,6 +345,7 @@ struct MusicCanvasView: View {
         let known = ["disabled", "waiting_music", "preparing", "delivering", "displayed", "delivered_unknown",
                      "needs_setup", "discovered", "ready", "busy", "image_provider_required"]
         if known.contains(state) { return text("state." + state) }
+        if state == "canvas_alternative_unchanged" { return text("state.alternative_unchanged") }
         if state == "canvas_manual_takeover" { return text("state.waiting_screen") }
         if state == "canvas_public_asset_required" { return text("asset_required") }
         return text("state.unavailable")
@@ -390,17 +428,24 @@ struct MusicCanvasView: View {
             await refresh(captured)
         }
     }
-    private func loadPreview(_ target: String) {
-        let captured = scope
-        Task {
+    private func loadPreview(_ request: PreviewRequest?) async {
+        guard !Task.isCancelled, previewRequest == request else { return }
+        preview = nil
+        guard let request else { return }
+        while !Task.isCancelled, previewRequest == request {
             do {
-                let bytes = try await model.withHomeAssistantClient { try await $0.musicCanvasPreview(targetID: target) }
-                guard current(captured), selected?.id == target else { return }
+                let bytes = try await model.withHomeAssistantClient(notifiesTransportFailure: false) {
+                    try await $0.musicCanvasPreview(targetID: request.targetID)
+                }
+                guard !Task.isCancelled, previewRequest == request else { return }
                 preview = bytes
+                if request.revision != nil { return }
             } catch {
-                guard current(captured), selected?.id == target else { return }
+                guard !Task.isCancelled, previewRequest == request else { return }
                 preview = nil
             }
+            // Older Core versions have no revision to invalidate the preview.
+            try? await Task.sleep(for: .seconds(request.revision == nil ? 15 : 5))
         }
     }
 }

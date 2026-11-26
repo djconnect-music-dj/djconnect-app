@@ -166,7 +166,7 @@ private struct DJConnectPresentationSurface: ViewModifier {
 extension View {
     func djConnectGlassPreferences() -> some View { modifier(DJConnectGlassPreference()) }
     func djConnectPresentationSurface() -> some View { modifier(DJConnectPresentationSurface()) }
-    func djConnectBreathingArtwork(enabled: Bool = true) -> some View {
+    func djConnectBreathingArtwork(enabled: Bool) -> some View {
         modifier(DJConnectBreathingArtwork(enabled: enabled))
     }
 }
@@ -242,47 +242,10 @@ let djConnectIconGradient = LinearGradient(
 struct DJConnectHeroGlyph: View {
     let systemImage: String
     var assetName: String? = nil
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.scenePhase) private var scenePhase
-    @State private var startedAt = ProcessInfo.processInfo.systemUptime
 
     var body: some View {
-        Group {
-            if reduceMotion || scenePhase != .active {
-                artwork(angle: nil)
-            } else {
-                TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { _ in
-                    let elapsed = max(0, ProcessInfo.processInfo.systemUptime - startedAt)
-                    let turn = elapsed.truncatingRemainder(dividingBy: 12) / 12
-                    artwork(angle: turn * 360)
-                }
-            }
-        }
-        .frame(width: 72, height: 72)
-        .accessibilityHidden(true)
-        .allowsHitTesting(false)
-    }
-
-    private func artwork(angle: Double?) -> some View {
-        symbol.foregroundStyle(djConnectIconGradient)
-            .overlay {
-                if let angle {
-                    let light = AngularGradient(stops: [
-                        .init(color: .clear, location: 0),
-                        .init(color: .clear, location: 0.70),
-                        .init(color: .white.opacity(0.04), location: 0.78),
-                        .init(color: .white.opacity(0.25), location: 0.90),
-                        .init(color: .white.opacity(0.82), location: 0.96),
-                        .init(color: .white.opacity(0.18), location: 0.985),
-                        .init(color: .clear, location: 1)
-                    ], center: .center, startAngle: .degrees(angle), endAngle: .degrees(angle + 360))
-                    ZStack {
-                        light.mask(symbol.foregroundStyle(.white))
-                            .blur(radius: 2).opacity(0.45)
-                        light.mask(symbol.foregroundStyle(.white))
-                    }
-                }
-            }
+        DJConnectHeroShine(artwork: symbol.foregroundStyle(djConnectIconGradient))
+            .frame(width: 72, height: 72)
     }
 
     @ViewBuilder private var symbol: some View {
@@ -295,6 +258,51 @@ struct DJConnectHeroGlyph: View {
             Image(systemName: systemImage)
                 .font(.system(size: 50, weight: .semibold))
         }
+    }
+}
+
+struct DJConnectHeroShine<Artwork: View>: View {
+    let artwork: Artwork
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var startedAt = ProcessInfo.processInfo.systemUptime
+
+    var body: some View {
+        Group {
+            if reduceMotion || scenePhase != .active {
+                illuminatedArtwork(angle: nil)
+            } else {
+                TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { _ in
+                    let elapsed = max(0, ProcessInfo.processInfo.systemUptime - startedAt)
+                    let turn = elapsed.truncatingRemainder(dividingBy: 12) / 12
+                    illuminatedArtwork(angle: turn * 360)
+                }
+            }
+        }
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
+    }
+
+    private func illuminatedArtwork(angle: Double?) -> some View {
+        artwork
+            .overlay {
+                if let angle {
+                    let light = AngularGradient(stops: [
+                        .init(color: .clear, location: 0),
+                        .init(color: .clear, location: 0.70),
+                        .init(color: .white.opacity(0.04), location: 0.78),
+                        .init(color: .white.opacity(0.25), location: 0.90),
+                        .init(color: .white.opacity(0.82), location: 0.96),
+                        .init(color: .white.opacity(0.18), location: 0.985),
+                        .init(color: .clear, location: 1)
+                    ], center: .center, startAngle: .degrees(angle), endAngle: .degrees(angle + 360))
+                    ZStack {
+                        light.mask(artwork)
+                            .blur(radius: 2).opacity(0.45)
+                        light.mask(artwork)
+                    }
+                }
+            }
     }
 }
 

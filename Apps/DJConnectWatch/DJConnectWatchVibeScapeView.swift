@@ -32,7 +32,7 @@ struct DJConnectWatchVibeScapeView: View {
                     let curve = VibeScapeDynamics.sample(Float(dynamics), family: scene.family)
                     let phase = reduceMotion || !isVisible ? 0 : phaseAtOrigin
                         + max(0, clock.date.timeIntervalSince(phaseOrigin)) * Double(scene.motion * curve.speed)
-                    Self.draw(scene, curve: curve, phase: phase, in: context, size: size)
+                    Self.draw(scene, curve: curve, dynamics: dynamics, phase: phase, in: context, size: size)
                 }
             }
             .background(.black)
@@ -172,7 +172,7 @@ struct DJConnectWatchVibeScapeView: View {
         self.followsDJ = followsDJ
     }
 
-    private static func draw(_ scene: VibeScapeScene, curve: VibeScapeDynamicsSample,
+    private static func draw(_ scene: VibeScapeScene, curve: VibeScapeDynamicsSample, dynamics: Double,
                              phase: Double, in context: GraphicsContext, size: CGSize) {
         let palette = [scene.palette, scene.secondaryPalette, scene.accentPalette].map {
             Color(red: Double($0.x), green: Double($0.y), blue: Double($0.z))
@@ -180,6 +180,25 @@ struct DJConnectWatchVibeScapeView: View {
         let center = CGPoint(x: size.width / 2, y: size.height / 2)
         let unit = min(size.width, size.height)
         let bounds = Path(CGRect(origin: .zero, size: size))
+        if scene.family == .festival {
+            context.fill(bounds, with: .color(Color(red: 8 / 255, green: 11 / 255, blue: 25 / 255)))
+            var lasers = context
+            lasers.blendMode = .screen
+            for index in 0..<7 {
+                let angle = phase * 0.20 + Double(index) * 2 * .pi / 7
+                let swing = sin(angle)
+                let glow = CGPoint(x: size.width * (0.5 + (0.18 + 0.28 * dynamics) * swing),
+                                   y: size.height * (0.5 + (0.16 + 0.24 * dynamics) * cos(angle * 0.8)))
+                let color = palette[index % palette.count]
+                lasers.fill(bounds, with: .radialGradient(.init(colors: [color.opacity(0.47), color.opacity(0)]),
+                                                          center: glow, startRadius: 0, endRadius: size.width * 0.43))
+                var beam = Path()
+                beam.move(to: CGPoint(x: center.x, y: size.height * 0.72))
+                beam.addLine(to: CGPoint(x: glow.x + swing * size.width * 0.3, y: glow.y - size.height * 0.4))
+                lasers.stroke(beam, with: .color(color.opacity(0.53)), lineWidth: 1)
+            }
+            return
+        }
         context.fill(bounds, with: .radialGradient(.init(colors: [palette[0].opacity(0.24), .black]),
                                                    center: center, startRadius: 0, endRadius: unit * 0.72))
         let seed = Double(scene.composition.x) * 2 * .pi
@@ -192,7 +211,7 @@ struct DJConnectWatchVibeScapeView: View {
         case .home:
             drawLiquidGlass(palette, phase: phase * evolution + seed, excursion: excursion,
                             parallax: parallax, in: context, size: size)
-        case .radio, .club, .festival:
+        case .radio, .club:
             let strandCount = Int(8 * detail)
             for index in 0..<strandCount {
                 let offset = Double(index) / Double(strandCount) * 2 * .pi
@@ -206,24 +225,19 @@ struct DJConnectWatchVibeScapeView: View {
                         let radius = unit * (0.23 + 0.055 * excursion * cos(3 * angle + spin))
                         point = CGPoint(x: center.x + cos(angle + spin) * radius,
                                         y: center.y + sin(angle + spin) * radius * (0.75 + 0.19 * sin(spin) * parallax))
-                    case .club:
+                    default:
                         let edge = cos(angle).magnitude + sin(angle).magnitude
                         let radius = unit * (0.16 + Double(index) * 0.013 * excursion) / edge
                         point = CGPoint(x: center.x + cos(angle + spin) * radius,
                                         y: center.y + sin(angle + spin) * radius + sin(spin) * unit * 0.14 * parallax)
-                    default:
-                        let radius = unit * (0.23 + 0.065 * excursion * cos(3 * angle + spin))
-                        point = CGPoint(x: center.x + cos(angle + offset) * radius,
-                                        y: center.y + sin(angle + offset) * radius + sin(2 * angle + spin) * unit * 0.12 * parallax)
                     }
                     if step == 0 { path.move(to: point) } else { path.addLine(to: point) }
                 }
                 let color = palette[index % 3]
                 context.stroke(path, with: .color(color.opacity(0.17)), lineWidth: 4)
-                context.stroke(path, with: .color(color.opacity(0.8)),
-                               style: StrokeStyle(lineWidth: 1, dash: scene.family == .festival ? [1, 2] : []))
+                context.stroke(path, with: .color(color.opacity(0.8)), lineWidth: 1)
             }
-        case .neutral:
+        case .festival, .neutral:
             break
         }
     }

@@ -168,12 +168,11 @@ struct VibeScapeScreen: View {
                                 .accessibilityIdentifier("vibescape-voice-status")
                         }
                         if visit.scene?.family == .neutral { Text(text("ui.session.persona.unavailable")).font(.caption).foregroundStyle(.white) }
-                        dynamicsControl
-                        HStack {
-                            Text(text("ui.vibescape.calm")); Spacer()
-                            Text(text("ui.vibescape.dynamics.follow")); Spacer()
-                            Text(text("ui.vibescape.intense"))
-                        }.font(.caption).foregroundStyle(.white.opacity(0.8)).accessibilityHidden(true)
+                        VibeScapeDynamicsControls(visit: visit, language: model.language,
+                            editingChanged: dynamicsEditingChanged) {
+                            publishDynamics(commit: true)
+                            showControls()
+                        }
                     }
                         .frame(width: min(480, max(0, geometry.size.width - 32)))
                         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { sliderBounds = $0 }
@@ -462,7 +461,34 @@ struct VibeScapeScreen: View {
         adjustingDynamics = editing; controlsGeneration = UUID()
         if !editing { publishDynamics(commit: true) }
     }
-    private var dynamicsControl: some View {
+}
+
+struct VibeScapeDynamicsControls: View {
+    @ObservedObject var visit: VisualDirectorVisit
+    let language: String
+    let editingChanged: (Bool) -> Void
+    let didFollowDJ: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private func text(_ key: String) -> String {
+        DJConnectLocalization.localized(key: key, language: language)
+    }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            slider
+            HStack {
+                Text(text("ui.vibescape.calm")); Spacer()
+                Text(text("ui.vibescape.dynamics.follow")); Spacer()
+                Text(text("ui.vibescape.intense"))
+            }
+            .font(.caption)
+            .foregroundStyle(.white.opacity(0.8))
+            .accessibilityHidden(true)
+        }
+    }
+
+    private var slider: some View {
         HStack(spacing: 12) {
             Image(systemName: "bolt.fill").foregroundStyle(.white)
                 .accessibilityHidden(true)
@@ -478,13 +504,13 @@ struct VibeScapeScreen: View {
             #if os(macOS)
             VibeScapeMacDynamicsSlider(
                 value: Binding(get: { Double(visit.dynamics) }, set: { _ = visit.setDynamics(Float($0)) }),
-                editingChanged: dynamicsEditingChanged)
+                editingChanged: editingChanged)
                 .frame(maxWidth: .infinity).frame(height: 44)
                 .accessibilityLabel(text("ui.vibescape.dynamics"))
                 .accessibilityIdentifier("vibescape-dynamics")
             #else
             Slider(value: Binding(get: { Double(visit.dynamics) }, set: { _ = visit.setDynamics(Float($0)) }),
-                   in: 0...1, onEditingChanged: dynamicsEditingChanged)
+                   in: 0...1, onEditingChanged: editingChanged)
                 .tint(.white)
                 .frame(maxWidth: .infinity).frame(height: 44)
                 .accessibilityLabel(text("ui.vibescape.dynamics"))
@@ -495,8 +521,7 @@ struct VibeScapeScreen: View {
                 withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.35)) {
                     visit.followTrackIntensity()
                 }
-                publishDynamics(commit: true)
-                showControls()
+                didFollowDJ()
             } label: {
                 Image(systemName: "arrow.uturn.backward").foregroundStyle(.white).frame(width: 44, height: 44)
             }

@@ -858,6 +858,7 @@ struct DJConnectLocalAudioRoute: Equatable, Sendable {
 
 @MainActor
 public final class DJConnectAppModel: ObservableObject {
+    #if os(iOS)
     @Published var isShowingGuestJoin = false
     @Published private(set) var isPresentingLiveGuest = false
     func liveGuestPresentationDidChange(_ presented: Bool) {
@@ -869,6 +870,9 @@ public final class DJConnectAppModel: ObservableObject {
             nativeWidgetPushOwner.withdrawLocally(); nativeActivityPushOwner.withdrawLocally()
         }
     }
+    #else
+    public let isPresentingLiveGuest = false
+    #endif
     // View-lifetime presentation only. Never a Profile/defaults/cache field.
     @Published var isShowingVibeScape = false {
         didSet {
@@ -1215,7 +1219,6 @@ public final class DJConnectAppModel: ObservableObject {
     func prepareDisplayConsentPresentation() {
         refreshDisplayConsentPresentation()
         if !blocksVibeCastScreenSelection { vibeCastLiveEnabled = false; resetDisplayConsent() }
-        Task { await refreshVibeCastRemote() }
     }
 
     func dismissDisplayConsentPresentation() {
@@ -3169,6 +3172,8 @@ public final class DJConnectAppModel: ObservableObject {
     private let logLevelKey = "DJConnectLogLevel"
     private let appLanguageOverrideKey = DJConnectLocalization.appLanguageOverrideDefaultsKey
     private let demoModeKey = "DJConnectDemoMode"
+    private var returnsToSavedPairingAfterDemo = false
+    private var demoTransitionGeneration = UUID()
     private let askDJMoodKey = "DJConnectAskDJMood"
     private let wakeWordPhraseKey = "DJConnectWakeWordPhrase"
     private let askDJMessagesKey = "DJConnectAskDJMessages"
@@ -4168,6 +4173,11 @@ public final class DJConnectAppModel: ObservableObject {
     }
 
     public func startDemoMode() {
+        guard !isDemoMode else { return }
+        returnsToSavedPairingAfterDemo = pairingStatus == .paired
+        demoTransitionGeneration = UUID()
+        manualRefreshTask?.cancel()
+        manualRefreshTask = nil
         log(.debug, "User action: start demo mode")
         cancelLocalNetworkExplanation()
         demoWatchTextReplies.removeAll()
@@ -4189,8 +4199,7 @@ public final class DJConnectAppModel: ObservableObject {
         pairingStatus = .unpaired
         isConnected = false
         isPairing = false
-        backendAvailable = true
-        updateRequiredMessage = nil
+        clearRuntimeState()
         pairingMessage = localized(key: "appModel.demo.mode.active.home.assistant.is.not.connected")
         clearAskDJHistoryLocally()
         applyDemoState()
@@ -4202,6 +4211,12 @@ public final class DJConnectAppModel: ObservableObject {
     }
 
     public func stopDemoMode() {
+        guard isDemoMode else { return }
+        demoTransitionGeneration = UUID()
+        manualRefreshTask?.cancel()
+        manualRefreshTask = nil
+        let restorePairing = returnsToSavedPairingAfterDemo
+        returnsToSavedPairingAfterDemo = false
         log(.debug, "User action: stop demo mode")
         demoWatchTextReplies.removeAll()
         dismissSessionIntroduction()
@@ -4215,6 +4230,18 @@ public final class DJConnectAppModel: ObservableObject {
         isPairingScreenDismissed = false
         clearRuntimeState()
         pairingMessage = localized(key: "appModel.demo.mode.stopped.pair.with.home.assistant.to.continue")
+        if restorePairing {
+            do {
+                if let token = try tokenStore.loadToken(), !token.isEmpty {
+                    lastFullRefreshAt = nil
+                    lastBackendCollectionsRefreshAt = nil
+                    beginStoredPairingValidation()
+                    isPairingScreenDismissed = pairingStatus == .paired
+                }
+            } catch {
+                applyTokenStorageFailure(error)
+            }
+        }
         log(.info, "Demo mode stopped")
     }
 
@@ -5492,8 +5519,9 @@ public final class DJConnectAppModel: ObservableObject {
             return await runRefresh(reason: "Refresh completed", notifyUserOnError: true, forceCollections: true)
         }
         manualRefreshTask = task
+        let demoGeneration = demoTransitionGeneration
         let result = await task.value
-        manualRefreshTask = nil
+        if demoTransitionGeneration == demoGeneration { manualRefreshTask = nil }
         return result
     }
 
@@ -5546,9 +5574,13 @@ public final class DJConnectAppModel: ObservableObject {
         }
         log(.debug, "Manual refresh requested")
         isRefreshing = true
-        defer { isRefreshing = false }
+        let generation = demoTransitionGeneration
+        defer {
+            if demoTransitionGeneration == generation { isRefreshing = false }
+        }
         return await performLiveRefresh(reason: reason, notifyUserOnError: notifyUserOnError,
-                                        forceCollections: forceCollections, refreshCollections: refreshCollections)
+                                        forceCollections: forceCollections, refreshCollections: refreshCollections,
+                                        generation: generation)
     }
 
     private func performDemoRefresh(reason: String) -> Bool {
@@ -5562,16 +5594,22 @@ public final class DJConnectAppModel: ObservableObject {
     }
 
     private func performLiveRefresh(reason: String, notifyUserOnError: Bool,
-                                    forceCollections: Bool, refreshCollections: Bool) async -> Bool {
+                                    forceCollections: Bool, refreshCollections: Bool, generation: UUID) async -> Bool {
+        let stillLive: @MainActor () -> Bool = { [weak self] in
+            self?.demoTransitionGeneration == generation && self?.isDemoMode == false
+        }
         do {
-            try await refreshStatusWithFallback()
+            try await refreshStatusWithFallback(isStillValid: stillLive)
+            guard stillLive() else { return false }
             lastFullRefreshAt = Date()
             if refreshCollections {
-                await refreshBackendCollections(force: forceCollections)
+                await refreshBackendCollections(force: forceCollections, isStillValid: stillLive)
             }
+            guard stillLive() else { return false }
             log(.info, reason)
             return true
         } catch let error as DJConnectError {
+            guard stillLive() else { return false }
             log(.warning, "Refresh failed: \(Self.describe(error))")
             apply(error: error)
             if notifyUserOnError {
@@ -5582,6 +5620,7 @@ public final class DJConnectAppModel: ObservableObject {
             // A superseded snapshot is not a lost connection.
             return false
         } catch {
+            guard stillLive() else { return false }
             log(.error, "Refresh failed unexpectedly: \(error.localizedDescription)")
             applyConnectionUnavailableState(message: error.localizedDescription)
             if notifyUserOnError {

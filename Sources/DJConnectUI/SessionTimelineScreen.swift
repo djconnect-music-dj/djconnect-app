@@ -1327,7 +1327,19 @@ struct SessionTimelineScreen: View {
                     .accessibilityLabel(text(model.isVibeCastSharing ? "ui.displayConsent.active_title" : "ui.vibecast.handoff.title"))
                     .accessibilityIdentifier("session-handoff-toggle")
                 }
-                if activeSession != nil { SessionEndToolbarButton(model: model) }
+                if activeSession != nil {
+                    if !model.isShowingVibeScape {
+                        Button {
+                            model.isShowingGuestJoin = true
+                        } label: {
+                            Label(text("ui.live.join"), systemImage: "qrcode.viewfinder")
+                        }
+                        .labelStyle(.iconOnly)
+                        .accessibilityLabel(text("ui.live.join"))
+                        .accessibilityIdentifier("session-join-party")
+                    }
+                    SessionEndToolbarButton(model: model)
+                }
             }
             #endif
         }
@@ -1708,6 +1720,7 @@ struct SessionModeToggleButtons: View {
     var openVibeScape: (() -> Void)? = nil
     var isVibeScape = false
     var mood: String? = nil
+    var showsAnotherPage = false
     private var selectionTheme: DJConnectSessionMoodTheme { .init(sessionMood: mood) }
 
     var body: some View {
@@ -1730,7 +1743,7 @@ struct SessionModeToggleButtons: View {
     }
 
     private func modeButton(forecast: Bool, key: String) -> some View {
-        let selected = !isVibeScape && showsForecast == forecast
+        let selected = !showsAnotherPage && !isVibeScape && showsForecast == forecast
         return modeButton(title: DJConnectLocalization.localized(key: key, language: language),
                           selected: selected,
                           identifier: forecast ? "session-forecast-toggle" : "session-flow-toggle") {
@@ -2451,7 +2464,7 @@ struct SessionControlPopoverHost: View {
     let searchEnabled: Bool?
     let refreshAction: (() -> Void)?
     @State private var pendingAction: (SessionControlIntent, MoreAction)?
-    private enum MoreAction { case handoff, refresh, voice, search, canvas }
+    private enum MoreAction { case handoff, joinParty, refresh, voice, search, canvas }
     init(model: DJConnectAppModel, intent: Binding<SessionControlIntent?>, showsHandoff: Bool = false, canvasAction: (() -> Void)? = nil, refreshAction: (() -> Void)? = nil, searchAction: (() -> Void)? = nil, searchEnabled: Bool? = nil, visualMoodSelection: Binding<Int>? = nil, isCanvasActive: Bool = false) {
         self.model = model; _intent = intent; history = model.sessionHistory
         self.showsHandoff = showsHandoff; self.canvasAction = canvasAction; self.refreshAction = refreshAction; self.searchAction = searchAction; self.visualMoodSelection = visualMoodSelection
@@ -2474,6 +2487,9 @@ struct SessionControlPopoverHost: View {
         case .handoff:
             guard showsHandoff, captured.sessionID == model.activeDJSession?.id else { return }
             model.openVibeCastDestinationPicker()
+        case .joinParty:
+            guard captured.sessionID == model.activeDJSession?.id, !model.isShowingVibeScape else { return }
+            model.isShowingGuestJoin = true
         case .voice:
             guard captured.sessionID == model.activeDJSession?.id else { return }
             intent = SessionControlIntent(kind: .voice, sessionID: captured.sessionID, epoch: captured.epoch, sourceRect: captured.sourceRect)
@@ -2595,6 +2611,13 @@ struct SessionControlPopoverHost: View {
                                             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                                     }.accessibilityIdentifier("session-handoff-toggle")
                                 }
+                                if captured.sessionID == model.activeDJSession?.id && !model.isShowingVibeScape {
+                                    Button { queue(.joinParty, captured: captured) } label: {
+                                        Label(text("ui.live.join"), systemImage: "qrcode.viewfinder")
+                                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                                    }
+                                    .accessibilityIdentifier("session-join-party")
+                                }
                                 if refreshAction != nil {
                                     Button { queue(.refresh, captured: captured) } label: {
                                         HStack {
@@ -2648,7 +2671,7 @@ struct SessionControlPopoverHost: View {
     }
 }
 
-// Wait for native dismissal completion before presenting the handoff sheet.
+// Wait for native dismissal before presenting the next session control.
 private struct SessionPopoverDismissalObserver: UIViewControllerRepresentable {
     let onDismiss: () -> Void
     final class Controller: UIViewController {
@@ -3793,7 +3816,6 @@ struct SessionHorizonTrackContent: View {
                 if let url = artworkURL {
                     CachedArtworkImage(url: url, mode: .fit, usesAlbumGlassFrame: true) { Color.clear }
                         .frame(width: 100, height: 100)
-                        .djConnectBreathingArtwork()
                 }
                 VStack(alignment: .leading, spacing: 6) {
                     Text(title).font(.title3.bold())

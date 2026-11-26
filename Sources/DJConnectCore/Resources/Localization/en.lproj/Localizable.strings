@@ -1454,7 +1454,7 @@
 "ui.session.forecast.flow" = "Flow";
 "ui.session.forecast.tab" = "Horizon";
 "ui.session.forecast.title" = "Horizon · ~15 min";
-"ui.session.forecast.notice" = "A direction for the coming minutes. Music and contributions may change.";
+"ui.session.forecast.notice" = "A direction for the coming minutes.";
 "ui.session.forecast.loading" = "Loading Horizon…";
 "ui.session.forecast.empty" = "No Horizon";
 "ui.session.forecast.source" = "Source";
@@ -1645,7 +1645,7 @@
 "ui.vibescape.world.home" = "Liquid world";
 "ui.vibescape.world.radio" = "Kinetic atelier";
 "ui.vibescape.world.club" = "Light architecture";
-"ui.vibescape.world.festival" = "Cosmic bloom";
+"ui.vibescape.world.festival" = "Laser show";
 
 // Watch companion V2
 "watch.v2.moments" = "DJ Moments";
@@ -1774,7 +1774,7 @@
 "ui.ask_moments.loading_inventory" = "Loading available Moments…";
 "ui.ask_moments.unavailable" = "Moments are not available here yet.";
 "ui.ask_moments.subject" = "Subject";
-"ui.ask_moments.choose" = "Choose a Moment";
+"ui.ask_moments.choose" = "Choose another Moment";
 "ui.ask_moments.no_result" = "I could not find a well-supported Moment about this subject.";
 "ui.ask_moments.temporary" = "This is temporarily unavailable. Please try again later.";
 "ui.ask_moments.denied" = "This Moment is not available for this session.";
@@ -1816,7 +1816,7 @@
 
 // Music Canvas v1
 "ui.canvas.open" = "Show music as art";
-"ui.canvas.description" = "Artwork, colour and atmosphere that follow your session.";
+"ui.canvas.description" = "Music Canvas turns the music you play into artistic compositions on your Art Mode screen.";
 "ui.canvas.enabled" = "Show on screens";
 "ui.canvas.choose_screens" = "Choose your screens";
 "ui.canvas.screens" = "Screens";
@@ -1828,6 +1828,10 @@
 "ui.canvas.free" = "Free";
 "ui.canvas.full" = "Full frame";
 "ui.canvas.matte" = "Mat";
+"ui.canvas.matte_size" = "Mat thickness";
+"ui.canvas.matte_size.small" = "Small";
+"ui.canvas.matte_size.medium" = "Medium";
+"ui.canvas.matte_size.large" = "Large";
 "ui.canvas.off" = "Off";
 "ui.canvas.matching" = "Matching";
 "ui.canvas.contrast" = "Contrasting";
@@ -1838,6 +1842,8 @@
 "ui.canvas.cadence.1800" = "Every half hour";
 "ui.canvas.cadence.3600" = "Every hour";
 "ui.canvas.details" = "Details";
+"ui.canvas.new_artwork" = "New artwork";
+"ui.canvas.state.alternative_unchanged" = "The image provider returned the same artwork.";
 "ui.canvas.done" = "Done";
 "ui.canvas.cancel" = "Cancel";
 "ui.canvas.working" = "Working";
@@ -1883,7 +1889,8 @@
 "ui.live.join" = "Join VibeCast Party";
 "ui.session.welcome.join_separator" = "or";
 
-"ui.live.leave" = "Leave joined session";
+"ui.live.leave" = "Leave VibeCast Party";
+"ui.live.leave_confirmation" = "Leave VibeCast Party?";
 
 "ui.live.connected" = "Connected to guest session";
 
@@ -1902,6 +1909,13 @@
 "ui.live.request_playing" = "Your requested song is playing: %@";
 
 "ui.live.help_title" = "Guest help";
+
+"ui.live.help_requests" = "Song requests";
+"ui.live.help_request_track" = "Could you play Promise by HAEVN?";
+"ui.live.help_request_title" = "Play Hello";
+"ui.live.help_questions" = "Music questions";
+"ui.live.help_question_playing" = "What is playing now?";
+"ui.live.help_question_artist" = "Who are the band members of HAEVN?";
 
 "ui.live.help" = "Request a song or ask about the music. You cannot control playback or change the host’s session settings. Your conversation is temporary and disappears when you leave.";
 
@@ -1929,6 +1943,7 @@
 "ui.vibecast.cast.presenting" = "The screen reports that VibeCast is displaying.";
 "ui.vibecast.cast.waiting" = "Waiting for confirmation from the screen…";
 "ui.vibecast.cast.failed" = "Could not connect. Try again.";
+"ui.vibecast.cast.known_hosts_help" = "Is the TV missing from Google Cast in Home Assistant? Go to Settings → Devices & services → Google Cast → Configure. Add the TV’s IP address under Known hosts, then try again in DJConnect.";
 "ui.vibecast.cast.choose" = "Choose your Google Cast screen.";
 
 "ui.canvas.not_offered" = "This Home Assistant does not currently offer Music Canvas.";
@@ -1937,3 +1952,7 @@
 
 "ui.live.tv_address" = "TV address";
 "ui.live.tv_code" = "TV code";
+
+"ui.live.requested" = "Requested";
+"ui.live.requested_empty" = "No requested tracks are waiting.";
+"ui.live.requested_scheduled" = "Scheduled";

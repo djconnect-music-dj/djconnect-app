@@ -42,10 +42,9 @@ struct AskDJMomentsCardContent: View {
                     Text(controller.pendingText ?? text("loading_inventory")).fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("ask-moments-pending")
                 }
-                HStack {
-                    Button(text("cancel")) { controller.cancel() }.disabled(controller.operationID == nil || controller.checkingCancellation)
-                    if controller.noticeText != nil { Button(text("check_status")) { controller.checkStatus() } }
-                }.frame(minHeight: 44)
+                if controller.noticeText != nil {
+                    Button(text("check_status")) { controller.checkStatus() }.frame(minHeight: 44)
+                }
             case .presenting:
                 result()
                     .id("requested-rich-result-" + generation.uuidString)
@@ -55,14 +54,20 @@ struct AskDJMomentsCardContent: View {
                         controller.visibility(visible && windowVisible && scenePhase == .active, generation: generation)
                     }
                     .onDisappear { controller.visibility(false, generation: generation) }
-                if let accepted = controller.currentResult {
+                if let accepted = controller.currentResult,
+                   accepted.retention == "retained" || accepted.moment.privateBulletinHeadlines.isEmpty {
                     Text(text(accepted.retention == "retained" ? "already_saved" : "not_retained"))
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Toggle(text(reading ? "release_reading" : "keep_reading"), isOn: $reading)
                     .onChange(of: reading) { _, active in controller.hold(.reading, active, generation: generation) }
                     .frame(minHeight: 44)
-            case .notice:
+            case .notice, .idle: EmptyView()
+            }
+            if let notice = controller.noticeText {
+                Text(notice).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            if controller.presentation.phase == .notice {
                 if controller.canChooseAgain {
                     Button(text("choose")) { controller.chooseAgain() }
                         .djConnectButtonStyle(DJConnectButtonStyle())
@@ -70,9 +75,7 @@ struct AskDJMomentsCardContent: View {
                 } else if controller.operationID != nil {
                     Button(text("check_status")) { controller.checkStatus() }.frame(minHeight: 44)
                 }
-            case .idle: EmptyView()
             }
-            if let notice = controller.noticeText { Text(notice).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ask-moments-current-card")

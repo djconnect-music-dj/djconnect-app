@@ -1,3 +1,4 @@
+#if os(iOS)
 import SwiftUI
 import DJConnectCore
 import ImageIO
@@ -22,6 +23,16 @@ struct VibeCastPartyMark: View {
     }
 }
 
+private struct VibeCastPartyHero: View {
+    private let size: CGFloat = 86
+
+    var body: some View {
+        DJConnectHeroShine(artwork: djConnectIconGradient
+            .frame(width: size, height: size)
+            .mask(VibeCastPartyMark(size: size)))
+    }
+}
+
 struct VibeCastPartyJoinLabel: View {
     let title: String
 
@@ -37,21 +48,14 @@ struct VibeCastPartyJoinLabel: View {
 struct DJConnectLiveGuestJoinView: View {
     @ObservedObject var guest: DJConnectLiveGuestModel
     let language: String
-    @State private var pastedLink = ""
-    #if os(macOS)
-    @State private var address = ""
-    @State private var manualCode = ""
-    #endif
-    #if os(iOS)
     @State private var scanning = false
-    #endif
 
     private func text(_ key: String) -> String {
         DJConnectLocalization.localized(key: key, language: language)
     }
 
     var body: some View {
-        DJConnectGlassDialogSurface(title: vibeCastPartyTitle, icon: VibeCastPartyMark(size: 86)) {
+        DJConnectGlassDialogSurface(title: vibeCastPartyTitle, icon: VibeCastPartyHero()) {
             VStack(spacing: 14) {
                 if guest.invitation != nil {
                     Button {
@@ -65,33 +69,11 @@ struct DJConnectLiveGuestJoinView: View {
                 } else if guest.isBusy {
                     ProgressView()
                 } else {
-                    #if os(iOS)
                     Button { scanning = true } label: {
                         Label(text("ui.scan.qr.code"), systemImage: "qrcode.viewfinder")
                     }
                     .djConnectButtonStyle(DJConnectButtonStyle(emphasis: .primary, expands: true))
                     .accessibilityIdentifier("live-guest-scan")
-                    #elseif os(macOS)
-                    TextField(text("ui.live.tv_address"), text: $address)
-                        .textFieldStyle(.roundedBorder)
-                        .textContentType(.URL)
-                        .accessibilityIdentifier("live-guest-tv-address")
-                    TextField(text("ui.live.tv_code"), text: $manualCode)
-                        .textFieldStyle(.roundedBorder)
-                        .accessibilityIdentifier("live-guest-tv-code")
-                        .onSubmit(openCode)
-                    Button(text("ui.continue"), action: openCode)
-                        .djConnectButtonStyle(DJConnectButtonStyle(emphasis: .primary, expands: true))
-                        .disabled(address.isEmpty || manualCode.isEmpty)
-                    #endif
-                    TextField(text("ui.live.invitation_link"), text: $pastedLink)
-                        .textFieldStyle(.roundedBorder)
-                        .textContentType(.URL)
-                        .accessibilityIdentifier("live-guest-invitation")
-                        .onSubmit(openInvitation)
-                    Button(text("ui.live.open_invitation"), action: openInvitation)
-                        .djConnectButtonStyle(DJConnectButtonStyle(expands: true))
-                        .disabled(pastedLink.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
                 if let key = guest.statusKey { Text(text(key)).foregroundStyle(.secondary) }
                 DJConnectNotNowLinkButton(language: language, key: "ui.not.now.b1e535") {
@@ -101,7 +83,6 @@ struct DJConnectLiveGuestJoinView: View {
             }
         }
         .accessibilityIdentifier("live-guest-join")
-        #if os(iOS)
         .fullScreenCover(isPresented: $scanning) {
             PairingQRScannerView(language: language, instructionsKey: "ui.live.join_instructions",
                                  confirmsDetection: false) { value in
@@ -109,23 +90,7 @@ struct DJConnectLiveGuestJoinView: View {
                 guest.receiveScan(value)
             }
         }
-        #endif
     }
-
-    private func openInvitation() {
-        let link = pastedLink.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !link.isEmpty else { return }
-        pastedLink = ""
-        guest.receiveScan(link)
-    }
-
-    #if os(macOS)
-    private func openCode() {
-        guard !address.isEmpty, !manualCode.isEmpty else { return }
-        guest.receiveCode(manualCode, address: address)
-        if guest.invitation != nil { manualCode = "" }
-    }
-    #endif
 }
 
 /// Guest navigation has no paired model, owner controls or personal data sources.
@@ -133,50 +98,63 @@ struct DJConnectLiveGuestView: View {
     @ObservedObject var guest: DJConnectLiveGuestModel
     let language: String
     @Environment(\.dynamicTypeSize) private var dynamicType
+    @FocusState private var isComposerFocused: Bool
     @State private var showsHelp = false
+    @State private var confirmsLeaving = false
+    #if os(iOS)
+    @State private var showsReactions = false
+    #endif
     @State private var mode: Mode = .flow
     @State private var artworkSample: (artwork: DJConnectLiveGuestModel.Artwork, color: Color)?
 
-    private enum Mode { case flow, horizon, vibeScape }
+    private enum Mode { case flow, horizon, vibeScape, requested }
 
     private let spacing: CGFloat = 12
     private let gutter: CGFloat = 20
+    private let reactionEmojis = ["❤️", "🔥", "👏", "😍", "💃"]
     private var locale: Locale { Locale(identifier: DJConnectLocalization.supportedLanguageCode(language)) }
 
     private func text(_ key: String) -> String { DJConnectLocalization.localized(key: key, language: language) }
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { clock in
-            let tint = currentArtworkTint
-            VStack(spacing: spacing) {
-                header
-                modeSelector
-                switch mode {
-                case .flow:
-                    flow(at: clock.date, tint: tint)
-                case .horizon:
-                    horizon(tint: tint)
-                case .vibeScape:
-                    DJConnectGuestVibescape(guest: guest, language: language)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .padding(.horizontal, gutter)
-                        .accessibilityIdentifier("live-guest-vibescape")
+        Group {
+            if mode == .vibeScape {
+                DJConnectGuestVibescape(guest: guest, language: language) { toggleControls in
+                    VStack(spacing: spacing) {
+                        header
+                        modeSelector(onVibeScape: toggleControls)
+                    }
+                    .padding(.top, 8)
+                }
+                .accessibilityIdentifier("live-guest-vibescape")
+            } else {
+                TimelineView(.periodic(from: .now, by: 1)) { clock in
+                    let tint = currentArtworkTint
+                    VStack(spacing: spacing) {
+                        header
+                        modeSelector { mode = .vibeScape }
+                        if mode == .horizon {
+                            horizon(tint: tint)
+                        } else if mode == .requested {
+                            requestedTracks
+                        } else {
+                            flow(at: clock.date, tint: tint)
+                        }
+                    }
+                    .padding(.top, 8)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .background { background(tint: tint) }
                 }
             }
-            .padding(.top, 8)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .background { background(tint: tint) }
         }
+        #if os(macOS)
+        .toolbar(mode == .vibeScape ? .hidden : .automatic, for: .windowToolbar)
+        .windowToolbarFullScreenVisibility(mode == .vibeScape ? .onHover : .visible)
+        #endif
         .foregroundStyle(.white)
         .environment(\.colorScheme, .dark)
-        .sheet(isPresented: $showsHelp) {
-            VStack(alignment: .leading, spacing: 20) {
-                Text(vibeCastPartyTitle).font(.title2.bold())
-                Text(text(guest.requestSongsAllowed ? "ui.live.help" : "ui.live.help_information_only"))
-                Text(text("ui.ask_dj.accuracy_notice")).font(.caption).foregroundStyle(.secondary)
-                Button(text("ui.close")) { showsHelp = false }
-            }
-            .padding(24)
+        .djConnectPopup(isPresented: $confirmsLeaving) {
+            leaveConfirmation
         }
         .accessibilityIdentifier("live-guest-root")
     }
@@ -208,12 +186,20 @@ struct DJConnectLiveGuestView: View {
                 .font(.headline)
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 8)
-            Image(systemName: "person.2.wave.2.fill")
-                .font(.subheadline)
-                .foregroundStyle(.white.opacity(0.78))
-                .accessibilityLabel(text("ui.live.connected"))
-                .accessibilityIdentifier("live-guest-connection")
-            Button { guest.disconnect() } label: {
+            if guest.requestedTracks != nil {
+                Menu {
+                    Button { mode = .requested } label: {
+                        Label(text("ui.live.requested"), systemImage: "music.note.list")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel(text("ui.live.requested"))
+                .accessibilityIdentifier("live-guest-requested-menu")
+            }
+            Button { confirmsLeaving = true } label: {
                 Image(systemName: "stop.fill")
                     .font(.subheadline.weight(.semibold))
                     .frame(width: 44, height: 44)
@@ -227,12 +213,74 @@ struct DJConnectLiveGuestView: View {
         .padding(.horizontal, gutter)
     }
 
-    private var modeSelector: some View {
+    private var leaveConfirmation: some View {
+        DJConnectGlassDialogSurface(
+            title: text("ui.live.leave_confirmation"),
+            icon: VibeCastPartyHero()
+        ) {
+            VStack(spacing: 12) {
+                Button(text("ui.live.leave")) {
+                    confirmsLeaving = false
+                    guest.disconnect()
+                }
+                .djConnectButtonStyle(DJConnectButtonStyle(emphasis: .destructive, expands: true, usesDestructiveGlass: true))
+                .accessibilityIdentifier("live-guest-confirm-leave")
+
+                Button(text("ui.cancel"), role: .cancel) { confirmsLeaving = false }
+                    .djConnectButtonStyle(DJConnectButtonStyle(expands: true))
+                    .accessibilityIdentifier("live-guest-cancel-leave")
+                    .keyboardShortcut(.cancelAction)
+            }
+        }
+        .accessibilityIdentifier("live-guest-leave-confirmation")
+    }
+
+    private func modeSelector(onVibeScape: @escaping () -> Void) -> some View {
         SessionModeToggleButtons(
             showsForecast: Binding(get: { mode == .horizon }, set: { mode = $0 ? .horizon : .flow }),
-            language: language, openVibeScape: { mode = .vibeScape }, isVibeScape: mode == .vibeScape
+            language: language, openVibeScape: onVibeScape, isVibeScape: mode == .vibeScape,
+            showsAnotherPage: mode == .requested
         )
         .padding(.horizontal, gutter)
+    }
+
+    private var requestedTracks: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: spacing) {
+                Text(text("ui.live.requested"))
+                    .font(.title2.bold())
+                    .accessibilityAddTraits(.isHeader)
+                if let tracks = guest.requestedTracks, !tracks.isEmpty {
+                    ForEach(tracks) { track in
+                        QueueTrackRow(
+                            title: track.title,
+                            subtitle: track.artist.isEmpty ? nil : track.artist
+                        ) {
+                            if let artwork = track.artwork {
+                                DJConnectGuestArtwork(guest: guest, artwork: artwork, queueCover: true)
+                            } else {
+                                QueueArtworkView(url: nil)
+                            }
+                        } accessory: {
+                            if track.scheduled == true {
+                                Text(text("ui.live.requested_scheduled"))
+                                    .font(.caption2.weight(.semibold))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(.white.opacity(0.14), in: Capsule())
+                            }
+                        }
+                    }
+                } else {
+                    Text(text("ui.live.requested_empty")).foregroundStyle(.secondary)
+                }
+            }
+            .frame(maxWidth: 1000)
+            .padding(.horizontal, gutter)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity)
+        }
+        .accessibilityIdentifier("live-guest-requested")
     }
 
     private func clock(_ date: Date) -> some View {
@@ -345,8 +393,32 @@ struct DJConnectLiveGuestView: View {
     }
 
     private var emotionMenu: some View {
+        #if os(iOS)
+        Button { showsReactions.toggle() } label: {
+            Image(systemName: "heart")
+                .font(.system(size: 34))
+                .frame(width: 64, height: 64)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(guest.isBusy)
+        .accessibilityLabel(text("ui.live.react"))
+        .accessibilityIdentifier("live-guest-emotion-menu")
+        .popover(isPresented: $showsReactions) {
+            ViewThatFits(in: .horizontal) {
+                reactionRow(reactionEmojis[...])
+                VStack(spacing: 6) {
+                    reactionRow(reactionEmojis.prefix(3))
+                    reactionRow(reactionEmojis.suffix(2))
+                }
+            }
+            .padding(8)
+            .presentationCompactAdaptation(.popover)
+            .djConnectGlassPopoutSurface(nativePresentation: true)
+        }
+        #else
         Menu {
-            ForEach(["❤️", "🔥", "👏", "😍", "💃"], id: \.self) { emoji in
+            ForEach(reactionEmojis, id: \.self) { emoji in
                 Button(emoji) { Task { await guest.react(emoji) } }
             }
         } label: {
@@ -356,7 +428,30 @@ struct DJConnectLiveGuestView: View {
         .disabled(guest.isBusy)
         .accessibilityLabel(text("ui.live.react"))
         .accessibilityIdentifier("live-guest-emotion-menu")
+        #endif
     }
+
+    #if os(iOS)
+    private func reactionRow(_ emojis: ArraySlice<String>) -> some View {
+        HStack(spacing: 6) {
+            ForEach(emojis, id: \.self) { emoji in
+                Button {
+                    showsReactions = false
+                    Task { await guest.react(emoji) }
+                } label: {
+                    Text(emoji)
+                        .font(.system(size: 34))
+                        .frame(width: 60, height: 60)
+                        .background(.white.opacity(0.10), in: Circle())
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(guest.isBusy)
+            }
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+    #endif
 
     @ViewBuilder private func publicRow(_ row: DJConnectLiveGuestModel.PublicRow, at date: Date, tint: Color?) -> some View {
         switch row {
@@ -424,7 +519,8 @@ struct DJConnectLiveGuestView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: spacing) {
                 if let horizon = guest.horizon, horizon.isCurrent, !horizon.sections.isEmpty {
-                    SessionHorizonHero(theme: .init(sessionMood: guest.session?.mood))
+                    SessionHorizonHero(theme: .init(sessionMood: guest.session?.mood),
+                                       isPlaying: guest.playback?.state == "playing")
                     ForEach(Array(horizon.sections.enumerated()), id: \.offset) { _, section in
                         Text(section.text)
                             .font(.body)
@@ -446,17 +542,76 @@ struct DJConnectLiveGuestView: View {
         .accessibilityIdentifier("live-guest-horizon")
     }
 
+    private var helpPopover: some View {
+        ViewThatFits(in: .vertical) {
+            helpContent.fixedSize(horizontal: false, vertical: true)
+            ScrollView { helpContent }
+                .scrollBounceBehavior(.basedOnSize)
+        }
+        .frame(idealWidth: 340, maxHeight: 450)
+        .presentationCompactAdaptation(.popover)
+        .djConnectGlassPopoutSurface(nativePresentation: true)
+        .accessibilityIdentifier("live-guest-help-popover")
+    }
+
+    private var helpContent: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text(text("ui.ask.dj"))
+                    .font(.title2.bold())
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 8)
+                Button { showsHelp = false } label: {
+                    Image(systemName: "xmark").frame(width: 36, height: 36)
+                }
+                .djConnectButtonStyle(DJConnectButtonStyle(shape: .icon))
+                .accessibilityLabel(text("ui.close"))
+            }
+
+            helpExamples("ui.live.help_requests", examples: ["ui.live.help_request_track", "ui.live.help_request_title"])
+            helpExamples("ui.live.help_questions", examples: ["ui.live.help_question_playing", "ui.live.help_question_artist"])
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(text("ui.live.help"))
+                Text(text("ui.ask_dj.accuracy_notice"))
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func helpExamples(_ title: String, examples: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(text(title))
+                .font(.subheadline.bold())
+                .accessibilityAddTraits(.isHeader)
+            ForEach(examples, id: \.self) { key in
+                Text(text(key)).font(.subheadline)
+            }
+        }
+    }
+
     private var composer: some View {
         HStack(spacing: 12) {
-            Button { showsHelp = true } label: {
+            Button {
+                isComposerFocused = false
+                showsHelp = true
+            } label: {
                 Image(systemName: "questionmark.circle").frame(width: 32, height: 32)
             }
                 .buttonStyle(.plain)
                 .accessibilityLabel(text("ui.live.help_title"))
                 .accessibilityIdentifier("live-guest-help")
+                .popover(isPresented: $showsHelp, arrowEdge: .bottom) {
+                    helpPopover
+                        .presentationCompactAdaptation(.popover)
+                }
             TextField(text(guest.requestSongsAllowed ? "ui.live.composer" : "ui.live.composer_information_only"), text: $guest.draft, axis: .vertical)
                 .lineLimit(1...4)
                 .textFieldStyle(.plain)
+                .focused($isComposerFocused)
                 .accessibilityIdentifier("live-guest-composer")
             Button { Task { await guest.send(language: language) } } label: {
                 Group {
@@ -479,40 +634,128 @@ struct DJConnectLiveGuestView: View {
 }
 
 /// Reuses the native GPU renderer with public session style and local dynamics only.
-private struct DJConnectGuestVibescape: View {
+private struct DJConnectGuestVibescape<TopControls: View>: View {
     @ObservedObject var guest: DJConnectLiveGuestModel
     let language: String
+    @ViewBuilder let topControls: (@escaping () -> Void) -> TopControls
     @StateObject private var visit = VisualDirectorVisit()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @State private var unavailable = false
+    @State private var controlsVisible = true
+    @State private var controlsGeneration = UUID()
+    @State private var adjustingDynamics = false
+    #if os(macOS)
+    @State private var hoveringControls = false
+    @State private var topBounds = CGRect.zero
+    @State private var bottomBounds = CGRect.zero
+    #else
+    private let hoveringControls = false
+    #endif
 
     private var style: [String] {
         [guest.session?.session_id ?? "", guest.viewState?.mood ?? "", guest.viewState?.persona ?? ""]
     }
+
     var body: some View {
-        VStack {
-            if unavailable {
-                Image(systemName: "sparkles.tv").font(.largeTitle)
-            } else if visit.scene != nil {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            if !unavailable, visit.scene != nil {
                 VibeScapeMetalView(visit: visit, reduceMotion: reduceMotion,
                     isActive: scenePhase == .active, unavailable: { unavailable = true })
+                    .ignoresSafeArea()
+                    .accessibilityHidden(true)
             }
-            Slider(value: Binding(get: { Double(visit.dynamics) }, set: { _ = visit.setDynamics(Float($0)) }), in: 0...1)
-                .accessibilityLabel(DJConnectLocalization.localized(key: "ui.live.local_dynamics", language: language))
-                .disabled(visit.scene == nil)
-                .padding()
+            if unavailable {
+                Text(DJConnectLocalization.localized(key: "ui.vibescape.unavailable", language: language))
+                    .padding(28)
+            }
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture(perform: showControls)
+                .accessibilityHidden(true)
+            VStack(spacing: 0) {
+                topControls(toggleControls)
+                    #if os(macOS)
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { topBounds = $0 }
+                    #endif
+                Spacer(minLength: 0)
+                VibeScapeDynamicsControls(visit: visit, language: language,
+                    editingChanged: dynamicsEditingChanged, didFollowDJ: showControls)
+                    .disabled(visit.scene == nil || unavailable)
+                    .frame(maxWidth: 480)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
+                    #if os(macOS)
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { bottomBounds = $0 }
+                    #endif
+            }
+            .opacity(controlsVisible ? 1 : 0)
+            .allowsHitTesting(controlsVisible)
+            .accessibilityHidden(!controlsVisible)
         }
+        #if os(macOS)
+        .onContinuousHover(coordinateSpace: .global) { phase in
+            switch phase {
+            case let .active(point):
+                updateControlHover(topBounds.contains(point) || bottomBounds.contains(point))
+            case .ended:
+                updateControlHover(false)
+            }
+        }
+        #endif
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.24), value: controlsVisible)
+        .task(id: controlsGeneration) {
+            guard controlsVisible, !adjustingDynamics, !hoveringControls else { return }
+            do { try await Task.sleep(for: .seconds(3)) } catch { return }
+            guard !Task.isCancelled, !adjustingDynamics, !hoveringControls else { return }
+            controlsVisible = false
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("VibeScape")
+        .accessibilityAction(named: Text(DJConnectLocalization.localized(
+            key: "ui.vibescape.dynamics", language: language)), showControls)
         .task(id: style) {
             guard guest.isJoined, let state = guest.viewState,
                   let persona = DJConnectSessionPersonaValue(rawValue: state.persona) else { visit.revoke(); return }
             visit.enter(mood: state.mood, occurrence: nil, family: VibeScapeFamily(persona: persona))
-            _ = visit.setDynamics(Float(state.dynamics))
+            visit.updateTrackIntensity(Float(state.dynamics))
+        }
+        .onChange(of: guest.viewState?.dynamics) { _, value in
+            visit.updateTrackIntensity(value.map(Float.init))
         }
         .onDisappear { visit.revoke() }
     }
-}
 
+    private func showControls() {
+        controlsVisible = true
+        controlsGeneration = UUID()
+    }
+
+    private func toggleControls() {
+        DJConnectHaptics.selection()
+        controlsVisible.toggle()
+        controlsGeneration = UUID()
+    }
+
+    private func dynamicsEditingChanged(_ editing: Bool) {
+        if editing {
+            DJConnectHaptics.selection()
+            visit.beginDynamicsAdjustment()
+        }
+        adjustingDynamics = editing
+        showControls()
+    }
+
+    #if os(macOS)
+    private func updateControlHover(_ inside: Bool) {
+        guard hoveringControls != inside else { return }
+        hoveringControls = inside
+        if inside { showControls() }
+        else { controlsGeneration = UUID() }
+    }
+    #endif
+}
 
 /// Only the current guest-purpose bytes render here, with original source
 /// expiry. Pixels and the guest bearer never enter a file or owner cache.
@@ -521,6 +764,7 @@ private struct DJConnectGuestArtwork: View {
     let artwork: DJConnectLiveGuestModel.Artwork
     var currentPlayback = false
     var isPlaying = false
+    var queueCover = false
     var onTint: ((Color) -> Void)? = nil
     @State private var loadedCover: (artwork: DJConnectLiveGuestModel.Artwork, image: CGImage, tint: Color?)?
 
@@ -531,6 +775,8 @@ private struct DJConnectGuestArtwork: View {
                     .accessibilityIdentifier("live-guest-artwork")
                 if currentPlayback {
                     cover.djAlbumArtworkGlassCard(tint: loadedCover.tint)
+                } else if queueCover {
+                    cover.clipShape(RoundedRectangle(cornerRadius: 10))
                 } else {
                     cover.clipShape(RoundedRectangle(cornerRadius: 9))
                         .padding(4)
@@ -539,6 +785,8 @@ private struct DJConnectGuestArtwork: View {
             } else if currentPlayback {
                 AlbumArtworkPlaceholder(tint: .gray, isPlaying: isPlaying)
                     .djAlbumArtworkGlassCard(tint: nil)
+            } else if queueCover {
+                QueueArtworkView(url: nil)
             }
         }
         .task(id: artwork) {
@@ -563,3 +811,4 @@ private struct DJConnectGuestArtwork: View {
         .onDisappear { loadedCover = nil }
     }
 }
+#endif

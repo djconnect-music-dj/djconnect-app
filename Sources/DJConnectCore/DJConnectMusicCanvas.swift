@@ -11,7 +11,9 @@ public struct DJConnectCanvasPresentation: Codable, Equatable, Sendable {
     public var show_track_title: Bool
     public var composition: String?
     public var cadence: String?
+    public var matte_size: String?
 
+    public static let matteSizes = ["small", "medium", "large"]
     public static let mattes = ["off", "matching", "contrast"]
 }
 
@@ -53,6 +55,7 @@ public struct DJConnectCanvasPreferences: Codable, Equatable, Sendable {
             DJConnectCanvasPresentation.mattes.contains(style.matte)
                 && (style.composition.map(Self.compositions.contains) ?? true)
                 && (style.cadence.map(Self.cadences.contains) ?? true)
+                && (style.matte_size.map(DJConnectCanvasPresentation.matteSizes.contains) ?? true)
         } ?? true)
     }
     public static let compositions = ["central", "free", "full"]
@@ -78,6 +81,8 @@ public struct DJConnectCanvasTarget: Decodable, Equatable, Identifiable, Sendabl
     public let screen: DJConnectCanvasScreen
     public let remote_cleanup: Bool
     public let preview_available: Bool
+    public let can_request_artwork: Bool?
+    public let preview_revision: String?
     public let shared_profiles: Int
     public let forgetting: Bool?
 }
@@ -90,8 +95,10 @@ public struct DJConnectCanvasSnapshot: Decodable, Equatable, Sendable {
     public let preferences: DJConnectCanvasPreferences
     public let targets: [DJConnectCanvasTarget]
     public let image_generation_available: Bool
+    public let manual_artwork_refresh: Bool?
     public let can_manage_devices: Bool
     public let per_screen_composition_and_cadence: Bool?
+    public let per_screen_matte_size: Bool?
     public var isValid: Bool {
         success && contract_version == 1 && binding.count == 64 &&
         binding.allSatisfy({ $0.isHexDigit && $0.isASCII }) && revision >= 0 &&
@@ -103,6 +110,10 @@ public struct DJConnectCanvasSnapshot: Decodable, Equatable, Sendable {
             !target.id.isEmpty && target.id.utf8.count <= 128 &&
             !target.name.isEmpty && target.name.count <= 128 &&
             target.shared_profiles >= 0 &&
+            (target.preview_revision.map { revision in
+                target.preview_available && revision.utf8.count == 64 &&
+                revision.allSatisfy { $0.isASCII && $0.isHexDigit }
+            } ?? true) &&
             (target.adapter != "switchbot" || !target.remote_cleanup) &&
             (target.screen.width.map { (256...8192).contains($0) } ?? true) &&
             (target.screen.height.map { (256...8192).contains($0) } ?? true) &&

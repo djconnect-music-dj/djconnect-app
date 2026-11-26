@@ -748,7 +748,9 @@ public struct DJConnectRootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @StateObject private var introductionAnchors = SessionIntroductionAnchors()
+    #if os(iOS)
     @StateObject private var liveGuest = DJConnectLiveGuestModel()
+    #endif
     @State private var selectedSection = DJConnectSection.djSession
     @State private var openedSavedSession: SavedSessionDestination?
     #if os(macOS)
@@ -764,6 +766,7 @@ public struct DJConnectRootView: View {
     }
 
     public var body: some View {
+        #if os(iOS)
         Group {
             if liveGuest.isJoined {
                 DJConnectLiveGuestView(guest: liveGuest, language: model.language)
@@ -776,9 +779,7 @@ public struct DJConnectRootView: View {
         }
         .onOpenURL { url in
             guard !liveGuest.receive(url.absoluteString) else { return }
-            #if !os(macOS)
             if !model.handleAppNavigationDeepLink(url) { model.handlePairingDeepLink(url) }
-            #endif
         }
         .onChange(of: liveGuest.isPresented, initial:true) { _, shown in
             model.liveGuestPresentationDidChange(shown)
@@ -789,6 +790,9 @@ public struct DJConnectRootView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .background { liveGuest.disconnect() }
         }
+        #else
+        ordinaryRoot
+        #endif
     }
 
     private var ordinaryRoot: some View {
@@ -1049,9 +1053,11 @@ public struct DJConnectRootView: View {
         }
         .djConnectPopup(item: rootSheetBinding) { sheet in
             rootSheetView(sheet)
+            #if os(iOS)
                 .djConnectPopup(isPresented: guestJoinBinding(above: sheet)) {
                     DJConnectLiveGuestJoinView(guest: liveGuest, language: model.language)
                 }
+            #endif
         }
         .onChange(of: model.shouldShowPairingScreen) {
             if model.shouldShowPairingScreen {
@@ -1358,6 +1364,7 @@ public struct DJConnectRootView: View {
         }
     }
 
+    #if os(iOS)
     private func guestJoinBinding(above sheet: DJConnectRootSheet?) -> Binding<Bool> {
         Binding(
             get: { activeRootSheet == sheet && liveGuest.isPresented && !liveGuest.isJoined },
@@ -1369,6 +1376,7 @@ public struct DJConnectRootView: View {
         )
     }
 
+    #endif
     private var rootSheetBinding: Binding<DJConnectRootSheet?> {
         rendezvousOwnedSheetBinding(current: { activeRootSheet }, rendezvous: .rendezvous,
             dismissRendezvous: model.rendezvousPresentationDismissal(),
@@ -1758,9 +1766,11 @@ private struct PairingSheetView: View {
                         unpairedSessionOptions
                     }
                     pairingPending
+                    #if os(iOS)
                     if model.pairingFlowTarget == .appleWatch {
                         pairingGuestJoinButton
                     }
+                    #endif
                 }
             }
             .padding(28)
@@ -1864,6 +1874,7 @@ private struct PairingSheetView: View {
     }
     #endif
 
+    #if os(iOS)
     private var pairingGuestJoinButton: some View {
         Button {
             model.isShowingGuestJoin = true
@@ -1875,14 +1886,17 @@ private struct PairingSheetView: View {
         .accessibilityIdentifier("pairing-join-session")
     }
 
+    #endif
     private var unpairedSessionOptions: some View {
         VStack(spacing: 8) {
+            #if os(iOS)
             pairingGuestJoinButton
 
             Text(localizedKey(model.language, "ui.session.welcome.join_separator"))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
 
+            #endif
             Button {
                 model.startDemoMode()
             } label: {
@@ -3182,6 +3196,7 @@ private struct WelcomeView: View {
                             .djConnectButtonStyle(DJConnectButtonStyle(emphasis: isLastStep ? .primary : .tertiary, expands: true))
                             .controlSize(.large)
                             .accessibilityIdentifier("welcome-dismiss-button")
+                            #if os(iOS)
                             Button {
                                 model.isShowingGuestJoin = true
                             } label: {
@@ -3189,6 +3204,7 @@ private struct WelcomeView: View {
                             }
                                 .djConnectButtonStyle(DJConnectButtonStyle(emphasis: .secondary, expands: true))
                                 .accessibilityIdentifier("welcome-join-session")
+                            #endif
                         }
                         .frame(maxWidth: .infinity)
                     }
@@ -3692,13 +3708,14 @@ private struct AnimatedAlbumArtworkView: View {
     var usesDemoArtwork = false
 
     var body: some View {
+        let isPlaying = playback?.isPlaying == true && playback?.hasPlayback != false
         CachedArtworkImage(url: usesDemoArtwork ? nil : playback?.albumImageURL, mode: .fit,
                            usesAlbumGlassFrame: true, animatesArtworkChanges: true, showsArtworkSpotlight: true) {
-            AlbumArtworkPlaceholder(tint: artworkTintColor(for: playback), isPlaying: playback?.isPlaying == true)
+            AlbumArtworkPlaceholder(tint: artworkTintColor(for: playback), isPlaying: isPlaying)
         }
         .aspectRatio(1, contentMode: .fit)
         .frame(maxWidth: maxWidth)
-        .djConnectBreathingArtwork()
+        .djConnectBreathingArtwork(enabled: isPlaying)
         .frame(maxWidth: .infinity, alignment: .center)
     }
 }
@@ -7862,7 +7879,6 @@ private struct TrackInsightHeroArtwork: View {
                 }
                 .frame(width: artworkSide, height: artworkSide)
                 .djAlbumArtworkGlassCard(tint: profile.colors.first)
-                .djConnectBreathingArtwork()
                 .shadow(color: (profile.colors.last ?? djConnectAccent).opacity(0.42), radius: max(18, side * 0.16), x: 0, y: max(8, side * 0.08))
             }
         }
@@ -9170,6 +9186,7 @@ private struct IdleDJSessionView: View {
                     dimsWhenDisabled: !refreshing && !model.isSchedulingProfileDJChoice && model.profileDJSettings.phase != .saving))
                 .disabled(model.isLoadingDJSession || (!model.isDemoMode && model.pairingStatus != .paired) || !model.canUsePlaybackFeatures || model.isSchedulingProfileDJChoice || (!model.isDemoMode && [.saving, .uncertain].contains(model.profileDJSettings.phase)))
                 .accessibilityIdentifier("session-welcome-start")
+                #if os(iOS)
                 Text(localizedKey(model.language, "ui.session.welcome.join_separator"))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -9181,18 +9198,7 @@ private struct IdleDJSessionView: View {
                 }
                     .djConnectButtonStyle(DJConnectButtonStyle(expands: true))
                     .accessibilityIdentifier("session-welcome-join")
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "sparkles")
-                        .font(.body.weight(.semibold))
-                        .accessibilityHidden(true)
-                    Text(localizedKey(model.language, "ui.session.welcome.for_you_tip"))
-                        .font(.footnote)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .foregroundStyle(.white.opacity(0.85))
-                .frame(maxWidth: .infinity, alignment: .center)
-                .accessibilityElement(children: .combine)
+                #endif
                 welcomeInstruction
                 if !model.isDemoMode && (model.pairingStatus != .paired || !model.canUsePlaybackFeatures) {
                     Text(localizedKey(model.language, "ui.session.requires_connection")).font(.footnote).foregroundStyle(.secondary)
@@ -9750,9 +9756,15 @@ private struct VibeCastDestinationPicker: View {
                 #endif
             }
             if let statusKey {
-                Text(localizedKey(language, statusKey))
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(localizedKey(language, statusKey))
+                    if statusKey == "ui.vibecast.cast.failed" {
+                        Text(localizedKey(language, "ui.vibecast.cast.known_hosts_help"))
+                    }
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             }
             DJConnectNotNowLinkButton(language: language, key: "ui.not.now.b1e535") { dismiss() }
         }
@@ -9937,12 +9949,15 @@ struct VibeCastDisplayConsentForm: View {
         self.qrPrepared = qrPrepared
     }
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @State private var code = ""
     @State private var dynamicsDraft: Double?
     @State private var didSubmitLookup = false
     @State private var lookupFocusRequest = 0
     @FocusState private var lookupFocused: Bool
     private var busy: Bool { model.displayConsentState == .resolving || model.displayConsentState == .approving || model.displayConsentState == .revoking }
+    private var pollsRemoteState: Bool { scenePhase == .active && model.isVibeCastSharing }
+
     var body: some View {
         Group {
             if embedded { formContent }
@@ -10113,9 +10128,6 @@ struct VibeCastDisplayConsentForm: View {
                             }
                         }
                         .disabled(model.isUpdatingVibeCastRemote || model.stoppingLiveDisplay)
-                    } else {
-                        Button(localizedKey(model.language, "ui.refresh")) { Task { await model.refreshVibeCastRemote() } }
-                            .disabled(model.isUpdatingVibeCastRemote)
                     }
                 }
                 if model.displayConsentState == .approved && model.usesLegacyVibeCastStatus {
@@ -10139,10 +10151,10 @@ struct VibeCastDisplayConsentForm: View {
             }
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("display-consent-form")
-            .task(id: model.isVibeCastSharing) {
-                while model.isVibeCastSharing && !Task.isCancelled {
-                    do { try await Task.sleep(for: .seconds(3)) } catch { return }
+            .task(id: pollsRemoteState) {
+                while pollsRemoteState && !Task.isCancelled {
                     await model.refreshVibeCastRemote()
+                    do { try await Task.sleep(for: .seconds(3)) } catch { return }
                 }
             }
     }
@@ -10995,19 +11007,9 @@ private struct QueueItemRow: View, Equatable {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
+        QueueTrackRow(title: item.title, subtitle: subtitle) {
             QueueArtworkView(url: item.albumImageURL)
-                .frame(width: 52, height: 52)
-            VStack(alignment: .leading, spacing: 4) {
-                QueueOverflowText(text: item.title)
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(.white)
-                if let subtitle {
-                    QueueOverflowText(text: subtitle)
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.78))
-                }
-            }
+        } accessory: {
             if isLoading {
                 ProgressView()
                     .controlSize(.large)
@@ -11016,16 +11018,40 @@ private struct QueueItemRow: View, Equatable {
                 RowPlayIndicator()
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 9)
-        .modifier(DJConnectMediaRowSurface())
-        .accessibilityElement(children: .combine)
         .accessibilityLabel(item.displayTitle)
     }
 
     private static func trimmedNonEmpty(_ value: String?) -> String? {
         let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed?.isEmpty == false ? trimmed : nil
+    }
+}
+
+struct QueueTrackRow<Artwork: View, Accessory: View>: View {
+    let title: String
+    let subtitle: String?
+    @ViewBuilder let artwork: () -> Artwork
+    @ViewBuilder let accessory: () -> Accessory
+
+    var body: some View {
+        HStack(spacing: 12) {
+            artwork().frame(width: 52, height: 52)
+            VStack(alignment: .leading, spacing: 4) {
+                QueueOverflowText(text: title)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(.white)
+                if let subtitle {
+                    QueueOverflowText(text: subtitle)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.78))
+                }
+            }
+            accessory()
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 9)
+        .modifier(DJConnectMediaRowSurface())
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -11093,7 +11119,7 @@ private struct RowPlayIndicator: View {
     }
 }
 
-private struct QueueArtworkView: View {
+struct QueueArtworkView: View {
     let url: URL?
     var fallbackSystemImage = "music.note"
 
@@ -18219,6 +18245,15 @@ struct SettingsView: View {
                                 model.stopDemoMode()
                             }
                             .accessibilityIdentifier("settings-stop-demo")
+                        }
+                        .djMusicDNASettingsListRow()
+                    } else if model.pairingStatus == .paired {
+                        LabeledContent(localizedKey(model.language, "ui.demo.mode")) {
+                            Button(localizedKey(model.language, "ui.start.demo.mode")) {
+                                returnToDJSession()
+                                model.startDemoMode()
+                            }
+                            .accessibilityIdentifier("settings-start-demo")
                         }
                         .djMusicDNASettingsListRow()
                     }

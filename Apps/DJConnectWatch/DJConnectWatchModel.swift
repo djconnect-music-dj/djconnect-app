@@ -541,7 +541,9 @@ final class DJConnectWatchModel: NSObject, ObservableObject {
         pushNotificationStatus = Self.pushNotificationStatus()
         syncAppLanguageOverrideToSharedDefaults()
         demoMusicDNAEnabled = storedDemoMusicDNAEnabled
-        askDJMessages = Self.loadAskDJMessages(key: askDJMessagesKey)
+        if !monkeyTestingMode, !storedDemoMode {
+            askDJMessages = Self.loadAskDJMessages(key: askDJMessagesKey)
+        }
         isShowingWelcome = !welcomeSeen && !monkeyTestingMode
         if monkeyTestingMode {
             storedDemoMode = false
@@ -1889,6 +1891,10 @@ final class DJConnectWatchModel: NSObject, ObservableObject {
     }
 
     func startDemoMode() {
+        guard !isDemoMode else { return }
+        cancelWatchQuestionRecording()
+        stopAskDJAudio()
+        askDJMessages = []
         pendingDemoTextRequest = nil
         demoShuffleChoice = nil
         demoRepeatChoice = nil
@@ -1907,13 +1913,16 @@ final class DJConnectWatchModel: NSObject, ObservableObject {
         runtimeDiagnosticsTask?.cancel()
         runtimeDiagnosticsTask = nil
         lastRuntimeMemoryLogBucket = -1
-        paired = false
         isShowingPairingSuccess = false
         voiceState = .idle
         applyDemoState()
     }
 
     func stopDemoMode() {
+        guard isDemoMode else { return }
+        cancelWatchQuestionRecording()
+        stopAskDJAudio()
+        askDJMessages = Self.loadAskDJMessages(key: askDJMessagesKey)
         pendingDemoTextRequest = nil
         demoShuffleChoice = nil
         demoRepeatChoice = nil
@@ -1928,17 +1937,25 @@ final class DJConnectWatchModel: NSObject, ObservableObject {
         companionDemoSession = nil
         playback = nil
         playbackBeatSignature = nil
+        queueContext = nil
+        queueItems = []
+        playlistItems = []
+        availableOutputs = []
+        selectedOutput = Self.noOutputName
         currentTrackInsight = nil
         responseImages = []
         voiceState = .idle
-        paired = false
         isShowingPairingSuccess = false
-        connectionState = .unpaired
+        connectionState = paired ? .paired : .unpaired
         statusMessage = "Demo modus gestopt"
         startRuntimeDiagnosticsMonitor()
         startNetworkMonitor()
         activateCompanionSession()
         sendCompanionPairingRegistration()
+        if canUseBackend {
+            Task { await refreshStatus() }
+            Task { await refreshForegroundSession() }
+        }
     }
 
     func refreshStatus(confirmAskDJBeat: Bool = false) async {
@@ -3951,6 +3968,7 @@ final class DJConnectWatchModel: NSObject, ObservableObject {
     private func clearAskDJHistoryLocally() {
         askDJMessages = []
         currentTrackInsight = nil
+        guard !isDemoMode else { return }
         UserDefaults.standard.removeObject(forKey: askDJMessagesKey)
         askDJHistoryRevision = 0
         askDJClearRevision = 0
@@ -4750,6 +4768,7 @@ final class DJConnectWatchModel: NSObject, ObservableObject {
     }
 
     private func saveAskDJMessages() {
+        guard !isDemoMode else { return }
         if let data = try? JSONEncoder().encode(askDJMessages) {
             UserDefaults.standard.set(data, forKey: askDJMessagesKey)
         }

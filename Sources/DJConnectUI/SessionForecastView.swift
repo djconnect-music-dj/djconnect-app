@@ -188,7 +188,8 @@ struct SessionForecastContent: View {
         TimelineView(SessionEntryRefreshSchedule(deadlines: deadlines)) { clock in
             VStack(alignment: .leading, spacing: 12) {
                 let mood = model.isDemoMode ? model.activeDJSession?.selectedMood : model.sessionForecastRefreshScope?.mood
-                SessionHorizonHero(theme: .init(sessionMood: mood))
+                let isPlaying = model.isPlaying && model.playback?.hasPlayback != false
+                SessionHorizonHero(theme: .init(sessionMood: mood), isPlaying: isPlaying)
                 Text(text("ui.session.forecast.title")).font(.title2.bold()).accessibilityAddTraits(.isHeader)
                 Text(text("ui.session.forecast.notice")).font(.callout).foregroundStyle(.secondary)
                 if model.isDemoMode {
@@ -254,6 +255,7 @@ struct SessionForecastContent: View {
 
 struct SessionHorizonHero: View {
     let theme: DJConnectSessionMoodTheme
+    let isPlaying: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
@@ -298,7 +300,7 @@ struct SessionHorizonHero: View {
         let colors = palette
         GeometryReader { geometry in
             let artwork = artwork(size: geometry.size, colors: colors)
-            if !reduceMotion && scenePhase == .active {
+            if isPlaying && !reduceMotion && scenePhase == .active {
                 TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { clock in
                     let cycleDuration = 9.0
                     let seconds = clock.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: cycleDuration)

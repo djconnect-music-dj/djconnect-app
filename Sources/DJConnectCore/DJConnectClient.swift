@@ -242,14 +242,15 @@ public final class DJConnectClient: Sendable {
                                isCurrent: @escaping @MainActor @Sendable () -> Bool) async throws -> VibeCastOwnerState {
         let before = try await vibeCastOwnerState(shareID: shareID, sessionID: sessionID, issuerEpoch: issuerEpoch,
             expectedInstallationID: expectedInstallationID, pairedLocalOrigin: pairedLocalOrigin, isCurrent: isCurrent)
-        if before.policy.information == enabled { return before }
-        let policy: [String: Any] = ["information": enabled, "requests": enabled ? "review" : "disabled",
+        let requests = enabled ? "auto_queue" : "disabled"
+        if before.policy.information == enabled, before.policy.requests == requests { return before }
+        let policy: [String: Any] = ["information": enabled, "requests": requests,
             "max_pending": before.policy.max_pending, "screen_focus": false]
         _ = try await participationOwnerExchange("configure", shareID: shareID, sessionID: sessionID,
             extra: ["policy": policy], isCurrent: isCurrent)
         let after = try await vibeCastOwnerState(shareID: shareID, sessionID: sessionID, issuerEpoch: issuerEpoch,
             expectedInstallationID: expectedInstallationID, pairedLocalOrigin: pairedLocalOrigin, isCurrent: isCurrent)
-        guard after.policy.information == enabled else { throw DJConnectError.invalidResponse }
+        guard after.policy.information == enabled, after.policy.requests == requests else { throw DJConnectError.invalidResponse }
         return after
     }
 
@@ -1288,6 +1289,20 @@ public final class DJConnectClient: Sendable {
         body.binding = current.binding; body.operation_id = operationID.uuidString.lowercased()
         body.expected_revision = current.revision; body.patch = preferences
         return try await canvasReceipt("update", body: body)
+    }
+
+    public func requestNewMusicCanvasArtwork(_ current: DJConnectCanvasSnapshot, targetID: String,
+                                             operationID: UUID) async throws -> DJConnectCanvasReceipt {
+        guard current.isValid, current.manual_artwork_refresh == true,
+              current.targets.contains(where: { $0.id == targetID && $0.can_request_artwork == true }) else {
+            throw DJConnectError.invalidResponse
+        }
+        var body = canvasIdentity()
+        body.binding = current.binding
+        body.operation_id = operationID.uuidString.lowercased()
+        body.expected_revision = current.revision
+        body.target_id = targetID
+        return try await canvasReceipt("new_artwork", body: body)
     }
 
     public func musicCanvasOperation(binding: String, operationID: UUID) async throws -> DJConnectCanvasReceipt {
