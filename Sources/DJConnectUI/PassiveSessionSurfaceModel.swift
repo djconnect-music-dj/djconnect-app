@@ -396,13 +396,22 @@ import DJConnectCore
         guard p.isCurrent(at: now) else { caches[surface] = nil; nativeCaptures[surface] = nil; phases[surface] = .ready; notify(); return }
         invalidatedPlayback[surface] = nil
         let previous = caches[surface]
-        // Publish text/metadata first; optional image IO cannot block the whole surface.
+        var pixels: [String: Data] = [:]
+        if let previous, previous.isCurrent(at: now) {
+            for (slot, data) in previous.pixels {
+                if let artwork = p.currentArtwork(slot: slot, at: now),
+                   previous.projection.currentArtwork(slot: slot, at: now) == artwork {
+                    pixels[slot] = data
+                }
+            }
+        }
+        // Stage renewed metadata with still-authorized pixels from the same asset.
         let originalCache: DJConnectPassiveSurfaceCache
         if let previous, p.hasSameOriginalObservation(as: previous.projection, at: now) {
-            originalCache = try previous.staging(pixels: previous.removingExpiredFields(at: now).pixels, at: now)
+            originalCache = try previous.staging(pixels: pixels, at: now)
         } else {
             originalCache = try DJConnectPassiveSurfaceCache(projection: p.removingExpiredFields(at: now),
-                at: originalClock.wall, uptime: originalClock.uptime)
+                at: originalClock.wall, uptime: originalClock.uptime).staging(pixels: pixels, at: now)
             nativeCaptures[surface] = originalClock
         }
         guard current(captured, version, surface), !Task.isCancelled, grants[surface]?.id == result.grant_id else { return }
@@ -411,23 +420,18 @@ import DJConnectCore
             onDiagnostic?("cache_ready surface=\(surface.rawValue) playback=\(p.currentPlayback(at: now) != nil) contribution=\(p.currentContribution(at: now) != nil) artwork=\(p.artwork.count)")
         }
         phases[surface] = .ready; notify(); scheduleExpiry()
-        var pixels: [String: Data] = [:]
-        for a in p.artwork where p.currentArtwork(slot: a.slot, at: Date()) != nil {
+        for a in p.artwork where pixels[a.slot] == nil && p.currentArtwork(slot: a.slot, at: Date()) != nil {
             guard current(captured, version, surface), !Task.isCancelled,
                   grants[surface]?.id == result.grant_id, originalCache.isCurrent(at: Date()) else { return }
-            if previous?.projection.currentArtwork(slot: a.slot, at: Date()) == a, let existing = previous?.pixels[a.slot] {
-                pixels[a.slot] = existing
-            } else {
-                do {
-                    let data = try await services.image(a, result)
-                    guard current(captured, version, surface), !Task.isCancelled,
-                          grants[surface]?.id == result.grant_id, originalCache.isCurrent(at: Date()) else { return }
-                    guard Self.validPixels(data) else { continue }
-                    pixels[a.slot] = data
-                } catch {
-                    if (error as? DJConnectError)?.invalidatesSessionAuthority == true { throw error }
-                    // Missing/expired/unavailable cover never borrows another slot.
-                }
+            do {
+                let data = try await services.image(a, result)
+                guard current(captured, version, surface), !Task.isCancelled,
+                      grants[surface]?.id == result.grant_id, originalCache.isCurrent(at: Date()) else { return }
+                guard Self.validPixels(data) else { continue }
+                pixels[a.slot] = data
+            } catch {
+                if (error as? DJConnectError)?.invalidatesSessionAuthority == true { throw error }
+                // Missing/expired/unavailable cover never borrows another slot.
             }
         }
         let publishedAt = Date()
@@ -436,8 +440,10 @@ import DJConnectCore
         let valid = pixels.filter { p.currentArtwork(slot: $0.key, at: publishedAt) != nil }
         let completed = try originalCache.staging(pixels: valid, at: publishedAt)
         guard current(captured, version, surface), !Task.isCancelled, grants[surface]?.id == result.grant_id else { return }
-        caches[surface] = completed
-        notify(); scheduleExpiry()
+        if completed != originalCache {
+            caches[surface] = completed
+            notify(); scheduleExpiry()
+        }
     }
     static func cachePNG(for image: CGImage) throws -> Data {
         func encode(_ image: CGImage) throws -> Data {

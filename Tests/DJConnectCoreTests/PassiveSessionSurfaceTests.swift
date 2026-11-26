@@ -653,6 +653,42 @@ private func passiveResponseObject(_ response: DJConnectPassiveSurfaceResponse) 
     #expect(completed.projection.expires_at == original.projection.expires_at)
 }
 
+@Test(.isolatedClientResources) @MainActor func passiveWidgetKeepsMatchingCoverThroughNewMetadataPublication() async throws {
+    let response = try passiveCurrent(), model = PassiveSessionSurfaceModel(), png = try passivePNG()
+    var root = try passiveResponseObject(response)
+    var projection = try #require(root["passive_session"] as? [String: Any])
+    projection["delivery_sequence"] = response.passive_session.delivery_sequence + 1
+    root["passive_session"] = projection
+    let next = try passiveDecode(root)
+    var imageRequests = 0
+    let services = PassiveSessionSurfaceModel.Services(
+        available: { true }, authorize: { _, _, _ in response },
+        read: { _, _, _ in next },
+        image: { _, _ in imageRequests += 1; return png }
+    )
+    model.bind(owner: "A", sessionID: response.passive_session.session_id, foreground: true)
+    await model.discover(services)
+    await model.setEnabled(true, surface: .widget, services: services)
+    let original = try #require(model.caches[.widget])
+    #expect(original.pixels["now_playing"] == png)
+
+    var publishedWithoutCover = false
+    let observation = model.objectWillChange.sink {
+        if let cache = model.caches[.widget],
+           cache.projection.delivery_sequence == next.passive_session.delivery_sequence,
+           cache.pixels["now_playing"] == nil {
+            publishedWithoutCover = true
+        }
+    }
+    await model.refreshAndWait(services)
+    observation.cancel()
+
+    #expect(model.caches[.widget]?.projection.delivery_sequence == next.passive_session.delivery_sequence)
+    #expect(model.caches[.widget]?.pixels["now_playing"] == png)
+    #expect(imageRequests == original.pixels.count)
+    #expect(!publishedWithoutCover)
+}
+
 @Test(.isolatedClientResources) @MainActor func passiveIdenticalFrameAndAsOfReadCannotRenewTheReceivePair() async throws {
     let response = try passiveCurrent { $0["artwork"] = [] }, model = PassiveSessionSurfaceModel()
     var next = response
