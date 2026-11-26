@@ -43,7 +43,12 @@ jobs:
           test "$(jq -r '.deployment_result' "$evidence")" = DEPLOYED_PENDING_SMOKE
           manifest="$(mktemp)"
           trap 'rm -f "$manifest" iphone-apps.json watch-apps.json' EXIT
-          curl --fail --silent --show-error --location https://raw.githubusercontent.com/djconnect-music-dj/djconnect/main/docs/release/PLATFORM_4_0_RC1_APPLE_OPERATIONAL_MANIFEST.json --output "$manifest"
+          case "$MANIFEST_ID" in
+            release-apple-internal-4.0.0-40475) manifest_file=PLATFORM_4_0_RC1_APPLE_OPERATIONAL_MANIFEST.json; manifest_version=4.0.0 ;;
+            release-apple-internal-4.1.0-40478) manifest_file=PLATFORM_4_1_APPLE_OPERATIONAL_MANIFEST.json; manifest_version=4.1.0 ;;
+            *) echo "Unrecognized Apple internal release manifest." >&2; exit 1 ;;
+          esac
+          curl --fail --silent --show-error --location "https://raw.githubusercontent.com/djconnect-music-dj/djconnect/main/docs/release/$manifest_file" --output "$manifest"
           manifest_status="$(jq -r '.status' "$manifest")"
           case "$manifest_status" in
             APPROVED_DEPLOYMENT_DISPATCH_PENDING|APPROVED_PARTIAL_DEPLOYMENT_OPERATIONAL) ;;
@@ -52,7 +57,7 @@ jobs:
           test "$(jq -r '.approval.state' "$manifest")" = APPROVED
           test "$(jq -r '.manifest_id' "$manifest")" = "$MANIFEST_ID"
           jq -e --arg artifact "$ARTIFACT_ID" --arg checksum "$ARTIFACT_SHA256" '.artifact_bindings[] | select(.target == "apple_private_device" and .target_device == "iphone" and .artifact_id == $artifact and .artifact_sha256 == $checksum and .signing == "local_developer_provisioning_required" and .paired_watch_validation == "required")' "$manifest" >/dev/null
-          expected_version="$(jq -er --arg sha "$CANDIDATE_SHA" --arg repo "$GITHUB_REPOSITORY" '.repositories[] | select(.repository == $repo and .source_sha == $sha) | .version' "$manifest")"
+          expected_version="$(jq -er --arg sha "$CANDIDATE_SHA" --arg repo "$GITHUB_REPOSITORY" --arg version "$manifest_version" '.repositories[] | select(.repository == $repo and .source_sha == $sha and .version == $version) | .version' "$manifest")"
           xcrun devicectl device info apps --device "$IPHONE_UDID" --bundle-id dev.djconnect.ios --json-output iphone-apps.json
           xcrun devicectl device info apps --device "$WATCH_UDID" --bundle-id dev.djconnect.ios.watch --json-output watch-apps.json
           jq -e --arg version "$expected_version" '[.result.apps[] | select(.bundleIdentifier == "dev.djconnect.ios" and .version == $version)] | length == 1' iphone-apps.json >/dev/null
