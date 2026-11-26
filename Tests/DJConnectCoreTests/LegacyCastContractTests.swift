@@ -246,7 +246,17 @@ private final class CastFixtureBundle: NSObject {}
     func invalidate() { stopView() }
 }
 
-@Test(.isolatedClientResources, arguments: ["background-before-read", "background-after-read", "history", "guest", "authority", "session", "demo", "stop", "pairing", "origin", "token"])
+private let legacyCastIngressModes: [String] = {
+    let common = ["background-before-read", "background-after-read", "history", "authority", "session",
+                  "demo", "stop", "pairing", "origin", "token"]
+    #if os(iOS)
+    return common + ["guest"]
+    #else
+    return common
+    #endif
+}()
+
+@Test(.isolatedClientResources, arguments: legacyCastIngressModes)
 @MainActor func legacyCastActualModelIngressSeparatesSuspensionFromOriginalWithdrawal(_ mode: String) async throws {
     func fixture(_ name: String) throws -> [String: Any] {
         let url = Bundle(for: CastFixtureBundle.self).url(forResource: name, withExtension: "json") ??
@@ -303,9 +313,18 @@ private final class CastFixtureBundle: NSObject {}
     let owner = try #require(sender.owner)
     if mode.hasPrefix("background") || mode == "history" || mode == "guest" {
         let reads = CastOwnerWire.calls(host:host).filter { $0.url?.path.hasSuffix("/broadcast/token") == true }.count
-        if mode == "history" { model.sessionHistory.suspend(preservingVoicePreference:true) }
-        else if mode == "guest" { model.liveGuestPresentationDidChange(true);model.connectLegacyCast(deviceID:"actual-sdk-identifier");#expect(!model.canConnectLegacyCast) }
-        else { model.markInactiveSession() }
+        switch mode {
+        case "history":
+            model.sessionHistory.suspend(preservingVoicePreference: true)
+        #if os(iOS)
+        case "guest":
+            model.liveGuestPresentationDidChange(true)
+            model.connectLegacyCast(deviceID: "actual-sdk-identifier")
+            #expect(!model.canConnectLegacyCast)
+        #endif
+        default:
+            model.markInactiveSession()
+        }
         sender.hold = false
         try await Task.sleep(for:.milliseconds(5))
         #expect(sender.suspends >= 1 && sender.stops == 0)

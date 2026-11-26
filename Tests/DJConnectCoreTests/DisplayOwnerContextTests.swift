@@ -60,16 +60,3 @@ func rendezvousOwnerRouteRejectsUntrustedDestinations(url: String) throws {
         #expect(throws: (any Error).self) { try DJConnectGuestInvitation.parse(invalid) }
     }
 }
-
-@Test func nativeGuestTVCodeRequiresAPlainHTTPSOrigin() throws {
-    let invitation = try DJConnectGuestInvitation.manualCode("abcd-efgh-jklm", address: "ha.example.com")
-    #expect(invitation.origin.absoluteString == "https://ha.example.com")
-    let body = try #require(JSONSerialization.jsonObject(with: invitation.redemptionBody()) as? [String: Any])
-    #expect(body["code"] as? String == "ABCDEFGHJKLM")
-    #expect(Set(body.keys) == ["contract_version", "code"])
-    for address in ["http://ha.example.com", "ha.example.com/private", "user@ha.example.com", "ha.example.com#fragment"] {
-        #expect(throws: (any Error).self) {
-            try DJConnectGuestInvitation.manualCode("abcd-efgh-jklm", address: address)
-        }
-    }
-}

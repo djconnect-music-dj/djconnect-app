@@ -821,6 +821,7 @@ final class DJConnectIOSUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["live-guest-join"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["live-guest-scan"].exists)
         XCTAssertFalse(app.buttons["live-guest-confirm"].exists)
+        XCTAssertFalse(app.textFields["live-guest-invitation"].exists)
         let link = "djconnect://join#v=1&ha_url=https%3A%2F%2Fha.example.com&issuer_epoch=\(String(repeating: "A", count: 43))&invitation_id=\(String(repeating: "B", count: 32))&invitation_secret=\(String(repeating: "C", count: 43))"
         app.open(try XCTUnwrap(URL(string: link)))
         XCTAssertTrue(app.buttons["live-guest-confirm"].waitForExistence(timeout: 5))

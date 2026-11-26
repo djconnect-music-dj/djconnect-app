@@ -114,6 +114,7 @@ final class DJConnectMacAppDelegate: NSObject, NSApplicationDelegate, @preconcur
 
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls where url.scheme?.lowercased() == "djconnect" {
+            guard url.host?.lowercased() != "join" else { continue }
             pendingURL = url
             flushPendingURL()
         }
