@@ -1986,10 +1986,12 @@ extension DJConnectIOSUITests {
         XCTAssertTrue(menu.isHittable)
         XCTAssertLessThan(menu.frame.midX, app.frame.midX)
         XCTAssertLessThan(menu.frame.midY, start.frame.midY)
+        let menuBottom = menu.frame.maxY
         menu.tap()
 
         let join = app.buttons["session-idle-join-party"]
         XCTAssertTrue(join.waitForExistence(timeout: 5))
+        XCTAssertGreaterThanOrEqual(join.frame.minY, menuBottom)
         XCTAssertEqual(join.label, "Deelnemen aan VibeCast Party")
         join.tap()
 
