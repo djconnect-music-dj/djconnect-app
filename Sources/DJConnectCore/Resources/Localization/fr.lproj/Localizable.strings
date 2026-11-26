@@ -1838,6 +1838,8 @@
 "ui.canvas.cadence.1800" = "Toutes les demi-heures";
 "ui.canvas.cadence.3600" = "Toutes les heures";
 "ui.canvas.details" = "Détails";
+"ui.canvas.new_artwork" = "Nouvelle œuvre";
+"ui.canvas.state.alternative_unchanged" = "Le générateur d’images a renvoyé la même œuvre.";
 "ui.canvas.done" = "Terminé";
 "ui.canvas.cancel" = "Annuler";
 "ui.canvas.working" = "En cours";

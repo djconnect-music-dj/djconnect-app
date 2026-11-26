@@ -1290,6 +1290,20 @@ public final class DJConnectClient: Sendable {
         return try await canvasReceipt("update", body: body)
     }
 
+    public func requestNewMusicCanvasArtwork(_ current: DJConnectCanvasSnapshot, targetID: String,
+                                             operationID: UUID) async throws -> DJConnectCanvasReceipt {
+        guard current.isValid, current.manual_artwork_refresh == true,
+              current.targets.contains(where: { $0.id == targetID && $0.can_request_artwork == true }) else {
+            throw DJConnectError.invalidResponse
+        }
+        var body = canvasIdentity()
+        body.binding = current.binding
+        body.operation_id = operationID.uuidString.lowercased()
+        body.expected_revision = current.revision
+        body.target_id = targetID
+        return try await canvasReceipt("new_artwork", body: body)
+    }
+
     public func musicCanvasOperation(binding: String, operationID: UUID) async throws -> DJConnectCanvasReceipt {
         var body = canvasIdentity()
         body.binding = binding; body.operation_id = operationID.uuidString.lowercased()
