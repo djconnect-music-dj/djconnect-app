@@ -1332,7 +1332,7 @@ struct SessionTimelineScreen: View {
                         Button {
                             model.isShowingGuestJoin = true
                         } label: {
-                            Label(text("ui.live.join"), systemImage: "qrcode.viewfinder")
+                            Label(text("ui.live.join"), systemImage: "party.popper.fill")
                         }
                         .labelStyle(.iconOnly)
                         .accessibilityLabel(text("ui.live.join"))
@@ -2613,7 +2613,7 @@ struct SessionControlPopoverHost: View {
                                 }
                                 if captured.sessionID == model.activeDJSession?.id && !model.isShowingVibeScape {
                                     Button { queue(.joinParty, captured: captured) } label: {
-                                        Label(text("ui.live.join"), systemImage: "qrcode.viewfinder")
+                                        Label(text("ui.live.join"), systemImage: "party.popper.fill")
                                             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                                     }
                                     .accessibilityIdentifier("session-join-party")

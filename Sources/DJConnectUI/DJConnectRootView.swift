@@ -9113,7 +9113,7 @@ private struct DJSessionView: View {
             Button {
                 model.isShowingGuestJoin = true
             } label: {
-                Label(title, systemImage: "qrcode.viewfinder")
+                Label(title, systemImage: "party.popper.fill")
             }
             .accessibilityIdentifier("session-idle-join-party")
         } label: {
