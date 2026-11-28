@@ -1832,6 +1832,9 @@
 "ui.canvas.screens" = "Schermen";
 "ui.canvas.no_screens" = "Er zijn nog geen geschikte schermen gevonden.";
 "ui.canvas.provider_required" = "Stel in Home Assistant een beeldgenerator in om kunst te maken.";
+"ui.canvas.provider.configured" = "Beeldgenerator ingesteld.";
+"ui.canvas.provider.billing" = "De beeldgenerator kan geen kunst maken. Controleer of het API-account en de facturering actief zijn bij je beeldprovider. Probeer daarna Kunstwerk vernieuwen.";
+"ui.canvas.provider.unavailable" = "De beeldgenerator kon geen kunst maken. Controleer de ingestelde beeldgenerator in Home Assistant en probeer Kunstwerk vernieuwen.";
 "ui.canvas.presentation" = "Weergave aanpassen";
 "ui.canvas.composition" = "Compositie";
 "ui.canvas.central" = "Centraal";

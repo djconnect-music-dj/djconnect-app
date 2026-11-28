@@ -1832,6 +1832,9 @@
 "ui.canvas.screens" = "Bildschirme";
 "ui.canvas.no_screens" = "Noch keine geeigneten Bildschirme gefunden.";
 "ui.canvas.provider_required" = "Wähle in Home Assistant einen Bildgenerator aus.";
+"ui.canvas.provider.configured" = "Bildgenerator eingerichtet.";
+"ui.canvas.provider.billing" = "Der Bildgenerator kann kein Kunstwerk erstellen. Prüfe, ob das API-Konto und die Abrechnung beim Bildanbieter aktiv sind. Wähle danach „Kunstwerk erneuern“.";
+"ui.canvas.provider.unavailable" = "Der Bildgenerator konnte kein Kunstwerk erstellen. Prüfe den in Home Assistant eingerichteten Bildgenerator und versuche es erneut.";
 "ui.canvas.presentation" = "Darstellung anpassen";
 "ui.canvas.composition" = "Komposition";
 "ui.canvas.central" = "Zentriert";

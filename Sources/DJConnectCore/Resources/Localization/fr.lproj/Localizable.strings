@@ -1832,6 +1832,9 @@
 "ui.canvas.screens" = "Écrans";
 "ui.canvas.no_screens" = "Aucun écran compatible trouvé.";
 "ui.canvas.provider_required" = "Choisissez un générateur d’images dans Home Assistant.";
+"ui.canvas.provider.configured" = "Générateur d’images configuré.";
+"ui.canvas.provider.billing" = "Le générateur ne peut pas créer d’œuvre. Vérifiez que le compte API et la facturation sont actifs chez votre fournisseur d’images, puis réessayez de renouveler l’œuvre.";
+"ui.canvas.provider.unavailable" = "Le générateur n’a pas pu créer d’œuvre. Vérifiez le générateur d’images configuré dans Home Assistant, puis réessayez de renouveler l’œuvre.";
 "ui.canvas.presentation" = "Adapter la présentation";
 "ui.canvas.composition" = "Composition";
 "ui.canvas.central" = "Centrée";
