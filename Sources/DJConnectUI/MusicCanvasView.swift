@@ -96,7 +96,9 @@ struct MusicCanvasView: View {
                     .accessibilityIdentifier("music-canvas-retry")
                 }
                 if (selectedTargetID == nil && busy && artworkRequestTargetID == nil) || (refreshing && snapshot == nil && notice == nil) {
-                    ProgressView().accessibilityLabel(text("working"))
+                    ProgressView()
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .accessibilityLabel(text("working"))
                 }
             }
             VStack(spacing: 12) {
