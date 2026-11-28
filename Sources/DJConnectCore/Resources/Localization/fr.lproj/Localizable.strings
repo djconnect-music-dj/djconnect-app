@@ -1070,6 +1070,13 @@
 "ui.session.end.confirm" = "Terminer cette session DJ ?";
 
 "ui.connection.status" = "État de la connexion";
+"ui.connection.llm_backend.title" = "Backend IA";
+"ui.connection.llm_backend.active" = "Actif. Les requêtes IA récentes ont abouti.";
+"ui.connection.llm_backend.configured" = "Configuré dans Home Assistant. Le fonctionnement du backend IA n’a pas encore été entièrement confirmé.";
+"ui.connection.llm_backend.billing" = "Un fournisseur d’IA refuse des requêtes. Vérifiez le compte API et la facturation chez ce fournisseur, puis réessayez.";
+"ui.connection.llm_backend.unavailable" = "Un fournisseur d’IA n’a pas répondu correctement. Vérifiez l’intégration IA dans Home Assistant, puis réessayez.";
+"ui.connection.llm_backend.configuration_required" = "Vérifiez l’agent de conversation et les tâches IA sélectionnés dans Home Assistant.";
+"ui.connection.llm_backend.unknown" = "Le statut du backend IA est encore indisponible.";
 
 "ui.connection.offline" = "Pas de connexion à Home Assistant";
 "ui.connection.recovering" = "Reconnexion à la session DJ…";
@@ -1832,7 +1839,6 @@
 "ui.canvas.screens" = "Écrans";
 "ui.canvas.no_screens" = "Aucun écran compatible trouvé.";
 "ui.canvas.provider_required" = "Choisissez un générateur d’images dans Home Assistant.";
-"ui.canvas.provider.configured" = "Générateur d’images configuré.";
 "ui.canvas.provider.billing" = "Le générateur ne peut pas créer d’œuvre. Vérifiez que le compte API et la facturation sont actifs chez votre fournisseur d’images, puis réessayez de renouveler l’œuvre.";
 "ui.canvas.provider.unavailable" = "Le générateur n’a pas pu créer d’œuvre. Vérifiez le générateur d’images configuré dans Home Assistant, puis réessayez de renouveler l’œuvre.";
 "ui.canvas.presentation" = "Adapter la présentation";

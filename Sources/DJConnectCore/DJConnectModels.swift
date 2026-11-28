@@ -8011,8 +8011,14 @@ public enum DJConnectJSONValue: Codable, Equatable, Sendable {
     }
 }
 
+public enum DJConnectLLMBackendStatus: String, Codable, Sendable {
+    case active, configured, billing, unavailable
+    case configurationRequired = "configuration_required"
+}
+
 public struct DJConnectEnvelope<T: Codable & Sendable>: Codable, Sendable {
     public var deviceSpeech: DJConnectDeviceSpeechAvailability?
+    public var llmBackendStatus: DJConnectLLMBackendStatus?
     public var success: Bool
     public var error: String?
     public var message: String?
@@ -8047,6 +8053,7 @@ public struct DJConnectEnvelope<T: Codable & Sendable>: Codable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case deviceSpeech = "device_speech"
+        case llmBackendStatus = "llm_backend_status"
         case success
         case error
         case message
@@ -8086,6 +8093,7 @@ public extension DJConnectEnvelope {
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         deviceSpeech = try? values.decodeIfPresent(DJConnectDeviceSpeechAvailability.self, forKey: .deviceSpeech)
+        llmBackendStatus = try? values.decodeIfPresent(DJConnectLLMBackendStatus.self, forKey: .llmBackendStatus)
         success = try values.decode(Bool.self, forKey: .success)
         error = try values.decodeIfPresent(String.self, forKey: .error)
         message = try values.decodeIfPresent(String.self, forKey: .message)
