@@ -8,7 +8,7 @@ on:
       artifact_id: {required: true, type: string}
       artifact_sha256: {required: true, type: string}
       target: {required: true, type: choice, options: [apple_private_device]}
-      target_device: {required: true, type: choice, options: [macbook, iphone, ipad]}
+      target_device: {required: true, type: choice, options: [macbook, macmini, iphone, ipad]}
       paired_watch_validation: {required: true, type: choice, options: [required, optional, disabled]}
       platform_version: {required: true, type: string}
       release_profile: {required: true, type: choice, options: [INTERNAL_RELEASE]}
@@ -42,7 +42,7 @@ jobs:
           printf '%s' "$ARTIFACT_ID" | grep -Eq '^[1-9][0-9]*$'
           printf '%s' "$ARTIFACT_SHA256" | grep -Eq '^[0-9a-f]{64}$'
           test "$TARGET" = apple_private_device
-          test "$TARGET_DEVICE" = macbook
+          [[ "$TARGET_DEVICE" = macbook || "$TARGET_DEVICE" = macmini ]]
           test "$PAIRED_WATCH_VALIDATION" = disabled
           printf '%s' "$PLATFORM_VERSION" | grep -Eq '^[0-9]+\.[0-9]+$'
           test "$RELEASE_PROFILE" = INTERNAL_RELEASE
@@ -110,17 +110,22 @@ jobs:
           test "$(jq -r '.target_device' "$evidence")" = "$TARGET_DEVICE"
           test "$(jq -r '.paired_watch_validation' "$evidence")" = "$PAIRED_WATCH_VALIDATION"
           test "$(jq -r '.deployment_result' "$evidence")" = DEPLOYED_PENDING_SMOKE
-          jq -e '.installed_hosts == ["macmini", "macbook"]' "$evidence" >/dev/null
+          jq -e --arg device "$TARGET_DEVICE" '.installed_hosts == (if $device == "macmini" then ["macmini"] else ["macmini", "macbook"] end)' "$evidence" >/dev/null
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
-      - name: Verify signed application and safe launch on both Macs
+      - name: Verify signed application and safe launch on the selected Macs
         env:
+          TARGET_DEVICE: ${{ inputs.target_device }}
+          MAC_MINI_PROVISIONING_UDID: ${{ secrets.DJCONNECT_MAC_MINI_PROVISIONING_UDID }}
           MANIFEST_ID: ${{ inputs.manifest_id }}
           EXPECTED_MACBOOK_UUID: ${{ secrets.DJCONNECT_APPLE_MACBOOK_HARDWARE_UUID }}
           RELEASE_VERSION: ${{ steps.manifest.outputs.release_version }}
         run: |
           set -euo pipefail
           mini_uuid="$(ioreg -rd1 -c IOPlatformExpertDevice | awk -F'"' '/IOPlatformUUID/{print $4; exit}')"
-          test "$mini_uuid" != "$EXPECTED_MACBOOK_UUID"
+          test -n "$mini_uuid" && test "$mini_uuid" != "$EXPECTED_MACBOOK_UUID"
+          local_udid="$(system_profiler SPHardwareDataType -json | jq -er '.SPHardwareDataType[0].provisioning_UDID | select(length > 0)')"
+          test -n "$MAC_MINI_PROVISIONING_UDID"
+          test "$(printf '%s' "$local_udid" | tr '[:lower:]' '[:upper:]')" = "$(printf '%s' "$MAC_MINI_PROVISIONING_UDID" | tr '[:lower:]' '[:upper:]')"
           expected_build=
           if [ "$MANIFEST_ID" = release-apple-internal-4.1.0-40546-macs-ipads ]; then
             expected_build=40546
@@ -132,6 +137,7 @@ jobs:
             expected_build=40549
           fi
           bash Tools/release/smoke_installed_macos_app.sh "$RELEASE_VERSION" "$mini_uuid" "$expected_build"
+          if [ "$TARGET_DEVICE" = macmini ]; then exit 0; fi
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=10 pcvantol@MacBook-Pro-van-Peter.local bash -s -- "$RELEASE_VERSION" "$EXPECTED_MACBOOK_UUID" "$expected_build" < Tools/release/smoke_installed_macos_app.sh
       - name: Publish redacted MacBook smoke evidence
         env:
@@ -153,7 +159,7 @@ jobs:
           import json, os
           with open("apple-macbook-smoke-evidence.json", "w", encoding="utf-8") as file:
               timestamp = datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-              json.dump({"schema_version": 1, "kind": "apple_private_macbook_smoke", "repository": os.environ["GITHUB_REPOSITORY"], "candidate_sha": os.environ["CANDIDATE_SHA"], "manifest_id": os.environ["MANIFEST_ID"], "artifact_id": os.environ["ARTIFACT_ID"], "artifact_sha256": os.environ["ARTIFACT_SHA256"], "target": os.environ["TARGET"], "target_device": os.environ["TARGET_DEVICE"], "paired_watch_validation": os.environ["PAIRED_WATCH_VALIDATION"], "platform_version": os.environ["PLATFORM_VERSION"], "release_profile": os.environ["RELEASE_PROFILE"], "release_version": os.environ["RELEASE_VERSION"], "deployment_workflow_run": os.environ["DEPLOYMENT_WORKFLOW_RUN"], "smoke_workflow_run": os.environ["SMOKE_WORKFLOW_RUN"], "runner_identity": "self-hosted-macos-apple-secure-distribution", "smoked_hosts": ["macmini", "macbook"], "signing_result": "PASS", "install_result": "PASS", "safe_launch_result": "PASS", "paired_watch_result": "NOT_APPLICABLE", "final_result": "SMOKE_PASSED", "timestamp": timestamp}, file, sort_keys=True)
+              json.dump({"schema_version": 1, "kind": "apple_private_" + os.environ["TARGET_DEVICE"] + "_smoke", "repository": os.environ["GITHUB_REPOSITORY"], "candidate_sha": os.environ["CANDIDATE_SHA"], "manifest_id": os.environ["MANIFEST_ID"], "artifact_id": os.environ["ARTIFACT_ID"], "artifact_sha256": os.environ["ARTIFACT_SHA256"], "target": os.environ["TARGET"], "target_device": os.environ["TARGET_DEVICE"], "paired_watch_validation": os.environ["PAIRED_WATCH_VALIDATION"], "platform_version": os.environ["PLATFORM_VERSION"], "release_profile": os.environ["RELEASE_PROFILE"], "release_version": os.environ["RELEASE_VERSION"], "deployment_workflow_run": os.environ["DEPLOYMENT_WORKFLOW_RUN"], "smoke_workflow_run": os.environ["SMOKE_WORKFLOW_RUN"], "runner_identity": "self-hosted-macos-apple-secure-distribution", "smoked_hosts": ["macmini"] if os.environ["TARGET_DEVICE"] == "macmini" else ["macmini", "macbook"], "signing_result": "PASS", "install_result": "PASS", "safe_launch_result": "PASS", "paired_watch_result": "NOT_APPLICABLE", "final_result": "SMOKE_PASSED", "timestamp": timestamp}, file, sort_keys=True)
           PY
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

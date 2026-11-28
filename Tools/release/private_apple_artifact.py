@@ -13,7 +13,7 @@ APPROVED_STATES = {
     "APPROVED_DEPLOYMENT_DISPATCH_PENDING",
     "APPROVED_PARTIAL_DEPLOYMENT_OPERATIONAL",
 }
-WATCH_REQUIREMENTS = {"macbook": "disabled", "iphone": "required", "ipad": None, "ipad-mini": None}
+WATCH_REQUIREMENTS = {"macbook": "disabled", "macmini": "disabled", "iphone": "required", "ipad": None, "ipad-mini": None}
 
 
 def verify_binding(manifest, *, manifest_id, source_sha, source_repository, device, repository_id, asset_id, checksum):

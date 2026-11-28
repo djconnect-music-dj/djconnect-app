@@ -10,7 +10,7 @@ on:
       artifact_id: {required: true, type: string}
       artifact_sha256: {required: true, type: string}
       target: {required: true, type: choice, options: [apple_private_device]}
-      target_device: {required: true, type: choice, options: [macbook, iphone, ipad]}
+      target_device: {required: true, type: choice, options: [macbook, macmini, iphone, ipad]}
       paired_watch_validation: {required: true, type: choice, options: [required, optional, disabled]}
       platform_version: {required: true, type: string}
       release_profile: {required: true, type: choice, options: [INTERNAL_RELEASE]}
@@ -54,7 +54,7 @@ jobs:
           test "$ACTION" = deployment && test "$EXECUTION_MODE" = execute
           test "$RELEASE_PROFILE" = INTERNAL_RELEASE
           test "$TARGET" = apple_private_device
-          test "$TARGET_DEVICE" = macbook
+          [[ "$TARGET_DEVICE" = macbook || "$TARGET_DEVICE" = macmini ]]
           test "$PAIRED_WATCH_VALIDATION" = disabled
           printf '%s' "$CANDIDATE_SHA" | grep -Eq '^[0-9a-f]{40}$'
           printf '%s' "$MANIFEST_ID" | grep -Eq '^release-[A-Za-z0-9._-]+$'
@@ -103,10 +103,12 @@ jobs:
           test "$(jq -r '.release_profile' "$manifest")" = "$RELEASE_PROFILE"
           release_version="$(jq -r --arg sha "$CANDIDATE_SHA" --arg repo "$GITHUB_REPOSITORY" --arg version "$manifest_version" '.repositories[] | select(.repository == $repo and .source_sha == $sha and .version == $version) | .version' "$manifest")"
           printf '%s' "$release_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'
-          /usr/bin/python3 Tools/release/private_apple_artifact.py "$manifest" macbook
+          /usr/bin/python3 Tools/release/private_apple_artifact.py "$manifest" "$TARGET_DEVICE"
           printf 'release_version=%s\n' "$release_version" >> "$GITHUB_OUTPUT"
-      - name: Validate Mac mini signing and exact SSH MacBook target
+      - name: Validate the configured Mac mini and any selected MacBook
         env:
+          TARGET_DEVICE: ${{ inputs.target_device }}
+          MAC_MINI_PROVISIONING_UDID: ${{ secrets.DJCONNECT_MAC_MINI_PROVISIONING_UDID }}
           EXPECTED_MACBOOK_UUID: ${{ secrets.DJCONNECT_APPLE_MACBOOK_HARDWARE_UUID }}
           SIGNING_IDENTITY: ${{ secrets.DJCONNECT_APPLE_DEVELOPMENT_SIGNING_IDENTITY }}
         run: |
@@ -121,10 +123,16 @@ jobs:
           cp /usr/bin/true "$signing_probe"
           codesign --force --sign "$SIGNING_IDENTITY" --timestamp=none "$signing_probe"
           codesign --verify --strict "$signing_probe"
-          book_uuid="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=10 pcvantol@MacBook-Pro-van-Peter.local ioreg -rd1 -c IOPlatformExpertDevice | awk -F'"' '/IOPlatformUUID/{print $4; exit}')"
-          test "$book_uuid" = "$EXPECTED_MACBOOK_UUID"
-      - name: Sign on Mac mini and install the same app on both Macs
+          local_udid="$(system_profiler SPHardwareDataType -json | jq -er '.SPHardwareDataType[0].provisioning_UDID | select(length > 0)')"
+          test -n "$MAC_MINI_PROVISIONING_UDID"
+          test "$(printf '%s' "$local_udid" | tr '[:lower:]' '[:upper:]')" = "$(printf '%s' "$MAC_MINI_PROVISIONING_UDID" | tr '[:lower:]' '[:upper:]')"
+          if [ "$TARGET_DEVICE" = macbook ]; then
+            book_uuid="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=10 pcvantol@MacBook-Pro-van-Peter.local ioreg -rd1 -c IOPlatformExpertDevice | awk -F'"' '/IOPlatformUUID/{print $4; exit}')"
+            test "$book_uuid" = "$EXPECTED_MACBOOK_UUID"
+          fi
+      - name: Sign and install on the approved Mac targets
         env:
+          TARGET_DEVICE: ${{ inputs.target_device }}
           MANIFEST_ID: ${{ inputs.manifest_id }}
           ARTIFACT_SHA256: ${{ inputs.artifact_sha256 }}
           MAC_APP_PROFILE: ${{ vars.DJCONNECT_MAC_APP_PROFILE_PATH }}
@@ -161,6 +169,7 @@ jobs:
           signed_sha="$(shasum -a 256 "$signed_archive" | awk '{print $1}')"
           mini_uuid="$(ioreg -rd1 -c IOPlatformExpertDevice | awk -F'"' '/IOPlatformUUID/{print $4; exit}')"
           bash Tools/release/install_signed_macos_archive.sh "$signed_archive" "$signed_sha" "$RELEASE_VERSION" "$mini_uuid" "$GITHUB_RUN_ID"
+          if [ "$TARGET_DEVICE" = macmini ]; then exit 0; fi
           ssh_options=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=10)
           book=pcvantol@MacBook-Pro-van-Peter.local
           remote_dir="$(ssh "${ssh_options[@]}" "$book" 'mktemp -d /private/tmp/djconnect-deploy.XXXXXXXX')"
@@ -186,7 +195,7 @@ jobs:
           from datetime import UTC, datetime
           import json, os
           with open("apple-macbook-deployment-evidence.json", "w", encoding="utf-8") as file:
-              json.dump({"schema_version": 1, "kind": "apple_private_macbook_deployment", "repository": os.environ["GITHUB_REPOSITORY"], "candidate_sha": os.environ["CANDIDATE_SHA"], "manifest_id": os.environ["MANIFEST_ID"], "artifact_id": os.environ["ARTIFACT_ID"], "artifact_sha256": os.environ["ARTIFACT_SHA256"], "target": os.environ["TARGET"], "target_device": os.environ["TARGET_DEVICE"], "paired_watch_validation": os.environ["PAIRED_WATCH_VALIDATION"], "platform_version": os.environ["PLATFORM_VERSION"], "release_profile": os.environ["RELEASE_PROFILE"], "release_version": os.environ["RELEASE_VERSION"], "installed_bundle_identifier": "dev.djconnect.mac", "installed_hosts": ["macmini", "macbook"], "signing_scope": "runner_local_apple_development_identity", "deployment_result": "DEPLOYED_PENDING_SMOKE", "timestamp": datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")}, file, sort_keys=True)
+              json.dump({"schema_version": 1, "kind": "apple_private_" + os.environ["TARGET_DEVICE"] + "_deployment", "repository": os.environ["GITHUB_REPOSITORY"], "candidate_sha": os.environ["CANDIDATE_SHA"], "manifest_id": os.environ["MANIFEST_ID"], "artifact_id": os.environ["ARTIFACT_ID"], "artifact_sha256": os.environ["ARTIFACT_SHA256"], "target": os.environ["TARGET"], "target_device": os.environ["TARGET_DEVICE"], "paired_watch_validation": os.environ["PAIRED_WATCH_VALIDATION"], "platform_version": os.environ["PLATFORM_VERSION"], "release_profile": os.environ["RELEASE_PROFILE"], "release_version": os.environ["RELEASE_VERSION"], "installed_bundle_identifier": "dev.djconnect.mac", "installed_hosts": ["macmini"] if os.environ["TARGET_DEVICE"] == "macmini" else ["macmini", "macbook"], "signing_scope": "runner_local_apple_development_identity", "deployment_result": "DEPLOYED_PENDING_SMOKE", "timestamp": datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")}, file, sort_keys=True)
           PY
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
