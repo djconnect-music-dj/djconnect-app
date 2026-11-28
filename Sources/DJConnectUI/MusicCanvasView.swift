@@ -9,6 +9,7 @@ struct MusicCanvasView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @State private var snapshot: DJConnectCanvasSnapshot?
+    @State private var screenList: ScreenList?
     @State private var busy = false
     @State private var refreshing = false
     @State private var readID = UUID()
@@ -25,6 +26,20 @@ struct MusicCanvasView: View {
     @State private var height = ""
     @State private var orientation = "portrait"
     @State private var preview: DJConnectSessionArtworkImage?
+
+    private struct ScreenList {
+        let scope: String
+        let targets: [DJConnectCanvasTarget]
+        let selectedIDs: Set<String>
+        let canManageDevices: Bool
+
+        init(_ snapshot: DJConnectCanvasSnapshot, scope: String) {
+            self.scope = scope
+            targets = snapshot.targets
+            selectedIDs = snapshot.preferences.enabled ? Set(snapshot.preferences.selected_targets) : []
+            canManageDevices = snapshot.can_manage_devices
+        }
+    }
 
     private struct PreviewRequest: Equatable {
         let targetID: String
@@ -80,7 +95,9 @@ struct MusicCanvasView: View {
                     targetSettings(selected, snapshot: snapshot).disabled(busy)
                 } else if selectedTargetID == nil {
                     Text(text("description")).foregroundStyle(.secondary)
-                    if let snapshot { screenChooser(snapshot) }
+                    if let screenList, current(screenList.scope) {
+                        screenChooser(screenList).disabled(busy || snapshot == nil)
+                    }
                 }
                 if let snapshot, !snapshot.image_generation_available {
                     Text(text("provider_required")).foregroundStyle(.secondary)
@@ -96,7 +113,9 @@ struct MusicCanvasView: View {
                     .accessibilityIdentifier("music-canvas-retry")
                 }
                 if (selectedTargetID == nil && busy && artworkRequestTargetID == nil) || (refreshing && snapshot == nil && notice == nil) {
-                    ProgressView().accessibilityLabel(text("working"))
+                    ProgressView()
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .accessibilityLabel(text("working"))
                 }
             }
             VStack(spacing: 12) {
@@ -139,7 +158,7 @@ struct MusicCanvasView: View {
         .task(id: request) { await loadPreview(request) }
         .task(id: loadScope) {
             guard !Task.isCancelled, scope == loadScope else { return }
-            snapshot = nil; selectedTargetID = nil; preview = nil; notice = nil
+            snapshot = nil; screenList = nil; selectedTargetID = nil; preview = nil; notice = nil
             readID = UUID(); operationID = nil; busy = false; refreshing = false
             artworkRequestTargetID = nil; shownArtworkPreviewRevision = nil
             guard current(loadScope) else {
@@ -153,7 +172,7 @@ struct MusicCanvasView: View {
         }
         .onChange(of: scenePhase) { _, value in
             if value != .active {
-                snapshot = nil; selectedTargetID = nil; preview = nil; shownArtworkPreviewRevision = nil
+                snapshot = nil; screenList = nil; selectedTargetID = nil; preview = nil; shownArtworkPreviewRevision = nil
             }
         }
         .onChange(of: selectedTargetID) { _, _ in openSetting = nil }
@@ -165,12 +184,12 @@ struct MusicCanvasView: View {
         shownArtworkPreviewRevision = nil
     }
 
-    private func screenChooser(_ snapshot: DJConnectCanvasSnapshot) -> some View {
+    private func screenChooser(_ screens: ScreenList) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(text("choose_screens")).font(.headline).accessibilityAddTraits(.isHeader)
-            if snapshot.targets.isEmpty { Text(text("no_screens")).foregroundStyle(.secondary) }
-            ForEach(snapshot.targets) { target in
-                let isSelected = snapshot.preferences.enabled && snapshot.preferences.selected_targets.contains(target.id)
+            if screens.targets.isEmpty { Text(text("no_screens")).foregroundStyle(.secondary) }
+            ForEach(screens.targets) { target in
+                let isSelected = screens.selectedIDs.contains(target.id)
                 HStack(spacing: 0) {
                     Button {
                         change {
@@ -204,7 +223,7 @@ struct MusicCanvasView: View {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(target.name).multilineTextAlignment(.leading)
                                 Text(status(target.state)).font(.caption).foregroundStyle(.secondary)
-                                if target.adapter == "switchbot", needsScreenGeometry(target), !snapshot.can_manage_devices {
+                                if target.adapter == "switchbot", needsScreenGeometry(target), !screens.canManageDevices {
                                     Text(text("switchbot_ha_setup")).font(.caption).foregroundStyle(.secondary)
                                 }
                             }
@@ -466,6 +485,7 @@ struct MusicCanvasView: View {
             if notice != nil { notice = nil }
             guard snapshot != value else { return }
             snapshot = value
+            screenList = ScreenList(value, scope: captured)
             onSnapshot(value, captured)
             if let selectedTargetID, !value.targets.contains(where: { $0.id == selectedTargetID }) {
                 returnToScreens()
@@ -475,9 +495,25 @@ struct MusicCanvasView: View {
             // Keep the chosen page on transient failures while dropping private data and the management grant.
             if (error as? DJConnectCanvasReadFailure) == .notOffered { returnToScreens() }
             snapshot = nil; preview = nil; shownArtworkPreviewRevision = nil
-            onSnapshot(nil, captured)
+            if !Self.isTransientReadFailure(error) {
+                screenList = nil
+                onSnapshot(nil, captured)
+            }
             notice = text((error as? DJConnectCanvasReadFailure) == .notOffered ? "not_offered" : "unavailable")
             model.recordCanvasReadFailure(error)
+        }
+    }
+
+    private static func isTransientReadFailure(_ error: Error) -> Bool {
+        switch error {
+        case DJConnectError.network, DJConnectError.backendUnavailable,
+             DJConnectHybridTransportError.unavailable, DJConnectHybridTransportError.capacity,
+             DJConnectHybridTransportError.notSent, DJConnectHybridTransportError.deliveryUnknown:
+            return true
+        case let DJConnectError.server(statusCode, _):
+            return statusCode == 429 || (500...599).contains(statusCode)
+        default:
+            return false
         }
     }
 
