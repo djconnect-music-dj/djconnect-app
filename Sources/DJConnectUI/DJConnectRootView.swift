@@ -1930,11 +1930,6 @@ private struct PairingSheetView: View {
                         unpairedSessionOptions
                     }
                     pairingPending
-                    #if os(iOS)
-                    if model.pairingFlowTarget == .appleWatch {
-                        pairingGuestJoinButton
-                    }
-                    #endif
                 }
             }
             .padding(28)

@@ -16,7 +16,7 @@ struct MusicCanvasView: View {
     @State private var artworkRequestTargetID: String?
     @State private var shownArtworkPreviewRevision: String?
     @State private var notice: String?
-    @State private var selected: DJConnectCanvasTarget?
+    @State private var selectedTargetID: String?
     @State private var openSetting: String?
     @State private var cleanupRemote = false
     @State private var confirmingForget = false
@@ -31,6 +31,11 @@ struct MusicCanvasView: View {
         let revision: String?
         let artworkRevision: String?
         let scope: String
+    }
+
+    private var selected: DJConnectCanvasTarget? {
+        guard let selectedTargetID else { return nil }
+        return snapshot?.targets.first { $0.id == selectedTargetID }
     }
 
     private var previewRequest: PreviewRequest? {
@@ -59,7 +64,7 @@ struct MusicCanvasView: View {
     var body: some View {
         let loadScope = scope
         let request = previewRequest
-        let back: (label: String, action: () -> Void)? = if selected != nil {
+        let back: (label: String, action: () -> Void)? = if selectedTargetID != nil {
             (DJConnectLocalization.localized(key: "ui.session.intro.back", language: model.language), returnToScreens)
         } else {
             nil
@@ -73,7 +78,7 @@ struct MusicCanvasView: View {
             VStack(alignment: .leading, spacing: 16) {
                 if let selected, let snapshot {
                     targetSettings(selected, snapshot: snapshot).disabled(busy)
-                } else {
+                } else if selectedTargetID == nil {
                     Text(text("description")).foregroundStyle(.secondary)
                     if let snapshot { screenChooser(snapshot) }
                 }
@@ -90,7 +95,7 @@ struct MusicCanvasView: View {
                     .disabled(refreshing || busy)
                     .accessibilityIdentifier("music-canvas-retry")
                 }
-                if selected == nil, (busy && artworkRequestTargetID == nil) || (refreshing && snapshot == nil && notice == nil) {
+                if (selectedTargetID == nil && busy && artworkRequestTargetID == nil) || (refreshing && snapshot == nil && notice == nil) {
                     ProgressView().accessibilityLabel(text("working"))
                 }
             }
@@ -130,11 +135,11 @@ struct MusicCanvasView: View {
                     .accessibilityIdentifier("music-canvas-done")
             }
         }
-        .accessibilityIdentifier(selected == nil ? "music-canvas-popup" : "music-canvas-settings-page")
+        .accessibilityIdentifier(selectedTargetID == nil ? "music-canvas-popup" : "music-canvas-settings-page")
         .task(id: request) { await loadPreview(request) }
         .task(id: loadScope) {
             guard !Task.isCancelled, scope == loadScope else { return }
-            snapshot = nil; selected = nil; preview = nil; notice = nil
+            snapshot = nil; selectedTargetID = nil; preview = nil; notice = nil
             readID = UUID(); operationID = nil; busy = false; refreshing = false
             artworkRequestTargetID = nil; shownArtworkPreviewRevision = nil
             guard current(loadScope) else {
@@ -148,14 +153,14 @@ struct MusicCanvasView: View {
         }
         .onChange(of: scenePhase) { _, value in
             if value != .active {
-                snapshot = nil; selected = nil; preview = nil; shownArtworkPreviewRevision = nil
+                snapshot = nil; selectedTargetID = nil; preview = nil; shownArtworkPreviewRevision = nil
             }
         }
-        .onChange(of: selected?.id) { _, _ in openSetting = nil }
+        .onChange(of: selectedTargetID) { _, _ in openSetting = nil }
     }
 
     private func returnToScreens() {
-        selected = nil
+        selectedTargetID = nil
         preview = nil
         shownArtworkPreviewRevision = nil
     }
@@ -190,7 +195,7 @@ struct MusicCanvasView: View {
                     .accessibilityAddTraits(isSelected ? .isSelected : [])
                     .accessibilityIdentifier("music-canvas-screen-" + target.id)
                     Button {
-                        selected = target
+                        selectedTargetID = target.id
                         shownArtworkPreviewRevision = nil
                         cleanupRemote = false; allowRemaining = false
                         width = ""; height = ""; orientation = "portrait"; preview = nil
@@ -458,14 +463,14 @@ struct MusicCanvasView: View {
             guard snapshot != value else { return }
             snapshot = value
             onSnapshot(value, captured)
-            if let selected {
-                let nextSelection = value.targets.first { $0.id == selected.id }
-                if nextSelection != selected { self.selected = nextSelection }
+            if let selectedTargetID, !value.targets.contains(where: { $0.id == selectedTargetID }) {
+                returnToScreens()
             }
         } catch {
             guard current(captured), !Task.isCancelled, readID == requestID else { return }
-            // A failed refresh cannot retain an old management grant or private image.
-            snapshot = nil; selected = nil; preview = nil; shownArtworkPreviewRevision = nil
+            // Keep the chosen page on transient failures while dropping private data and the management grant.
+            if (error as? DJConnectCanvasReadFailure) == .notOffered { returnToScreens() }
+            snapshot = nil; preview = nil; shownArtworkPreviewRevision = nil
             onSnapshot(nil, captured)
             notice = text((error as? DJConnectCanvasReadFailure) == .notOffered ? "not_offered" : "unavailable")
             model.recordCanvasReadFailure(error)
@@ -520,7 +525,7 @@ struct MusicCanvasView: View {
             } else if receipt?.state == "rejected" || receipt?.success == false {
                 notice = text("change_failed")
             } else if receipt?.state == "confirmed", receipt?.revision == nil {
-                selected = nil; preview = nil; shownArtworkPreviewRevision = nil
+                selectedTargetID = nil; preview = nil; shownArtworkPreviewRevision = nil
             }
             busy = false
             await refresh(captured)
