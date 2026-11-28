@@ -443,6 +443,10 @@ struct MusicCanvasView: View {
         let known = ["disabled", "waiting_music", "preparing", "delivering", "displayed", "delivered_unknown",
                      "needs_setup", "discovered", "ready", "busy", "image_provider_required"]
         if known.contains(state) { return text("state." + state) }
+        if state == "canvas_image_provider_billing" { return text("provider.billing") }
+        if state == "canvas_image_provider_failed" || state == "canvas_image_invalid" {
+            return text("provider.unavailable")
+        }
         if state == "canvas_alternative_unchanged" { return text("state.alternative_unchanged") }
         if state == "canvas_manual_takeover" { return text("state.waiting_screen") }
         if state == "canvas_public_asset_required" { return text("asset_required") }

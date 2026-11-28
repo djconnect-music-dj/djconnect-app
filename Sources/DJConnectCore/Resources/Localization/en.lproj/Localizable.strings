@@ -1832,6 +1832,9 @@
 "ui.canvas.screens" = "Screens";
 "ui.canvas.no_screens" = "No compatible screens found yet.";
 "ui.canvas.provider_required" = "Choose an image generator in Home Assistant to create artwork.";
+"ui.canvas.provider.configured" = "Image generator configured.";
+"ui.canvas.provider.billing" = "The image generator can’t create artwork. Check that the API account and billing are active with your image provider. Then try Refresh artwork.";
+"ui.canvas.provider.unavailable" = "The image generator couldn’t create artwork. Check the image generator configured in Home Assistant, then try Refresh artwork.";
 "ui.canvas.presentation" = "Adjust presentation";
 "ui.canvas.composition" = "Composition";
 "ui.canvas.central" = "Centred";
