@@ -2631,8 +2631,8 @@ public final class DJConnectAppModel: ObservableObject {
     @Published private var llmBackendStatus: DJConnectLLMBackendStatus?
     private var llmBackendStatusContext: [String] = []
     var currentLLMBackendStatus: DJConnectLLMBackendStatus? {
-        guard !isDemoMode, pairingStatus == .paired, isAppInForeground,
-              llmBackendStatusContext == currentDeviceSpeechContext else { return nil }
+        guard !isDemoMode, pairingStatus == .paired, isAppInForeground, isConnected,
+              haConnectionMode != .offline, llmBackendStatusContext == currentDeviceSpeechContext else { return nil }
         return llmBackendStatus
     }
 
