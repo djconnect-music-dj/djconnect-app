@@ -53,6 +53,7 @@ jobs:
             release-apple-internal-4.1.0-40546-macs-ipads) manifest_file=PLATFORM_4_1_APPLE_40546_MACS_IPADS_OPERATIONAL_MANIFEST.json; manifest_version=4.1.0 ;;
             release-apple-internal-4.1.0-40547-private-devices) manifest_file=PLATFORM_4_1_APPLE_40547_PRIVATE_DEVICES_OPERATIONAL_MANIFEST.json; manifest_version=4.1.0 ;;
             release-apple-internal-4.1.0-40548-private-devices) manifest_file=PLATFORM_4_1_APPLE_40548_PRIVATE_DEVICES_OPERATIONAL_MANIFEST.json; manifest_version=4.1.0 ;;
+            release-apple-internal-4.1.0-40549-private-devices) manifest_file=PLATFORM_4_1_APPLE_40549_PRIVATE_DEVICES_OPERATIONAL_MANIFEST.json; manifest_version=4.1.0 ;;
             *) echo "Unrecognized Apple internal release manifest." >&2; exit 1 ;;
           esac
           curl --fail --silent --show-error --location "https://raw.githubusercontent.com/djconnect-music-dj/djconnect/main/docs/release/$manifest_file" --output "$manifest"
