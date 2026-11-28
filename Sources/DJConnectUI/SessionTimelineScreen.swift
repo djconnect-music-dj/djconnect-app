@@ -3248,7 +3248,7 @@ struct SessionConnectionPopoverContent: View {
                 #else
                 SetupStatusView(model: model, openAbout: openAbout, rePair: requestRePair)
                 #endif
-                MusicCanvasConnectionStatus(model: model)
+                LLMBackendConnectionStatus(model: model)
             }
         }
         #if os(iOS)
@@ -3282,66 +3282,35 @@ struct SessionConnectionPopoverContent: View {
     }
 }
 
-private struct MusicCanvasConnectionStatus: View {
+private struct LLMBackendConnectionStatus: View {
     @ObservedObject var model: DJConnectAppModel
-    @Environment(\.scenePhase) private var scenePhase
-    @State private var providerStatus: ProviderStatus?
-    @State private var loadedScope: String?
-
-    private enum ProviderStatus: String {
-        case configured, configure, billing, unavailable
-
-        var messageKey: String {
-            self == .configure ? "ui.canvas.provider_required" : "ui.canvas.provider." + rawValue
-        }
-
-        init?(snapshot: DJConnectCanvasSnapshot) {
-            let preferences = snapshot.preferences
-            guard preferences.enabled, !preferences.selected_targets.isEmpty else { return nil }
-            let states = Set(snapshot.targets.filter { preferences.selected_targets.contains($0.id) }.map(\.state))
-            if !snapshot.image_generation_available { self = .configure }
-            else if states.contains("canvas_image_provider_billing") { self = .billing }
-            else if states.contains("canvas_image_provider_failed") || states.contains("canvas_image_invalid") {
-                self = .unavailable
-            } else { self = .configured }
-        }
-    }
-
-    private var scope: String? {
-        guard scenePhase == .active, model.pairingStatus == .paired, !model.isDemoMode else { return nil }
-        return MusicCanvasView.scope(for: model, scenePhase: scenePhase)
-    }
 
     var body: some View {
-        Group {
-            if let providerStatus, let scope, scope == loadedScope {
-                Label {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Music Canvas").font(.subheadline.weight(.semibold))
-                        Text(DJConnectLocalization.localized(
-                            key: providerStatus.messageKey, language: model.language))
-                            .font(.footnote)
-                    }
-                } icon: {
-                    Image(systemName: providerStatus == .configured ? "photo.artframe" : "exclamationmark.triangle")
-                        .foregroundStyle(providerStatus == .configured ? Color.secondary : Color.orange)
+        if model.pairingStatus == .paired {
+            let status = model.currentLLMBackendStatus
+            let attention = status == .billing || status == .configurationRequired || status == .unavailable
+            Label {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(localized("title")).font(.subheadline.weight(.semibold))
+                    Text(localized(status?.rawValue ?? "unknown")).font(.footnote)
                 }
-                .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("connection-music-canvas-status")
+            } icon: {
+                Image(systemName: attention ? "exclamationmark.triangle" : "sparkles")
+                    .foregroundStyle(attention ? Color.orange : Color.secondary)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("connection-llm-backend-status")
+            .task {
+                guard model.canRefreshSessionHistory else { return }
+                try? await model.withHomeAssistantClient(notifiesTransportFailure: false) {
+                    try await model.refreshConnectionEndpointsIfNeeded(client: $0)
+                }
             }
         }
-        .task(id: scope) {
-            guard let captured = scope else { return }
-            while !Task.isCancelled, captured == scope {
-                let snapshot = try? await model.withHomeAssistantClient(notifiesTransportFailure: false) {
-                    try await $0.musicCanvas()
-                }
-                guard !Task.isCancelled, captured == scope else { return }
-                providerStatus = snapshot.flatMap(ProviderStatus.init)
-                loadedScope = captured
-                try? await Task.sleep(for: .seconds(10))
-            }
-        }
+    }
+
+    private func localized(_ key: String) -> String {
+        DJConnectLocalization.localized(key: "ui.connection.llm_backend." + key, language: model.language)
     }
 }
 
