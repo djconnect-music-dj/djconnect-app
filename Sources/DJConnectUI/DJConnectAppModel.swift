@@ -2628,6 +2628,22 @@ public final class DJConnectAppModel: ObservableObject {
          (try? tokenStore.loadToken()) ?? "", sessionHistory.authorizedProfileID ?? "",
          currentRequestLocale]
     }
+    @Published private var llmBackendStatus: DJConnectLLMBackendStatus?
+    private var llmBackendStatusContext: [String] = []
+    var currentLLMBackendStatus: DJConnectLLMBackendStatus? {
+        guard !isDemoMode, pairingStatus == .paired, isAppInForeground, isConnected,
+              haConnectionMode != .offline, llmBackendStatusContext == currentDeviceSpeechContext else { return nil }
+        return llmBackendStatus
+    }
+
+    private func updateLLMBackendStatus(from response: DJConnectEnvelope<DJConnectPlayback>) {
+        let status = response.success ? response.llmBackendStatus : nil
+        let context = currentDeviceSpeechContext
+        guard status != llmBackendStatus || context != llmBackendStatusContext else { return }
+        llmBackendStatusContext = context
+        llmBackendStatus = status
+    }
+
     private var currentDeviceSpeechAvailability: DJConnectDeviceSpeechAvailability? {
         guard !isDemoMode, pairingStatus == .paired, isAppInForeground,
               deviceSpeechContext == currentDeviceSpeechContext else { return nil }
@@ -10461,6 +10477,7 @@ public final class DJConnectAppModel: ObservableObject {
         defer {
             deviceSpeechContext = currentDeviceSpeechContext
             deviceSpeechAvailability = response.deviceSpeech
+            updateLLMBackendStatus(from: response)
         }
         func endpoint(_ value: String?, remote: Bool) -> String? {
             guard let value, let c = URLComponents(string: value.trimmingCharacters(in: .whitespacesAndNewlines)),

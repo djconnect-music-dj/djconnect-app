@@ -86,6 +86,8 @@ jobs:
             release-apple-internal-4.1.0-40545) manifest_file=PLATFORM_4_1_APPLE_OPERATIONAL_MANIFEST.json; manifest_version=4.1.0 ;;
             release-apple-internal-4.1.0-40546-macs-ipads) manifest_file=PLATFORM_4_1_APPLE_40546_MACS_IPADS_OPERATIONAL_MANIFEST.json; manifest_version=4.1.0 ;;
             release-apple-internal-4.1.0-40547-private-devices) manifest_file=PLATFORM_4_1_APPLE_40547_PRIVATE_DEVICES_OPERATIONAL_MANIFEST.json; manifest_version=4.1.0 ;;
+            release-apple-internal-4.1.0-40548-private-devices) manifest_file=PLATFORM_4_1_APPLE_40548_PRIVATE_DEVICES_OPERATIONAL_MANIFEST.json; manifest_version=4.1.0 ;;
+            release-apple-internal-4.1.0-40549-private-devices) manifest_file=PLATFORM_4_1_APPLE_40549_PRIVATE_DEVICES_OPERATIONAL_MANIFEST.json; manifest_version=4.1.0 ;;
             *) echo "Unrecognized Apple internal release manifest." >&2; exit 1 ;;
           esac
           curl --fail --silent --show-error --location \
@@ -156,6 +158,10 @@ jobs:
             test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app_bundle/Contents/Info.plist")" = 40546
           elif [ "$MANIFEST_ID" = release-apple-internal-4.1.0-40547-private-devices ]; then
             test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app_bundle/Contents/Info.plist")" = 40547
+          elif [ "$MANIFEST_ID" = release-apple-internal-4.1.0-40548-private-devices ]; then
+            test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app_bundle/Contents/Info.plist")" = 40548
+          elif [ "$MANIFEST_ID" = release-apple-internal-4.1.0-40549-private-devices ]; then
+            test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app_bundle/Contents/Info.plist")" = 40549
           fi
           bash Tools/release/sign_internal_macos_bundle.sh "$app_bundle" "$SIGNING_IDENTITY"
           signed_archive="$staging/DJConnect-signed.zip"

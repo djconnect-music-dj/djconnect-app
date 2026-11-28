@@ -9,6 +9,7 @@ struct MusicCanvasView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @State private var snapshot: DJConnectCanvasSnapshot?
+    @State private var screenList: ScreenList?
     @State private var busy = false
     @State private var refreshing = false
     @State private var readID = UUID()
@@ -16,7 +17,8 @@ struct MusicCanvasView: View {
     @State private var artworkRequestTargetID: String?
     @State private var shownArtworkPreviewRevision: String?
     @State private var notice: String?
-    @State private var selected: DJConnectCanvasTarget?
+    @State private var selectedTargetID: String?
+    @State private var openSetting: String?
     @State private var cleanupRemote = false
     @State private var confirmingForget = false
     @State private var allowRemaining = false
@@ -25,11 +27,30 @@ struct MusicCanvasView: View {
     @State private var orientation = "portrait"
     @State private var preview: DJConnectSessionArtworkImage?
 
+    private struct ScreenList {
+        let scope: String
+        let targets: [DJConnectCanvasTarget]
+        let selectedIDs: Set<String>
+        let canManageDevices: Bool
+
+        init(_ snapshot: DJConnectCanvasSnapshot, scope: String) {
+            self.scope = scope
+            targets = snapshot.targets
+            selectedIDs = snapshot.preferences.enabled ? Set(snapshot.preferences.selected_targets) : []
+            canManageDevices = snapshot.can_manage_devices
+        }
+    }
+
     private struct PreviewRequest: Equatable {
         let targetID: String
         let revision: String?
         let artworkRevision: String?
         let scope: String
+    }
+
+    private var selected: DJConnectCanvasTarget? {
+        guard let selectedTargetID else { return nil }
+        return snapshot?.targets.first { $0.id == selectedTargetID }
     }
 
     private var previewRequest: PreviewRequest? {
@@ -58,14 +79,13 @@ struct MusicCanvasView: View {
     var body: some View {
         let loadScope = scope
         let request = previewRequest
-        let settingsTitle = DJConnectLocalization.localized(key: "ui.settings", language: model.language)
-        let back: (label: String, action: () -> Void)? = if selected != nil {
+        let back: (label: String, action: () -> Void)? = if selectedTargetID != nil {
             (DJConnectLocalization.localized(key: "ui.session.intro.back", language: model.language), returnToScreens)
         } else {
             nil
         }
         DJConnectGlassDialogSurface(
-            title: selected == nil ? "Music Canvas" : settingsTitle,
+            title: "Music Canvas",
             icon: DJConnectHeroGlyph(systemImage: "photo.artframe"),
             keepsCardMounted: true,
             back: back
@@ -73,9 +93,11 @@ struct MusicCanvasView: View {
             VStack(alignment: .leading, spacing: 16) {
                 if let selected, let snapshot {
                     targetSettings(selected, snapshot: snapshot).disabled(busy)
-                } else {
+                } else if selectedTargetID == nil {
                     Text(text("description")).foregroundStyle(.secondary)
-                    if let snapshot { screenChooser(snapshot) }
+                    if let screenList, current(screenList.scope) {
+                        screenChooser(screenList).disabled(busy || snapshot == nil)
+                    }
                 }
                 if let snapshot, !snapshot.image_generation_available {
                     Text(text("provider_required")).foregroundStyle(.secondary)
@@ -90,8 +112,10 @@ struct MusicCanvasView: View {
                     .disabled(refreshing || busy)
                     .accessibilityIdentifier("music-canvas-retry")
                 }
-                if (busy && artworkRequestTargetID == nil) || (refreshing && snapshot == nil && notice == nil) {
-                    ProgressView().accessibilityLabel(text("working"))
+                if (selectedTargetID == nil && busy && artworkRequestTargetID == nil) || (refreshing && snapshot == nil && notice == nil) {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .accessibilityLabel(text("working"))
                 }
             }
             VStack(spacing: 12) {
@@ -130,11 +154,11 @@ struct MusicCanvasView: View {
                     .accessibilityIdentifier("music-canvas-done")
             }
         }
-        .accessibilityIdentifier(selected == nil ? "music-canvas-popup" : "music-canvas-settings-page")
+        .accessibilityIdentifier(selectedTargetID == nil ? "music-canvas-popup" : "music-canvas-settings-page")
         .task(id: request) { await loadPreview(request) }
         .task(id: loadScope) {
             guard !Task.isCancelled, scope == loadScope else { return }
-            snapshot = nil; selected = nil; preview = nil; notice = nil
+            snapshot = nil; screenList = nil; selectedTargetID = nil; preview = nil; notice = nil
             readID = UUID(); operationID = nil; busy = false; refreshing = false
             artworkRequestTargetID = nil; shownArtworkPreviewRevision = nil
             guard current(loadScope) else {
@@ -148,23 +172,24 @@ struct MusicCanvasView: View {
         }
         .onChange(of: scenePhase) { _, value in
             if value != .active {
-                snapshot = nil; selected = nil; preview = nil; shownArtworkPreviewRevision = nil
+                snapshot = nil; screenList = nil; selectedTargetID = nil; preview = nil; shownArtworkPreviewRevision = nil
             }
         }
+        .onChange(of: selectedTargetID) { _, _ in openSetting = nil }
     }
 
     private func returnToScreens() {
-        selected = nil
+        selectedTargetID = nil
         preview = nil
         shownArtworkPreviewRevision = nil
     }
 
-    private func screenChooser(_ snapshot: DJConnectCanvasSnapshot) -> some View {
+    private func screenChooser(_ screens: ScreenList) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(text("choose_screens")).font(.headline).accessibilityAddTraits(.isHeader)
-            if snapshot.targets.isEmpty { Text(text("no_screens")).foregroundStyle(.secondary) }
-            ForEach(snapshot.targets) { target in
-                let isSelected = snapshot.preferences.enabled && snapshot.preferences.selected_targets.contains(target.id)
+            if screens.targets.isEmpty { Text(text("no_screens")).foregroundStyle(.secondary) }
+            ForEach(screens.targets) { target in
+                let isSelected = screens.selectedIDs.contains(target.id)
                 HStack(spacing: 0) {
                     Button {
                         change {
@@ -178,37 +203,39 @@ struct MusicCanvasView: View {
                             $0.enabled = !$0.selected_targets.isEmpty
                         }
                     } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                                .font(.title3.weight(.semibold))
-                                .foregroundStyle(isSelected ? Color.white : Color.white.opacity(0.62))
-                                .accessibilityHidden(true)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(target.name).multilineTextAlignment(.leading)
-                                Text(status(target.state)).font(.caption).foregroundStyle(.secondary)
-                                if target.adapter == "switchbot", needsScreenGeometry(target), !snapshot.can_manage_devices {
-                                    Text(text("switchbot_ha_setup")).font(.caption).foregroundStyle(.secondary)
-                                }
-                            }
-                            Spacer(minLength: 0)
-                        }
-                        .frame(minHeight: 44)
-                        .padding(.leading, 12)
-                        .contentShape(Rectangle())
+                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(isSelected ? Color.white : Color.white.opacity(0.62))
+                            .frame(width: 44)
+                            .frame(minHeight: 44, maxHeight: .infinity)
+                            .contentShape(Rectangle())
                     }
+                    .accessibilityLabel(text("enabled") + " — " + target.name)
                     .accessibilityAddTraits(isSelected ? .isSelected : [])
                     .accessibilityIdentifier("music-canvas-screen-" + target.id)
                     Button {
-                        selected = target
+                        selectedTargetID = target.id
                         shownArtworkPreviewRevision = nil
                         cleanupRemote = false; allowRemaining = false
                         width = ""; height = ""; orientation = "portrait"; preview = nil
                     } label: {
-                        Image(systemName: "chevron.forward")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.8))
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(target.name).multilineTextAlignment(.leading)
+                                Text(status(target.state)).font(.caption).foregroundStyle(.secondary)
+                                if target.adapter == "switchbot", needsScreenGeometry(target), !screens.canManageDevices {
+                                    Text(text("switchbot_ha_setup")).font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                            Spacer(minLength: 0)
+                            Image(systemName: "chevron.forward")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.white.opacity(0.8))
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                     }
                     .accessibilityLabel(
                         DJConnectLocalization.localized(key: "ui.settings", language: model.language) + " — " + target.name
@@ -216,7 +243,7 @@ struct MusicCanvasView: View {
                     .accessibilityIdentifier("music-canvas-screen-settings-" + target.id)
                 }
                 .buttonStyle(.plain)
-                .padding(.vertical, 8)
+                .fixedSize(horizontal: false, vertical: true)
                 .background(.white.opacity(isSelected ? 0.15 : 0.06), in: RoundedRectangle(cornerRadius: 12))
                 .disabled(busy)
             }
@@ -238,17 +265,65 @@ struct MusicCanvasView: View {
         target.screen.width == nil || target.screen.height == nil || target.screen.orientation == nil
     }
 
+    private func settingChoice(
+        _ key: String, selection: String, choices: [String], labelPrefix: String = "",
+        identifier: String? = nil, update: @escaping (String) -> Void
+    ) -> some View {
+        let isOpen = openSetting == key
+        let label = text(key)
+        let selectedLabel = text(labelPrefix + selection)
+        return VStack(alignment: .leading, spacing: 4) {
+            settingRow(label) {
+                Button {
+                    openSetting = isOpen ? nil : key
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(selectedLabel)
+                            .multilineTextAlignment(.trailing)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Image(systemName: isOpen ? "chevron.up" : "chevron.down")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .padding(.horizontal, 10)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(label)
+                .accessibilityValue(selectedLabel)
+                .accessibilityIdentifier(identifier ?? "music-canvas-setting-" + key)
+            }
+            if isOpen {
+                VStack(spacing: 0) {
+                    ForEach(choices, id: \.self) { choice in
+                        Button {
+                            openSetting = nil
+                            if choice != selection { update(choice) }
+                        } label: {
+                            HStack {
+                                Text(text(labelPrefix + choice))
+                                Spacer(minLength: 8)
+                                if choice == selection { Image(systemName: "checkmark").accessibilityHidden(true) }
+                            }
+                            .multilineTextAlignment(.leading)
+                            .padding(.horizontal, 12)
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(choice == selection ? .isSelected : [])
+                    }
+                }
+                .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+            }
+        }
+    }
+
     private func matteSetting(_ matte: String, supportsFrameMatching: Bool, update: @escaping @MainActor @Sendable (String) -> Void) -> some View {
         let choices = supportsFrameMatching
             ? DJConnectCanvasPresentation.mattes + [DJConnectCanvasPresentation.frameMatte]
             : DJConnectCanvasPresentation.mattes
-        return settingRow(text("matte")) {
-            Picker(text("matte"), selection: Binding(get: { matte }, set: update)) {
-                ForEach(choices, id: \.self) { Text(text($0)).tag($0) }
-            }
-            .pickerStyle(.menu)
-            .labelsHidden()
-        }
+        return settingChoice("matte", selection: matte, choices: choices, update: update)
     }
 
     private func trackTitleSetting(
@@ -301,56 +376,30 @@ struct MusicCanvasView: View {
                 let style = snapshot.preferences.presentation(for: target)
                 if snapshot.per_screen_composition_and_cadence == true {
                     let composition = style.composition ?? snapshot.preferences.composition
-                    settingRow(text("composition")) {
-                        Picker(text("composition"), selection: Binding(get: { composition }, set: { value in
-                            change { $0.updatePresentation(for: target) { $0.composition = value } }
-                        })) {
-                            ForEach(DJConnectCanvasPreferences.compositions, id: \.self) { Text(text($0)).tag($0) }
-                        }
-                        .pickerStyle(.menu)
-                        .labelsHidden()
+                    settingChoice("composition", selection: composition, choices: DJConnectCanvasPreferences.compositions) { value in
+                        change { $0.updatePresentation(for: target) { $0.composition = value } }
                     }
                     let cadence = style.cadence ?? snapshot.preferences.cadence_overrides[target.id] ?? snapshot.preferences.cadence
-                    settingRow(text("cadence")) {
-                        Picker(text("cadence"), selection: Binding(get: { cadence }, set: { value in
-                            change { $0.updatePresentation(for: target) { $0.cadence = value } }
-                        })) {
-                            ForEach(DJConnectCanvasPreferences.cadences, id: \.self) { Text(text("cadence." + $0)).tag($0) }
-                        }
-                        .pickerStyle(.menu)
-                        .labelsHidden()
+                    settingChoice("cadence", selection: cadence, choices: DJConnectCanvasPreferences.cadences,
+                                  labelPrefix: "cadence.") { value in
+                        change { $0.updatePresentation(for: target) { $0.cadence = value } }
                     }
                 }
                 matteSetting(style.matteChoice, supportsFrameMatching: snapshot.frame_matching_matte == true) { value in
                     change { $0.updatePresentation(for: target) { $0.selectMatte(value) } }
                 }
                 if snapshot.frame_matching_matte == true, style.match_frame == true {
-                    settingRow(text("frame_finish")) {
-                        Picker(text("frame_finish"), selection: Binding(
-                            get: { style.frame_finish ?? DJConnectCanvasPresentation.defaultFrameFinish },
-                            set: { value in change { $0.updatePresentation(for: target) { $0.frame_finish = value } } }
-                        )) {
-                            ForEach(DJConnectCanvasPresentation.frameFinishes, id: \.self) { finish in
-                                Text(text("frame_finish." + finish)).tag(finish)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .labelsHidden()
-                        .accessibilityIdentifier("music-canvas-frame-finish-" + target.id)
+                    settingChoice("frame_finish", selection: style.frame_finish ?? DJConnectCanvasPresentation.defaultFrameFinish,
+                                  choices: DJConnectCanvasPresentation.frameFinishes, labelPrefix: "frame_finish.",
+                                  identifier: "music-canvas-frame-finish-" + target.id) { value in
+                        change { $0.updatePresentation(for: target) { $0.frame_finish = value } }
                     }
                 }
                 if snapshot.per_screen_matte_size == true, style.matte != "off" {
-                    settingRow(text("matte_size")) {
-                        Picker(text("matte_size"), selection: Binding(get: { style.matte_size ?? "medium" }, set: { value in
-                            change { $0.updatePresentation(for: target) { $0.matte_size = value } }
-                        })) {
-                            ForEach(DJConnectCanvasPresentation.matteSizes, id: \.self) { size in
-                                Text(text("matte_size." + size)).tag(size)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .labelsHidden()
-                        .accessibilityIdentifier("music-canvas-matte-size-" + target.id)
+                    settingChoice("matte_size", selection: style.matte_size ?? "medium",
+                                  choices: DJConnectCanvasPresentation.matteSizes, labelPrefix: "matte_size.",
+                                  identifier: "music-canvas-matte-size-" + target.id) { value in
+                        change { $0.updatePresentation(for: target) { $0.matte_size = value } }
                     }
                 }
                 trackTitleSetting(style.show_track_title, identifier: "music-canvas-show-track-title-" + target.id) { enabled in
@@ -382,13 +431,8 @@ struct MusicCanvasView: View {
                     }
                 }
                 if target.screen.orientation == nil {
-                    settingRow(text("orientation")) {
-                        Picker(text("orientation"), selection: $orientation) {
-                            Text(text("portrait")).tag("portrait")
-                            Text(text("landscape")).tag("landscape")
-                        }
-                        .pickerStyle(.menu)
-                        .labelsHidden()
+                    settingChoice("orientation", selection: orientation, choices: ["portrait", "landscape"]) {
+                        orientation = $0
                     }
                 }
                 Text(text(target.adapter == "samsung" ? "tv_permission" : "screen_setup"))
@@ -418,6 +462,10 @@ struct MusicCanvasView: View {
         let known = ["disabled", "waiting_music", "preparing", "delivering", "displayed", "delivered_unknown",
                      "needs_setup", "discovered", "ready", "busy", "image_provider_required"]
         if known.contains(state) { return text("state." + state) }
+        if state == "canvas_image_provider_billing" { return text("provider.billing") }
+        if state == "canvas_image_provider_failed" || state == "canvas_image_invalid" {
+            return text("provider.unavailable")
+        }
         if state == "canvas_alternative_unchanged" { return text("state.alternative_unchanged") }
         if state == "canvas_manual_takeover" { return text("state.waiting_screen") }
         if state == "canvas_public_asset_required" { return text("asset_required") }
@@ -437,18 +485,35 @@ struct MusicCanvasView: View {
             if notice != nil { notice = nil }
             guard snapshot != value else { return }
             snapshot = value
+            screenList = ScreenList(value, scope: captured)
             onSnapshot(value, captured)
-            if let selected {
-                let nextSelection = value.targets.first { $0.id == selected.id }
-                if nextSelection != selected { self.selected = nextSelection }
+            if let selectedTargetID, !value.targets.contains(where: { $0.id == selectedTargetID }) {
+                returnToScreens()
             }
         } catch {
             guard current(captured), !Task.isCancelled, readID == requestID else { return }
-            // A failed refresh cannot retain an old management grant or private image.
-            snapshot = nil; selected = nil; preview = nil; shownArtworkPreviewRevision = nil
-            onSnapshot(nil, captured)
+            // Keep the chosen page on transient failures while dropping private data and the management grant.
+            if (error as? DJConnectCanvasReadFailure) == .notOffered { returnToScreens() }
+            snapshot = nil; preview = nil; shownArtworkPreviewRevision = nil
+            if !Self.isTransientReadFailure(error) {
+                screenList = nil
+                onSnapshot(nil, captured)
+            }
             notice = text((error as? DJConnectCanvasReadFailure) == .notOffered ? "not_offered" : "unavailable")
             model.recordCanvasReadFailure(error)
+        }
+    }
+
+    private static func isTransientReadFailure(_ error: Error) -> Bool {
+        switch error {
+        case DJConnectError.network, DJConnectError.backendUnavailable,
+             DJConnectHybridTransportError.unavailable, DJConnectHybridTransportError.capacity,
+             DJConnectHybridTransportError.notSent, DJConnectHybridTransportError.deliveryUnknown:
+            return true
+        case let DJConnectError.server(statusCode, _):
+            return statusCode == 429 || (500...599).contains(statusCode)
+        default:
+            return false
         }
     }
 
@@ -500,7 +565,7 @@ struct MusicCanvasView: View {
             } else if receipt?.state == "rejected" || receipt?.success == false {
                 notice = text("change_failed")
             } else if receipt?.state == "confirmed", receipt?.revision == nil {
-                selected = nil; preview = nil; shownArtworkPreviewRevision = nil
+                selectedTargetID = nil; preview = nil; shownArtworkPreviewRevision = nil
             }
             busy = false
             await refresh(captured)

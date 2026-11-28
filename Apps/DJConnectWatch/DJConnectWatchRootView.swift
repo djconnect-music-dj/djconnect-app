@@ -6405,8 +6405,8 @@ private struct DJConnectWatchCompanionNotificationsView: View {
                     .foregroundStyle(.secondary)
             } else {
                 Button(watchLocalizedKey(model.language, "watch.v2.notification.permission")) { model.requestWatchNotificationPermission() }
+                    .buttonStyle(.plain)
             }
-                .buttonStyle(.plain)
         }
         .watchStandardBackground()
         .navigationTitle(watchLocalizedKey(model.language, "watch.v2.notifications"))

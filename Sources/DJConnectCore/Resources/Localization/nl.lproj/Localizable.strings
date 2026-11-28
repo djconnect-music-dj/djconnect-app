@@ -1070,6 +1070,13 @@
 "ui.session.end.confirm" = "Wil je deze DJ-sessie beëindigen?";
 
 "ui.connection.status" = "Verbindingsstatus";
+"ui.connection.llm_backend.title" = "AI-backend";
+"ui.connection.llm_backend.active" = "Actief. Recente AI-aanroepen zijn geslaagd.";
+"ui.connection.llm_backend.configured" = "Ingesteld in Home Assistant. De AI-backend is nog niet volledig bevestigd.";
+"ui.connection.llm_backend.billing" = "Een AI-provider weigert verzoeken. Controleer het API-account en de facturering bij de provider en probeer het opnieuw.";
+"ui.connection.llm_backend.unavailable" = "Een AI-provider reageerde niet goed. Controleer de AI-integratie in Home Assistant en probeer het opnieuw.";
+"ui.connection.llm_backend.configuration_required" = "Controleer de geselecteerde gespreksagent en AI-taken in Home Assistant.";
+"ui.connection.llm_backend.unknown" = "De status van de AI-backend is nog niet beschikbaar.";
 
 "ui.connection.offline" = "Geen verbinding met Home Assistant";
 "ui.connection.recovering" = "Verbinding met de DJ-sessie herstellen…";
@@ -1832,6 +1839,8 @@
 "ui.canvas.screens" = "Schermen";
 "ui.canvas.no_screens" = "Er zijn nog geen geschikte schermen gevonden.";
 "ui.canvas.provider_required" = "Stel in Home Assistant een beeldgenerator in om kunst te maken.";
+"ui.canvas.provider.billing" = "De beeldgenerator kan geen kunst maken. Controleer of het API-account en de facturering actief zijn bij je beeldprovider. Probeer daarna Kunstwerk vernieuwen.";
+"ui.canvas.provider.unavailable" = "De beeldgenerator kon geen kunst maken. Controleer de ingestelde beeldgenerator in Home Assistant en probeer Kunstwerk vernieuwen.";
 "ui.canvas.presentation" = "Weergave aanpassen";
 "ui.canvas.composition" = "Compositie";
 "ui.canvas.central" = "Centraal";

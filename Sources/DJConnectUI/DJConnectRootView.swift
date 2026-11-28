@@ -1930,11 +1930,6 @@ private struct PairingSheetView: View {
                         unpairedSessionOptions
                     }
                     pairingPending
-                    #if os(iOS)
-                    if model.pairingFlowTarget == .appleWatch {
-                        pairingGuestJoinButton
-                    }
-                    #endif
                 }
             }
             .padding(28)
@@ -9219,6 +9214,10 @@ private struct DJSessionView: View {
     @ObservedObject var model: DJConnectAppModel
     var openQueueAction: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    #if os(iOS)
+    @State private var showingPartyMenu = false
+    @State private var joinPartyAfterMenuDismisses = false
+    #endif
 
     init(model: DJConnectAppModel, openQueueAction: @escaping () -> Void) {
         self.model = model; self.openQueueAction = openQueueAction
@@ -9273,18 +9272,33 @@ private struct DJSessionView: View {
     #if os(iOS)
     private var partyJoinMenu: some View {
         let title = localizedKey(model.language, "ui.live.join")
-        return Menu {
-            Button {
+        return AnchoredToolbarPopover(
+            isPresented: $showingPartyMenu, symbol: "party.popper", tint: .white,
+            label: title, identifier: "session-idle-party-menu",
+            onDismiss: {
+                guard joinPartyAfterMenuDismisses else { return }
+                joinPartyAfterMenuDismisses = false
                 model.isShowingGuestJoin = true
+            }
+        ) {
+            Button {
+                joinPartyAfterMenuDismisses = true
+                showingPartyMenu = false
             } label: {
                 Label(title, systemImage: "party.popper.fill")
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
             .accessibilityIdentifier("session-idle-join-party")
-        } label: {
-            Image(systemName: "party.popper")
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .frame(idealWidth: 280)
+            .djConnectGlassPopoutSurface(nativePresentation: true)
         }
-        .accessibilityLabel(title)
-        .accessibilityIdentifier("session-idle-party-menu")
+        .frame(width: 44, height: 44)
     }
     #endif
 

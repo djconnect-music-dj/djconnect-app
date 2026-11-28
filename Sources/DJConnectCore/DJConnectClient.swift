@@ -1268,18 +1268,23 @@ public final class DJConnectClient: Sendable {
         let local = DJConnectHybridTransport.isLocalTransportCandidate(baseURL) ||
             DJConnectHomeAssistantWebSocketFastPath.isLocalHomeAssistantURL(baseURL)
         let timeout: TimeInterval = local ? 3 : 6
-        var capabilitiesRequest = try sessionHistoryReadRequest(route: "capabilities")
-        capabilitiesRequest.timeoutInterval = timeout
-        let capability: Capability = try await decodedResponse(
-            for: capabilitiesRequest, using: sessionProjectionSession)
-        guard capability.success, capability.capabilities["music_canvas"] == true,
-              capability.contract_versions["music_canvas"] == 1 else { throw DJConnectCanvasReadFailure.notOffered }
-        var readRequest = try canvasRequest("read", body: canvasIdentity())
-        readRequest.timeoutInterval = timeout
-        let snapshot: DJConnectCanvasSnapshot = try await decodedResponse(
-            for: readRequest, using: sessionProjectionSession)
-        guard snapshot.isValid else { throw DJConnectCanvasReadFailure.invalidSnapshot }
-        return snapshot
+        // Per-request timeouts do not bound waits in the shared HA transport.
+        let deadline = DJConnectOperationDeadline(seconds: 2 * timeout)
+        return try await deadline.run {
+            var capabilitiesRequest = try self.sessionHistoryReadRequest(route: "capabilities")
+            capabilitiesRequest.timeoutInterval = timeout
+            let capability: Capability = try await self.decodedResponse(
+                for: capabilitiesRequest, using: self.sessionProjectionSession)
+            guard capability.success, capability.capabilities["music_canvas"] == true,
+                  capability.contract_versions["music_canvas"] == 1 else { throw DJConnectCanvasReadFailure.notOffered }
+            try deadline.check()
+            var readRequest = try self.canvasRequest("read", body: self.canvasIdentity())
+            readRequest.timeoutInterval = min(timeout, deadline.remaining)
+            let snapshot: DJConnectCanvasSnapshot = try await self.decodedResponse(
+                for: readRequest, using: self.sessionProjectionSession)
+            guard snapshot.isValid else { throw DJConnectCanvasReadFailure.invalidSnapshot }
+            return snapshot
+        }
     }
 
     public func updateMusicCanvas(_ current: DJConnectCanvasSnapshot, preferences: DJConnectCanvasPreferences,

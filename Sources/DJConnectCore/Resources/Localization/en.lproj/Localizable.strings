@@ -1070,6 +1070,13 @@
 "ui.session.end.confirm" = "End this DJ session?";
 
 "ui.connection.status" = "Connection status";
+"ui.connection.llm_backend.title" = "AI backend";
+"ui.connection.llm_backend.active" = "Active. Recent AI requests succeeded.";
+"ui.connection.llm_backend.configured" = "Configured in Home Assistant. The AI backend has not been fully confirmed yet.";
+"ui.connection.llm_backend.billing" = "An AI provider is rejecting requests. Check the API account and billing with the provider, then try again.";
+"ui.connection.llm_backend.unavailable" = "An AI provider failed to respond. Check the AI integration in Home Assistant, then try again.";
+"ui.connection.llm_backend.configuration_required" = "Check the conversation agent and AI tasks selected in Home Assistant.";
+"ui.connection.llm_backend.unknown" = "AI backend status is not available yet.";
 
 "ui.connection.offline" = "No connection to Home Assistant";
 "ui.connection.recovering" = "Reconnecting to the DJ session…";
@@ -1832,6 +1839,8 @@
 "ui.canvas.screens" = "Screens";
 "ui.canvas.no_screens" = "No compatible screens found yet.";
 "ui.canvas.provider_required" = "Choose an image generator in Home Assistant to create artwork.";
+"ui.canvas.provider.billing" = "The image generator can’t create artwork. Check that the API account and billing are active with your image provider. Then try Refresh artwork.";
+"ui.canvas.provider.unavailable" = "The image generator couldn’t create artwork. Check the image generator configured in Home Assistant, then try Refresh artwork.";
 "ui.canvas.presentation" = "Adjust presentation";
 "ui.canvas.composition" = "Composition";
 "ui.canvas.central" = "Centred";

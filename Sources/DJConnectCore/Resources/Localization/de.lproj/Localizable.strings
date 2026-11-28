@@ -1070,6 +1070,13 @@
 "ui.session.end.confirm" = "Diese DJ-Sitzung beenden?";
 
 "ui.connection.status" = "Verbindungsstatus";
+"ui.connection.llm_backend.title" = "KI-Backend";
+"ui.connection.llm_backend.active" = "Aktiv. Die letzten KI-Anfragen waren erfolgreich.";
+"ui.connection.llm_backend.configured" = "In Home Assistant eingerichtet. Das KI-Backend wurde noch nicht vollständig bestätigt.";
+"ui.connection.llm_backend.billing" = "Ein KI-Anbieter lehnt Anfragen ab. Prüfe das API-Konto und die Abrechnung beim Anbieter und versuche es erneut.";
+"ui.connection.llm_backend.unavailable" = "Ein KI-Anbieter hat nicht wie erwartet geantwortet. Prüfe die KI-Integration in Home Assistant und versuche es erneut.";
+"ui.connection.llm_backend.configuration_required" = "Prüfe den ausgewählten Konversationsagenten und die KI-Aufgaben in Home Assistant.";
+"ui.connection.llm_backend.unknown" = "Der Status des KI-Backends ist noch nicht verfügbar.";
 
 "ui.connection.offline" = "Keine Verbindung zu Home Assistant";
 "ui.connection.recovering" = "Verbindung zur DJ-Sitzung wird wiederhergestellt…";
@@ -1832,6 +1839,8 @@
 "ui.canvas.screens" = "Bildschirme";
 "ui.canvas.no_screens" = "Noch keine geeigneten Bildschirme gefunden.";
 "ui.canvas.provider_required" = "Wähle in Home Assistant einen Bildgenerator aus.";
+"ui.canvas.provider.billing" = "Der Bildgenerator kann kein Kunstwerk erstellen. Prüfe, ob das API-Konto und die Abrechnung beim Bildanbieter aktiv sind. Wähle danach „Kunstwerk erneuern“.";
+"ui.canvas.provider.unavailable" = "Der Bildgenerator konnte kein Kunstwerk erstellen. Prüfe den in Home Assistant eingerichteten Bildgenerator und versuche es erneut.";
 "ui.canvas.presentation" = "Darstellung anpassen";
 "ui.canvas.composition" = "Komposition";
 "ui.canvas.central" = "Zentriert";

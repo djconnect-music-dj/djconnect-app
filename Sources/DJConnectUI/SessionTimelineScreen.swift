@@ -3101,9 +3101,10 @@ struct SessionConnectionToolbarButton: View {
     private var status: SessionConnectionStatus { model.connectionPresentation }
     var body: some View {
         #if os(iOS)
-        ConnectionToolbarPopover(isPresented: $showingStatus, symbol: status.icon,
-                                 tint: UIColor(status.color), label: text("ui.connection.status"),
-                                 value: text(status.key)) { statusContent }
+        AnchoredToolbarPopover(isPresented: $showingStatus, symbol: status.icon,
+                               tint: UIColor(status.color), label: text("ui.connection.status"),
+                               identifier: "session-connection-toggle", value: text(status.key),
+                               automaticallySizesContent: true) { statusContent }
             .frame(width: 44, height: 44)
             .sessionIntroductionTarget("toolbar-connection")
         #else
@@ -3137,12 +3138,15 @@ struct SessionConnectionToolbarButton: View {
 /// SwiftUI toolbar popovers can promote their source to the navigation host on
 /// compact screens. Keep a UIKit source view physically inside the 44pt button
 /// so the system owns the arrow, dismissal and placement on both phone and pad.
-private struct ConnectionToolbarPopover<Content: View>: UIViewRepresentable {
+struct AnchoredToolbarPopover<Content: View>: UIViewRepresentable {
     @Binding var isPresented: Bool
     let symbol: String
     let tint: UIColor
     let label: String
-    let value: String
+    let identifier: String
+    var value: String? = nil
+    var automaticallySizesContent = false
+    var onDismiss: () -> Void = {}
     @ViewBuilder var content: () -> Content
 
     func makeCoordinator() -> Coordinator { Coordinator(isPresented: $isPresented) }
@@ -3159,14 +3163,15 @@ private struct ConnectionToolbarPopover<Content: View>: UIViewRepresentable {
         source.setImage(UIImage(systemName: symbol,
             withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)), for: .normal)
         source.tintColor = tint
-        source.accessibilityIdentifier = "session-connection-toggle"
+        source.accessibilityIdentifier = identifier
         source.accessibilityLabel = label
         source.accessibilityValue = value
         let coordinator = context.coordinator
         coordinator.isPresented = $isPresented
         if !isPresented {
-            coordinator.host?.dismiss(animated: true)
+            let host = coordinator.host
             coordinator.host = nil
+            host?.dismiss(animated: true, completion: onDismiss)
             return
         }
         if let host = coordinator.host {
@@ -3175,6 +3180,7 @@ private struct ConnectionToolbarPopover<Content: View>: UIViewRepresentable {
             return
         }
         let host = UIHostingController(rootView: content())
+        if automaticallySizesContent { host.sizingOptions = [.preferredContentSize] }
         host.modalPresentationStyle = .popover
         host.view.backgroundColor = .clear
         host.popoverPresentationController?.sourceView = source
@@ -3242,6 +3248,7 @@ struct SessionConnectionPopoverContent: View {
                 #else
                 SetupStatusView(model: model, openAbout: openAbout, rePair: requestRePair)
                 #endif
+                LLMBackendConnectionStatus(model: model)
             }
         }
         #if os(iOS)
@@ -3272,6 +3279,38 @@ struct SessionConnectionPopoverContent: View {
     private func openAbout() {
         dismiss()
         model.performHomeScreenAction(.about)
+    }
+}
+
+private struct LLMBackendConnectionStatus: View {
+    @ObservedObject var model: DJConnectAppModel
+
+    var body: some View {
+        if model.pairingStatus == .paired {
+            let status = model.currentLLMBackendStatus
+            let attention = status == .billing || status == .configurationRequired || status == .unavailable
+            Label {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(localized("title")).font(.subheadline.weight(.semibold))
+                    Text(localized(status?.rawValue ?? "unknown")).font(.footnote)
+                }
+            } icon: {
+                Image(systemName: attention ? "exclamationmark.triangle" : "sparkles")
+                    .foregroundStyle(attention ? Color.orange : Color.secondary)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("connection-llm-backend-status")
+            .task {
+                guard model.canRefreshSessionHistory else { return }
+                try? await model.withHomeAssistantClient(notifiesTransportFailure: false) {
+                    try await model.refreshConnectionEndpointsIfNeeded(client: $0)
+                }
+            }
+        }
+    }
+
+    private func localized(_ key: String) -> String {
+        DJConnectLocalization.localized(key: "ui.connection.llm_backend." + key, language: model.language)
     }
 }
 
